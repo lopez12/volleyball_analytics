@@ -360,7 +360,8 @@ function generateReport() {
 
     if (globalTotal > 0) {
         document.getElementById('totalActions').innerText = globalTotal;
-        document.getElementById('teamRating').innerText = (ratingSum / playerCount).toFixed(1);
+        // Use the same method for team rating as for the team summary card
+        document.getElementById('teamRating').innerText = calculateRating(teamStats);
         document.getElementById('perfectIndex').innerText = Math.round((globalPerfect / globalTotal) * 100) + '%';
         document.getElementById('dashboard').style.display = 'block';
         document.getElementById('btnDownload').style.display = 'inline-block';
