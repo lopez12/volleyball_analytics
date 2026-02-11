@@ -1,3 +1,26 @@
+/* --- GitHub Import UI --- */
+#btnImportGithub {
+    background: #0072c6;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 8px 16px;
+    margin-left: 10px;
+    cursor: pointer;
+    font-size: 1em;
+    transition: background 0.2s;
+}
+#btnImportGithub:hover {
+    background: #005fa3;
+}
+#githubFileSelect {
+    padding: 7px 12px;
+    border-radius: 4px;
+    border: 1px solid #ccc;
+    font-size: 1em;
+    margin-left: 10px;
+    min-width: 180px;
+}
 .team-summary-card {
     grid-column: span 2;
     background: #f1f5fa;

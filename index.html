@@ -14,9 +14,11 @@
         <h2>🏐 Analítica de Voleibol</h2>
         <p>Pega el log del partido (Ej: <code>7S# 10R! 2E+ 7A-</code>):</p>
         <textarea id="matchLog" placeholder="Pega aquí la secuencia...">7S# 17S+ 4D! 10A- 5R# 2E# 7A# 12S# 22S- 1R- 5R+ 2E# 10A# 5S+ 1D! 2E! 4A! 5D# 2E# 7A- 4R# 2E# 5A# 10S+ 10B# 10S- 5R+ 2E# 7A# 4S+ 7D# 2E# 10A# 5R# 2E- 5R# 2E# 7A#</textarea>
-        <div class="btn-group">
+        <div class="btn-group" style="margin-bottom:10px;">
             <button onclick="generateReport()" class="btn-primary">📊 Generar Reporte</button>
             <button onclick="downloadPDF()" class="btn-success" id="btnDownload" style="display:none">📄 Descargar PDF</button>
+            <button onclick="importFromGithub()" class="btn-primary" type="button" id="btnImportGithub">🌐 Importar desde GitHub</button>
+            <select id="githubFileSelect" style="display:none; margin-left:10px;"></select>
         </div>
     </div>
 

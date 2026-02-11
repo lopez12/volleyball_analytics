@@ -1,3 +1,38 @@
+// --- GitHub Import Feature ---
+function importFromGithub() {
+    const repo = 'lopez12/volleyball_analytics';
+    const branch = 'main';
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/`;
+    const select = document.getElementById('githubFileSelect');
+    select.style.display = 'inline-block';
+    select.innerHTML = '<option>Cargando archivos...</option>';
+    fetch(apiUrl)
+        .then(res => res.json())
+        .then(files => {
+            const txtFiles = files.filter(f => f.name.endsWith('.txt'));
+            if (txtFiles.length === 0) {
+                select.innerHTML = '<option>No hay archivos .txt</option>';
+                return;
+            }
+            select.innerHTML = '<option value="">Selecciona un archivo...</option>' +
+                txtFiles.map(f => `<option value="${f.name}">${f.name}</option>`).join('');
+            select.onchange = function() {
+                if (!this.value) return;
+                const rawUrl = `https://raw.githubusercontent.com/${repo}/${branch}/${this.value}`;
+                fetch(rawUrl)
+                  .then(res => res.text())
+                  .then(text => {
+                      document.getElementById('matchLog').value = text;
+                      select.style.display = 'none';
+                      generateReport();
+                  })
+                  .catch(() => alert('No se pudo cargar el archivo.'));
+            };
+        })
+        .catch(() => {
+            select.innerHTML = '<option>Error al buscar archivos</option>';
+        });
+}
 // Volleyball Analytics Dashboard JS
 const WEIGHTS = { '#': 1.0, '+': 0.4, '!': -0.3, '-': -1.0 };
 
