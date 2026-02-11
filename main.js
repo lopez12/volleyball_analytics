@@ -1,4 +1,3 @@
-// --- GitHub Import Feature ---
 function importFromGithub() {
     const repo = 'lopez12/volleyball_analytics';
     const branch = 'main';
@@ -33,6 +32,7 @@ function importFromGithub() {
             select.innerHTML = '<option>Error al buscar archivos</option>';
         });
 }
+window.importFromGithub = importFromGithub;
 // Volleyball Analytics Dashboard JS
 const WEIGHTS = { '#': 1.0, '+': 0.4, '!': -0.3, '-': -1.0 };
 
