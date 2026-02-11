@@ -20,14 +20,20 @@ function parseLog(logString) {
     const regexPlayer = /^(\d+)([SREADB])([#+!-])$/;
     const regexTeam = /^([SREADB])([#+!-])$/;
     const tokens = logString.trim().split(/\s+/);
+    const baseActions = () => ({'S':{tot:0,good:0},'R':{tot:0,good:0},'E':{tot:0,good:0},'A':{tot:0,good:0},'D':{tot:0,good:0},'B':{tot:0,good:0}});
+    const baseGrades = () => ({'#':0,'+':0,'!':0,'-':0});
+    const baseActionsByQuality = () => ({'#':[], '+':[], '!':[], '-':[]});
+    // For fast summary tables: actionsByGradeCount[grade][action] = count
+    const baseActionsByGradeCount = () => ({'#':{'S':0,'R':0,'E':0,'A':0,'D':0,'B':0},'+':{'S':0,'R':0,'E':0,'A':0,'D':0,'B':0},'!':{'S':0,'R':0,'E':0,'A':0,'D':0,'B':0},'-':{'S':0,'R':0,'E':0,'A':0,'D':0,'B':0}});
+
     const players = {};
     const team = {
-        total: 0, scoreSum: 0,
-        grades: { '#': 0, '+': 0, '!': 0, '-': 0 },
-        actions: {
-            'S': {tot:0, good:0}, 'R': {tot:0, good:0}, 'E': {tot:0, good:0},
-            'A': {tot:0, good:0}, 'D': {tot:0, good:0}, 'B': {tot:0, good:0}
-        }
+        total: 0,
+        scoreSum: 0,
+        grades: baseGrades(),
+        actions: baseActions(),
+        actionsByQuality: baseActionsByQuality(),
+        actionsByGradeCount: baseActionsByGradeCount()
     };
 
     tokens.forEach(token => {
@@ -36,28 +42,41 @@ function parseLog(logString) {
             const [_, num, action, grade] = match;
             if (!players[num]) {
                 players[num] = {
-                    total: 0, scoreSum: 0,
-                    grades: { '#': 0, '+': 0, '!': 0, '-': 0 },
-                    actions: {
-                        'S': {tot:0, good:0}, 'R': {tot:0, good:0}, 'E': {tot:0, good:0},
-                        'A': {tot:0, good:0}, 'D': {tot:0, good:0}, 'B': {tot:0, good:0}
-                    },
-                    actionsByQuality: { '#': [], '+': [], '!': [], '-': [] }
+                    total: 0,
+                    scoreSum: 0,
+                    grades: baseGrades(),
+                    actions: baseActions(),
+                    actionsByQuality: baseActionsByQuality(),
+                    actionsByGradeCount: baseActionsByGradeCount()
                 };
             }
+            // General stats
             players[num].total++;
             players[num].grades[grade]++;
             players[num].scoreSum += (WEIGHTS[grade] || 0);
+            // Per-action stats
             players[num].actions[action].tot++;
             if (grade === '#' || grade === '+') {
                 players[num].actions[action].good++;
             }
-            // Store the action token by quality
+            // For summary tables
             players[num].actionsByQuality[grade].push(`${num}${action}${grade}`);
+            players[num].actionsByGradeCount[grade][action]++;
+            // Team aggregate
+            team.total++;
+            team.grades[grade]++;
+            team.scoreSum += (WEIGHTS[grade] || 0);
+            team.actions[action].tot++;
+            if (grade === '#' || grade === '+') {
+                team.actions[action].good++;
+            }
+            team.actionsByQuality[grade].push(`${num}${action}${grade}`);
+            team.actionsByGradeCount[grade][action]++;
         } else {
             match = token.match(regexTeam);
             if (match) {
                 const [_, action, grade] = match;
+                // Team only
                 team.total++;
                 team.grades[grade]++;
                 team.scoreSum += (WEIGHTS[grade] || 0);
@@ -65,6 +84,8 @@ function parseLog(logString) {
                 if (grade === '#' || grade === '+') {
                     team.actions[action].good++;
                 }
+                team.actionsByQuality[grade].push(`T${action}${grade}`);
+                team.actionsByGradeCount[grade][action]++;
             }
         }
     });
@@ -126,50 +147,70 @@ function generateReport() {
                 </div>
             `}).join('');
 
-        // Summary table: for each quality, how many actions of each type
+        // Build summary table directly from actions and grades for consistency
         let summaryByQuality = { '#': {}, '+': {}, '!': {}, '-': {} };
-        // Initialize all action types to 0 for each quality
         Object.keys(FULL_NAMES).forEach(action => {
             summaryByQuality['#'][action] = 0;
             summaryByQuality['+'][action] = 0;
             summaryByQuality['!'][action] = 0;
             summaryByQuality['-'][action] = 0;
         });
+        // For each action, distribute the grades based on the player's grades and actions
+        // We need to count, for each action, how many of each grade occurred
+        // We'll use actionsByQuality for this, but with a direct mapping
         if (stats.actionsByQuality) {
             ['#','+','!','-'].forEach(grade => {
                 stats.actionsByQuality[grade].forEach(token => {
                     // token is like 7A-
-                    const match = token.match(/\d+([SREADB])[#+!-]/);
-                    if (match) {
-                        const action = match[1];
+                    // Instead of regex, just get the last two chars for action and grade
+                    // e.g., 7A- => action = token[token.length-2]
+                    const action = token[token.length-2];
+                    if (summaryByQuality[grade][action] !== undefined) {
                         summaryByQuality[grade][action]++;
                     }
                 });
             });
         }
-        // Build HTML summary table
-        // Build transposed HTML summary table
-            let actionsByQualityHtml = `
-                <div class="action-section" style="margin-top:10px;">
-                    <div class="action-title">Resumen por Calidad y Acción</div>
-                    <div class="stat-card" style="padding: 10px 0 0 0; background: none; border: none;">
-                        <div style="display: grid; grid-template-columns: 1.5fr repeat(4, 1fr); gap: 0; align-items: center;">
-                            <div class="stat-label"></div>
-                            <div class="stat-label" style="color:var(--success); font-weight:600;">Perfecto</div>
-                            <div class="stat-label" style="color:var(--primary); font-weight:600;">Positivo</div>
-                            <div class="stat-label" style="color:var(--warning); font-weight:600;">Regular</div>
-                            <div class="stat-label" style="color:var(--danger); font-weight:600;">Error</div>
-                            ${Object.keys(FULL_NAMES).map(action => `
-                                <div class="stat-label" style="text-align:left; color:var(--text-main); font-weight:600;">${FULL_NAMES[action]}</div>
-                                <div class="stat-value" style="color:var(--success); font-size:1em;">${summaryByQuality['#'][action]}</div>
-                                <div class="stat-value" style="color:var(--primary); font-size:1em;">${summaryByQuality['+'][action]}</div>
-                                <div class="stat-value" style="color:var(--warning); font-size:1em;">${summaryByQuality['!'][action]}</div>
-                                <div class="stat-value" style="color:var(--danger); font-size:1em;">${summaryByQuality['-'][action]}</div>
-                            `).join('')}
-                        </div>
-                    </div>
+        // Find max good (perfect+positive) and max bad (error) per action row
+        const actions = Object.keys(FULL_NAMES);
+        let maxGood = {}, maxBad = {};
+        actions.forEach(action => {
+            maxGood[action] = Math.max(summaryByQuality['#'][action], summaryByQuality['+'][action]);
+            maxBad[action] = summaryByQuality['-'][action];
+        });
+        // Find the highest good and bad values among all actions
+        let globalMaxGood = Math.max(...actions.map(a => maxGood[a]));
+        let globalMaxBad = Math.max(...actions.map(a => maxBad[a]));
+
+        let actionsByQualityHtml = `
+            <div class="action-section" style="margin-top:16px;">
+                <div class="action-title" style="margin-bottom:8px;">Resumen por Calidad y Acción</div>
+                <div style="overflow-x:auto;">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Perfecto</th>
+                            <th>Positivo</th>
+                            <th>Regular</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${actions.map(action => {
+                            return `<tr>
+                                <td>${FULL_NAMES[action]}</td>
+                                <td class="${summaryByQuality['#'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['#'][action]}</td>
+                                <td class="${summaryByQuality['+'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['+'][action]}</td>
+                                <td>${summaryByQuality['!'][action]}</td>
+                                <td class="${summaryByQuality['-'][action] === globalMaxBad && globalMaxBad > 0 ? 'highlight-bad' : ''}">${summaryByQuality['-'][action]}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
                 </div>
-            `;
+            </div>
+        `;
 
         const card = document.createElement('div');
         card.className = 'player-card';
@@ -223,8 +264,68 @@ function generateReport() {
                     <span class="action-count">${v.good}/${v.tot}</span>
                 </div>
             `}).join('');
+
+        // Team summary table (modern style)
+        // Build summary table directly from actions and grades for consistency
+        let summaryByQuality = { '#': {}, '+': {}, '!': {}, '-': {} };
+        Object.keys(FULL_NAMES).forEach(action => {
+            summaryByQuality['#'][action] = 0;
+            summaryByQuality['+'][action] = 0;
+            summaryByQuality['!'][action] = 0;
+            summaryByQuality['-'][action] = 0;
+        });
+        if (teamStats.actionsByQuality) {
+            ['#','+','!','-'].forEach(grade => {
+                teamStats.actionsByQuality[grade].forEach(token => {
+                    // token is like 7A- or T[A]-
+                    const action = token[token.length-2];
+                    if (summaryByQuality[grade][action] !== undefined) {
+                        summaryByQuality[grade][action]++;
+                    }
+                });
+            });
+        }
+        // Find max good (perfect+positive) and max bad (error) per action row
+        const actions = Object.keys(FULL_NAMES);
+        let maxGood = {}, maxBad = {};
+        actions.forEach(action => {
+            maxGood[action] = Math.max(summaryByQuality['#'][action], summaryByQuality['+'][action]);
+            maxBad[action] = summaryByQuality['-'][action];
+        });
+        let globalMaxGood = Math.max(...actions.map(a => maxGood[a]));
+        let globalMaxBad = Math.max(...actions.map(a => maxBad[a]));
+        let actionsByQualityHtml = `
+            <div class="action-section" style="margin-top:16px;">
+                <div class="action-title" style="margin-bottom:8px;">Resumen por Calidad y Acción</div>
+                <div style="overflow-x:auto;">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Perfecto</th>
+                            <th>Positivo</th>
+                            <th>Regular</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${actions.map(action => {
+                            return `<tr>
+                                <td>${FULL_NAMES[action]}</td>
+                                <td class="${summaryByQuality['#'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['#'][action]}</td>
+                                <td class="${summaryByQuality['+'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['+'][action]}</td>
+                                <td>${summaryByQuality['!'][action]}</td>
+                                <td class="${summaryByQuality['-'][action] === globalMaxBad && globalMaxBad > 0 ? 'highlight-bad' : ''}">${summaryByQuality['-'][action]}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>
+                </div>
+            </div>
+        `;
+
         const card = document.createElement('div');
-        card.className = 'player-card';
+        card.className = 'player-card team-summary-card';
         card.innerHTML = `
             <div class="card-header">
                 <span class="player-number">Equipo</span>
@@ -247,6 +348,7 @@ function generateReport() {
                     <div class="action-title">Efectividad por Acción (Buenos/Total)</div>
                     <div class="action-grid">${actionsHtml}</div>
                 </div>
+                ${actionsByQualityHtml}
             </div>
         `;
         teamGrid.appendChild(card);
