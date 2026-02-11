@@ -27,7 +27,7 @@
 }
 .summary-table th {
     background: #f3f4f6;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--text-main);
     text-transform: uppercase;
     font-size: 0.8rem;
