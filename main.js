@@ -41,7 +41,8 @@ function parseLog(logString) {
                     actions: {
                         'S': {tot:0, good:0}, 'R': {tot:0, good:0}, 'E': {tot:0, good:0},
                         'A': {tot:0, good:0}, 'D': {tot:0, good:0}, 'B': {tot:0, good:0}
-                    }
+                    },
+                    actionsByQuality: { '#': [], '+': [], '!': [], '-': [] }
                 };
             }
             players[num].total++;
@@ -51,6 +52,8 @@ function parseLog(logString) {
             if (grade === '#' || grade === '+') {
                 players[num].actions[action].good++;
             }
+            // Store the action token by quality
+            players[num].actionsByQuality[grade].push(`${num}${action}${grade}`);
         } else {
             match = token.match(regexTeam);
             if (match) {
@@ -79,20 +82,18 @@ function generateReport() {
     const { players, team } = parseLog(logText);
     const grid = document.getElementById('playersGrid');
     const teamGrid = document.getElementById('teamActionsGrid');
-    const actionFilter = document.getElementById('actionFilter').value;
 
     grid.innerHTML = '';
     teamGrid.innerHTML = '';
     let globalTotal = 0, globalPerfect = 0, ratingSum = 0, playerCount = 0;
 
-    // Filtered player stats
+    // Player stats
     const playersArray = Object.keys(players).map(num => {
         let data = players[num];
-        let filtered = filterStatsByAction(data, actionFilter);
         return {
             num,
-            data: filtered,
-            rating: calculateRating(filtered)
+            data,
+            rating: calculateRating(data)
         };
     }).filter(p => p.data.total > 0)
     .sort((a, b) => b.rating - a.rating);
@@ -125,6 +126,51 @@ function generateReport() {
                 </div>
             `}).join('');
 
+        // Summary table: for each quality, how many actions of each type
+        let summaryByQuality = { '#': {}, '+': {}, '!': {}, '-': {} };
+        // Initialize all action types to 0 for each quality
+        Object.keys(FULL_NAMES).forEach(action => {
+            summaryByQuality['#'][action] = 0;
+            summaryByQuality['+'][action] = 0;
+            summaryByQuality['!'][action] = 0;
+            summaryByQuality['-'][action] = 0;
+        });
+        if (stats.actionsByQuality) {
+            ['#','+','!','-'].forEach(grade => {
+                stats.actionsByQuality[grade].forEach(token => {
+                    // token is like 7A-
+                    const match = token.match(/\d+([SREADB])[#+!-]/);
+                    if (match) {
+                        const action = match[1];
+                        summaryByQuality[grade][action]++;
+                    }
+                });
+            });
+        }
+        // Build HTML summary table
+        // Build transposed HTML summary table
+            let actionsByQualityHtml = `
+                <div class="action-section" style="margin-top:10px;">
+                    <div class="action-title">Resumen por Calidad y Acción</div>
+                    <div class="stat-card" style="padding: 10px 0 0 0; background: none; border: none;">
+                        <div style="display: grid; grid-template-columns: 1.5fr repeat(4, 1fr); gap: 0; align-items: center;">
+                            <div class="stat-label"></div>
+                            <div class="stat-label" style="color:var(--success); font-weight:600;">Perfecto</div>
+                            <div class="stat-label" style="color:var(--primary); font-weight:600;">Positivo</div>
+                            <div class="stat-label" style="color:var(--warning); font-weight:600;">Regular</div>
+                            <div class="stat-label" style="color:var(--danger); font-weight:600;">Error</div>
+                            ${Object.keys(FULL_NAMES).map(action => `
+                                <div class="stat-label" style="text-align:left; color:var(--text-main); font-weight:600;">${FULL_NAMES[action]}</div>
+                                <div class="stat-value" style="color:var(--success); font-size:1em;">${summaryByQuality['#'][action]}</div>
+                                <div class="stat-value" style="color:var(--primary); font-size:1em;">${summaryByQuality['+'][action]}</div>
+                                <div class="stat-value" style="color:var(--warning); font-size:1em;">${summaryByQuality['!'][action]}</div>
+                                <div class="stat-value" style="color:var(--danger); font-size:1em;">${summaryByQuality['-'][action]}</div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
         const card = document.createElement('div');
         card.className = 'player-card';
         card.innerHTML = `
@@ -149,13 +195,14 @@ function generateReport() {
                     <div class="action-title">Efectividad por Acción (Buenos/Total)</div>
                     <div class="action-grid">${actionsHtml}</div>
                 </div>
+                ${actionsByQualityHtml}
             </div>
         `;
         grid.appendChild(card);
     });
 
     // Team-level actions
-    let teamStats = filterStatsByAction(team, actionFilter);
+    let teamStats = team;
     if (teamStats.total > 0) {
         const perfectPct = Math.round((teamStats.grades['#'] / teamStats.total) * 100);
         const positivePct = Math.round((teamStats.grades['+'] / teamStats.total) * 100);
@@ -218,20 +265,7 @@ function generateReport() {
     }
 }
 
-// Helper to filter stats by action
-function filterStatsByAction(stats, action) {
-    if (!stats) return null;
-    if (action === 'ALL') return stats;
-    // Only keep stats for the selected action
-    let filtered = {
-        total: stats.actions[action].tot,
-        scoreSum: 0,
-        grades: { '#': 0, '+': 0, '!': 0, '-': 0 },
-        actions: { [action]: { ...stats.actions[action] } }
-    };
-    // For now, grades and scoreSum are not split by action (limitation)
-    return filtered;
-}
+
 
 function downloadPDF() {
     const element = document.getElementById('dashboard');
