@@ -10,6 +10,9 @@
         grid-column: auto !important;
         margin-left: 0;
         margin-right: 0;
+        padding: 18px 12px 18px 12px !important;
+        font-size: 1rem !important;
+        box-sizing: border-box;
     }
 }
 /* --- GitHub Import UI --- */
