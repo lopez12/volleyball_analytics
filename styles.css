@@ -1,3 +1,15 @@
+@media (max-width: 600px) {
+    #githubFileSelect {
+        width: 100% !important;
+        min-width: 0 !important;
+        margin: 10px 0 0 0 !important;
+        font-size: 1.1em;
+        padding: 12px 10px;
+        box-sizing: border-box;
+        /* display: block !important;  Remove this so JS controls visibility */
+    }
+}
+
 /* Responsive: Player cards span full width on small screens */
 @media (max-width: 600px) {
     .players-grid,
