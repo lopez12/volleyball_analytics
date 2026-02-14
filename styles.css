@@ -3,10 +3,15 @@
         width: 100% !important;
         min-width: 0 !important;
         margin: 10px 0 0 0 !important;
-        font-size: 1.1em;
-        padding: 12px 10px;
+        font-size: 0.9em;
+        padding: 10px 8px;
         box-sizing: border-box;
-        /* display: block !important;  Remove this so JS controls visibility */
+        border-radius: 8px;
+        margin-left: 0;
+        margin-top: 8px;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
     }
 }
 
@@ -29,13 +34,39 @@
 }
 /* --- GitHub Import UI --- */
 #githubFileSelect {
-    padding: 7px 12px;
-    border-radius: 4px;
-    border: 1px solid #ccc;
-    font-size: 1em;
+    display: inline-block;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2563eb;
+    background: #f8fafc;
+    color: #2563eb;
+    font-size: 1rem;
+    font-family: inherit;
+    box-shadow: 0 2px 8px rgba(37,99,235,0.08);
+    transition: border-color 0.2s, box-shadow 0.2s;
     margin-left: 10px;
-    min-width: 180px;
+    min-width: 160px;
+    max-width: 100%;
 }
+#githubFileSelect:focus, #githubFileSelect:hover {
+    border-color: #1d4ed8;
+    box-shadow: 0 4px 12px rgba(37,99,235,0.15);
+    outline: none;
+}
+@media (max-width: 600px) {
+    #githubFileSelect {
+        width: 100% !important;
+        min-width: 0 !important;
+        margin: 10px 0 0 0 !important;
+        font-size: 1.1em;
+        padding: 12px 10px;
+        box-sizing: border-box;
+        border-radius: 8px;
+        margin-left: 0;
+        margin-top: 8px;
+    }
+}
+
 .team-summary-card {
     grid-column: span 2;
     background: #f1f5fa;
