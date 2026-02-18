@@ -206,15 +206,17 @@ function generateReport() {
                 });
             });
         }
-        // Find max good (perfect+positive) and max bad (error) per action row
+        // Find max good (perfect+positive), max regular, and max bad (error) per action row
         const actions = Object.keys(FULL_NAMES);
-        let maxGood = {}, maxBad = {};
+        let maxGood = {}, maxRegular = {}, maxBad = {};
         actions.forEach(action => {
             maxGood[action] = Math.max(summaryByQuality['#'][action], summaryByQuality['+'][action]);
+            maxRegular[action] = summaryByQuality['!'][action];
             maxBad[action] = summaryByQuality['-'][action];
         });
-        // Find the highest good and bad values among all actions
+        // Find the highest good, regular, and bad values among all actions
         let globalMaxGood = Math.max(...actions.map(a => maxGood[a]));
+        let globalMaxRegular = Math.max(...actions.map(a => maxRegular[a]));
         let globalMaxBad = Math.max(...actions.map(a => maxBad[a]));
 
         let actionsByQualityHtml = `
@@ -237,7 +239,7 @@ function generateReport() {
                                 <td>${FULL_NAMES[action]}</td>
                                 <td class="${summaryByQuality['#'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['#'][action]}</td>
                                 <td class="${summaryByQuality['+'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['+'][action]}</td>
-                                <td>${summaryByQuality['!'][action]}</td>
+                                <td class="${summaryByQuality['!'][action] === globalMaxRegular && globalMaxRegular > 0 ? 'highlight-regular' : ''}">${summaryByQuality['!'][action]}</td>
                                 <td class="${summaryByQuality['-'][action] === globalMaxBad && globalMaxBad > 0 ? 'highlight-bad' : ''}">${summaryByQuality['-'][action]}</td>
                             </tr>`;
                         }).join('')}
@@ -320,14 +322,16 @@ function generateReport() {
                 });
             });
         }
-        // Find max good (perfect+positive) and max bad (error) per action row
+        // Find max good (perfect+positive), max regular, and max bad (error) per action row
         const actions = Object.keys(FULL_NAMES);
-        let maxGood = {}, maxBad = {};
+        let maxGood = {}, maxRegular = {}, maxBad = {};
         actions.forEach(action => {
             maxGood[action] = Math.max(summaryByQuality['#'][action], summaryByQuality['+'][action]);
+            maxRegular[action] = summaryByQuality['!'][action];
             maxBad[action] = summaryByQuality['-'][action];
         });
         let globalMaxGood = Math.max(...actions.map(a => maxGood[a]));
+        let globalMaxRegular = Math.max(...actions.map(a => maxRegular[a]));
         let globalMaxBad = Math.max(...actions.map(a => maxBad[a]));
         let actionsByQualityHtml = `
             <div class="action-section" style="margin-top:16px;">
@@ -349,7 +353,7 @@ function generateReport() {
                                 <td>${FULL_NAMES[action]}</td>
                                 <td class="${summaryByQuality['#'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['#'][action]}</td>
                                 <td class="${summaryByQuality['+'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['+'][action]}</td>
-                                <td>${summaryByQuality['!'][action]}</td>
+                                <td class="${summaryByQuality['!'][action] === globalMaxRegular && globalMaxRegular > 0 ? 'highlight-regular' : ''}">${summaryByQuality['!'][action]}</td>
                                 <td class="${summaryByQuality['-'][action] === globalMaxBad && globalMaxBad > 0 ? 'highlight-bad' : ''}">${summaryByQuality['-'][action]}</td>
                             </tr>`;
                         }).join('')}
