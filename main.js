@@ -141,32 +141,15 @@ function generateReport() {
 
     grid.innerHTML = '';
     teamGrid.innerHTML = '';
-    let globalTotal = 0, globalPerfect = 0, ratingSum = 0, playerCount = 0;
+    let globalTotal = 0, globalPerfect = 0;
 
-    // Player stats
-    const playersArray = Object.keys(players).map(num => {
-        let data = players[num];
-        return {
-            num,
-            data,
-            rating: calculateRating(data)
-        };
-    }).filter(p => p.data.total > 0)
-    .sort((a, b) => b.rating - a.rating);
-
-    playersArray.forEach(p => {
-        const stats = p.data;
-        globalTotal += stats.total;
-        globalPerfect += stats.grades['#'];
-        ratingSum += parseFloat(p.rating);
-        playerCount++;
-
+    function createCard(title, stats, rating, extraClass = '') {
         const perfectPct = Math.round((stats.grades['#'] / stats.total) * 100);
         const positivePct = Math.round((stats.grades['+'] / stats.total) * 100);
         const regularPct = Math.round((stats.grades['!'] / stats.total) * 100);
         const errorPct = Math.round((stats.grades['-'] / stats.total) * 100);
         
-        let ratingColor = p.rating >= 8 ? '#16a34a' : (p.rating >= 6 ? '#ca8a04' : '#dc2626');
+        let ratingColor = rating >= 8 ? '#16a34a' : (rating >= 6 ? '#ca8a04' : '#dc2626');
 
         let actionsHtml = Object.entries(stats.actions)
             .filter(([k,v]) => v.tot > 0)
@@ -182,7 +165,6 @@ function generateReport() {
                 </div>
             `}).join('');
 
-        // Build summary table directly from actions and grades for consistency
         let summaryByQuality = { '#': {}, '+': {}, '!': {}, '-': {} };
         Object.keys(FULL_NAMES).forEach(action => {
             summaryByQuality['#'][action] = 0;
@@ -190,15 +172,10 @@ function generateReport() {
             summaryByQuality['!'][action] = 0;
             summaryByQuality['-'][action] = 0;
         });
-        // For each action, distribute the grades based on the player's grades and actions
-        // We need to count, for each action, how many of each grade occurred
-        // We'll use actionsByQuality for this, but with a direct mapping
+        
         if (stats.actionsByQuality) {
             ['#','+','!','-'].forEach(grade => {
                 stats.actionsByQuality[grade].forEach(token => {
-                    // token is like 7A-
-                    // Instead of regex, just get the last two chars for action and grade
-                    // e.g., 7A- => action = token[token.length-2]
                     const action = token[token.length-2];
                     if (summaryByQuality[grade][action] !== undefined) {
                         summaryByQuality[grade][action]++;
@@ -206,7 +183,7 @@ function generateReport() {
                 });
             });
         }
-        // Find max good (perfect+positive), max regular, and max bad (error) per action row
+        
         const actions = Object.keys(FULL_NAMES);
         let maxGood = {}, maxRegular = {}, maxBad = {};
         actions.forEach(action => {
@@ -214,7 +191,7 @@ function generateReport() {
             maxRegular[action] = summaryByQuality['!'][action];
             maxBad[action] = summaryByQuality['-'][action];
         });
-        // Find the highest good, regular, and bad values among all actions
+        
         let globalMaxGood = Math.max(...actions.map(a => maxGood[a]));
         let globalMaxRegular = Math.max(...actions.map(a => maxRegular[a]));
         let globalMaxBad = Math.max(...actions.map(a => maxBad[a]));
@@ -250,124 +227,10 @@ function generateReport() {
         `;
 
         const card = document.createElement('div');
-        card.className = 'player-card';
+        card.className = `player-card ${extraClass}`.trim();
         card.innerHTML = `
             <div class="card-header">
-                <span class="player-number">#${p.num}</span>
-                <span class="player-rating" style="color: ${ratingColor}; background: white;">${p.rating}</span>
-            </div>
-            <div class="card-body">
-                <div class="metric-row"><span>Perfecto (#)</span><span>${perfectPct}%</span></div>
-                <div class="bar-container"><div class="bar-fill" style="width: ${perfectPct}%; background-color: var(--success);"></div></div>
-
-                <div class="metric-row"><span>Positivo (+)</span><span>${positivePct}%</span></div>
-                <div class="bar-container"><div class="bar-fill" style="width: ${positivePct}%; background-color: var(--primary);"></div></div>
-                
-                <div class="metric-row"><span>Regular (!)</span><span>${regularPct}%</span></div>
-                <div class="bar-container"><div class="bar-fill" style="width: ${regularPct}%; background-color: var(--warning);"></div></div>
-
-                <div class="metric-row"><span>Error (-)</span><span>${errorPct}%</span></div>
-                <div class="bar-container"><div class="bar-fill" style="width: ${errorPct}%; background-color: var(--danger);"></div></div>
-                
-                <div class="action-section">
-                    <div class="action-title">Efectividad por Acción (Buenos/Total)</div>
-                    <div class="action-grid">${actionsHtml}</div>
-                </div>
-                ${actionsByQualityHtml}
-            </div>
-        `;
-        grid.appendChild(card);
-    });
-
-    // Team-level actions
-    let teamStats = team;
-    if (teamStats.total > 0) {
-        const perfectPct = Math.round((teamStats.grades['#'] / teamStats.total) * 100);
-        const positivePct = Math.round((teamStats.grades['+'] / teamStats.total) * 100);
-        const regularPct = Math.round((teamStats.grades['!'] / teamStats.total) * 100);
-        const errorPct = Math.round((teamStats.grades['-'] / teamStats.total) * 100);
-        let rating = calculateRating(teamStats);
-        let ratingColor = rating >= 8 ? '#16a34a' : (rating >= 6 ? '#ca8a04' : '#dc2626');
-        let actionsHtml = Object.entries(teamStats.actions)
-            .filter(([k,v]) => v.tot > 0)
-            .map(([k,v]) => {
-                let eff = v.tot > 0 ? (v.good / v.tot) : 0;
-                let pillClass = '';
-                if (eff === 1.0) pillClass = 'high-perf'; 
-                else if (eff < 0.4) pillClass = 'low-perf';
-                return `
-                <div class="action-pill ${pillClass}">
-                    <span class="action-name">${FULL_NAMES[k]}</span>
-                    <span class="action-count">${v.good}/${v.tot}</span>
-                </div>
-            `}).join('');
-
-        // Team summary table (modern style)
-        // Build summary table directly from actions and grades for consistency
-        let summaryByQuality = { '#': {}, '+': {}, '!': {}, '-': {} };
-        Object.keys(FULL_NAMES).forEach(action => {
-            summaryByQuality['#'][action] = 0;
-            summaryByQuality['+'][action] = 0;
-            summaryByQuality['!'][action] = 0;
-            summaryByQuality['-'][action] = 0;
-        });
-        if (teamStats.actionsByQuality) {
-            ['#','+','!','-'].forEach(grade => {
-                teamStats.actionsByQuality[grade].forEach(token => {
-                    // token is like 7A- or T[A]-
-                    const action = token[token.length-2];
-                    if (summaryByQuality[grade][action] !== undefined) {
-                        summaryByQuality[grade][action]++;
-                    }
-                });
-            });
-        }
-        // Find max good (perfect+positive), max regular, and max bad (error) per action row
-        const actions = Object.keys(FULL_NAMES);
-        let maxGood = {}, maxRegular = {}, maxBad = {};
-        actions.forEach(action => {
-            maxGood[action] = Math.max(summaryByQuality['#'][action], summaryByQuality['+'][action]);
-            maxRegular[action] = summaryByQuality['!'][action];
-            maxBad[action] = summaryByQuality['-'][action];
-        });
-        let globalMaxGood = Math.max(...actions.map(a => maxGood[a]));
-        let globalMaxRegular = Math.max(...actions.map(a => maxRegular[a]));
-        let globalMaxBad = Math.max(...actions.map(a => maxBad[a]));
-        let actionsByQualityHtml = `
-            <div class="action-section" style="margin-top:16px;">
-                <div class="action-title" style="margin-bottom:8px;">Resumen por Calidad y Acción</div>
-                <div style="overflow-x:auto;">
-                <table class="summary-table">
-                    <thead>
-                        <tr>
-                            <th></th>
-                            <th>Perfecto</th>
-                            <th>Positivo</th>
-                            <th>Regular</th>
-                            <th>Error</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${actions.map(action => {
-                            return `<tr>
-                                <td>${FULL_NAMES[action]}</td>
-                                <td class="${summaryByQuality['#'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['#'][action]}</td>
-                                <td class="${summaryByQuality['+'][action] === globalMaxGood ? 'highlight-good' : ''}">${summaryByQuality['+'][action]}</td>
-                                <td class="${summaryByQuality['!'][action] === globalMaxRegular && globalMaxRegular > 0 ? 'highlight-regular' : ''}">${summaryByQuality['!'][action]}</td>
-                                <td class="${summaryByQuality['-'][action] === globalMaxBad && globalMaxBad > 0 ? 'highlight-bad' : ''}">${summaryByQuality['-'][action]}</td>
-                            </tr>`;
-                        }).join('')}
-                    </tbody>
-                </table>
-                </div>
-            </div>
-        `;
-
-        const card = document.createElement('div');
-        card.className = 'player-card team-summary-card';
-        card.innerHTML = `
-            <div class="card-header">
-                <span class="player-number">Equipo</span>
+                <span class="player-number">${title}</span>
                 <span class="player-rating" style="color: ${ratingColor}; background: white;">${rating}</span>
             </div>
             <div class="card-body">
@@ -390,17 +253,37 @@ function generateReport() {
                 ${actionsByQualityHtml}
             </div>
         `;
-        teamGrid.appendChild(card);
-        globalTotal += teamStats.total;
-        globalPerfect += teamStats.grades['#'];
-        ratingSum += parseFloat(rating);
-        playerCount++;
+        return card;
+    }
+
+    // Player stats
+    const playersArray = Object.keys(players).map(num => {
+        let data = players[num];
+        return {
+            num,
+            data,
+            rating: calculateRating(data)
+        };
+    }).filter(p => p.data.total > 0)
+    .sort((a, b) => b.rating - a.rating);
+
+    playersArray.forEach(p => {
+        globalTotal += p.data.total;
+        globalPerfect += p.data.grades['#'];
+        grid.appendChild(createCard(`#${p.num}`, p.data, p.rating));
+    });
+
+    // Team-level actions
+    if (team.total > 0) {
+        let rating = calculateRating(team);
+        teamGrid.appendChild(createCard('Equipo', team, rating, 'team-summary-card'));
+        globalTotal += team.total;
+        globalPerfect += team.grades['#'];
     }
 
     if (globalTotal > 0) {
         document.getElementById('totalActions').innerText = globalTotal;
-        // Use the same method for team rating as for the team summary card
-        document.getElementById('teamRating').innerText = calculateRating(teamStats);
+        document.getElementById('teamRating').innerText = calculateRating(team);
         document.getElementById('perfectIndex').innerText = Math.round((globalPerfect / globalTotal) * 100) + '%';
         document.getElementById('dashboard').style.display = 'block';
         document.getElementById('btnDownload').style.display = 'inline-block';
