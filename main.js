@@ -133,6 +133,119 @@ function calculateRating(playerData) {
     return Math.max(1.0, Math.min(10.0, rawRating)).toFixed(1);
 }
 
+function calculatePhaseStats(tokens) {
+    const stats = {
+        so_good: { attempts: 0, kills: 0 }, // R# or R+
+        so_bad: { attempts: 0, kills: 0 },  // R!
+        trans: { attempts: 0, kills: 0 }    // D
+    };
+    
+    let currentPhase = null;
+    let sawSet = false;
+
+    tokens.forEach(token => {
+        let match = token.match(/^(\d+)([SREADB])([#+!-])$/) || token.match(/^([SREADB])([#+!-])$/);
+        if (!match) return;
+        
+        const action = match.length === 4 ? match[2] : match[1];
+        const grade = match.length === 4 ? match[3] : match[2];
+
+        if (action === 'R') {
+            // Side-Out Start
+            if (grade === '#' || grade === '+') {
+                currentPhase = 'so_good';
+                stats.so_good.attempts++;
+            } else if (grade === '!') {
+                currentPhase = 'so_bad';
+                stats.so_bad.attempts++;
+            } else {
+                currentPhase = null;
+            }
+            sawSet = false;
+        } else if (action === 'D') {
+            // Transition Start (Dig)
+            currentPhase = 'trans';
+            stats.trans.attempts++;
+            sawSet = false;
+        } else if (action === 'E') {
+            if (currentPhase) sawSet = true;
+            else { currentPhase = null; sawSet = false; }
+        } else if (action === 'A') {
+            if (currentPhase && sawSet) {
+                if (grade === '#') stats[currentPhase].kills++;
+                currentPhase = null; sawSet = false;
+            } else {
+                currentPhase = null; sawSet = false;
+            }
+        } else {
+            // S, B break the chain
+            currentPhase = null; sawSet = false;
+        }
+    });
+    return stats;
+}
+
+function calculatePointStats(tokens) {
+    let bp = { total: 0, won: 0 };
+    let so = { total: 0, won: 0 };
+
+    for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        let match = token.match(/^(\d*)([SREADB])([#+!-])$/);
+        if (!match) continue;
+        
+        const action = match[2];
+
+        if (action === 'S') {
+            bp.total++;
+            // Look ahead to see who serves next
+            let outcomeKnown = false;
+            for (let j = i + 1; j < tokens.length; j++) {
+                let nextMatch = tokens[j].match(/^(\d*)([SREADB])([#+!-])$/);
+                if (!nextMatch) continue;
+                const nextAction = nextMatch[2];
+                
+                if (nextAction === 'S') {
+                    bp.won++; // We served, then served again = Point Won
+                    outcomeKnown = true;
+                    break;
+                } else if (nextAction === 'R') {
+                    outcomeKnown = true; // We served, then received = Point Lost
+                    break;
+                }
+            }
+            // If end of log, check if rally ended with a terminal win (Ace/Kill/Block)
+            if (!outcomeKnown) {
+                for (let k = i; k < tokens.length; k++) {
+                     let kMatch = tokens[k].match(/^(\d*)([SREADB])([#+!-])$/);
+                     if (!kMatch) continue;
+                     if (k > i && (kMatch[2] === 'S' || kMatch[2] === 'R')) break;
+                     if (kMatch[3] === '#') { bp.won++; break; }
+                }
+            }
+        } else if (action === 'R') {
+            so.total++;
+            let outcomeKnown = false;
+            for (let j = i + 1; j < tokens.length; j++) {
+                let nextMatch = tokens[j].match(/^(\d*)([SREADB])([#+!-])$/);
+                if (!nextMatch) continue;
+                const nextAction = nextMatch[2];
+                if (nextAction === 'S') { so.won++; outcomeKnown = true; break; }
+                else if (nextAction === 'R') { outcomeKnown = true; break; }
+            }
+            if (!outcomeKnown) {
+                 for (let k = i; k < tokens.length; k++) {
+                     let kMatch = tokens[k].match(/^(\d*)([SREADB])([#+!-])$/);
+                     if (!kMatch) continue;
+                     if (k > i && (kMatch[2] === 'S' || kMatch[2] === 'R')) break;
+                     if (kMatch[3] === '#') { so.won++; break; }
+                }
+            }
+        }
+    }
+    return { bp, so };
+}
+
 function generateReport() {
     const logText = document.getElementById('matchLog').value;
     const { players, team } = parseLog(logText);
@@ -279,6 +392,86 @@ function generateReport() {
         teamGrid.appendChild(createCard('Equipo', team, rating, 'team-summary-card'));
         globalTotal += team.total;
         globalPerfect += team.grades['#'];
+
+        // Phase Analysis (Side-Out vs Transition)
+        const tokens = logText.trim().split(/\s+/);
+        const phaseStats = calculatePhaseStats(tokens);
+        const phaseCard = document.createElement('div');
+        phaseCard.className = 'player-card team-summary-card';
+        phaseCard.style.marginTop = '10px';
+        
+        const phaseContent = [
+            { key: 'so_good', label: 'Side-Out (Pase Bueno)', desc: 'R# / R+' },
+            { key: 'so_bad', label: 'Side-Out (Pase Regular)', desc: 'R!' },
+            { key: 'trans', label: 'Transición', desc: 'Tras Defensa' }
+        ].map(item => {
+            const s = phaseStats[item.key];
+            if (s.attempts === 0) return '';
+            const pct = Math.round((s.kills / s.attempts) * 100);
+            
+            // Color coding: Green for >50%, Blue for >35%, Red for lower
+            let barColor = pct >= 50 ? 'var(--success)' : (pct >= 35 ? 'var(--primary)' : 'var(--danger)');
+
+            return `
+                <div class="metric-row" style="margin-top: 12px;">
+                    <span>${item.label} <span style="font-weight:normal; color:#6b7280; font-size:0.8em;">(${s.kills}/${s.attempts} pts)</span></span>
+                    <span>${pct}%</span>
+                </div>
+                <div class="bar-container">
+                    <div class="bar-fill" style="width: ${pct}%; background-color: ${barColor};"></div>
+                </div>
+            `;
+        }).join('');
+
+        phaseCard.innerHTML = `
+            <div class="card-header"><span class="player-number">Eficacia por Fase de Juego</span></div>
+            <div class="card-body">
+                <div style="margin-bottom: 15px; font-size: 0.85rem; color: #4b5563; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; line-height: 1.4;">
+                    <strong>Side-Out:</strong> Capacidad de ganar puntos tras recibir saque. <br>
+                    <strong>Transición:</strong> Capacidad de ganar puntos tras defender un remate.
+                </div>
+                <div class="action-section" style="border-top: none; padding-top: 0;">
+                    <div class="action-title">Kill % por Situación</div>
+                    ${phaseContent || '<div style="padding:10px; text-align:center; color:#9ca3af; font-size:0.8rem;">No hay secuencias suficientes</div>'}
+                </div>
+            </div>
+        `;
+        teamGrid.appendChild(phaseCard);
+
+        // Point Scoring Stats (Break Point & Side Out)
+        const pointStats = calculatePointStats(tokens);
+        const scoringCard = document.createElement('div');
+        scoringCard.className = 'player-card team-summary-card';
+        scoringCard.style.marginTop = '10px';
+        
+        const bpPct = pointStats.bp.total > 0 ? Math.round((pointStats.bp.won / pointStats.bp.total) * 100) : 0;
+        const soPct = pointStats.so.total > 0 ? Math.round((pointStats.so.won / pointStats.so.total) * 100) : 0;
+        
+        // BP > 40% is good, SO > 60% is good
+        const bpColor = bpPct >= 40 ? 'var(--success)' : (bpPct >= 30 ? 'var(--primary)' : 'var(--danger)');
+        const soColor = soPct >= 60 ? 'var(--success)' : (soPct >= 50 ? 'var(--primary)' : 'var(--danger)');
+
+        scoringCard.innerHTML = `
+            <div class="card-header"><span class="player-number">Rendimiento de Puntos</span></div>
+            <div class="card-body">
+                <div style="margin-bottom: 15px; font-size: 0.85rem; color: #4b5563; background: #f8fafc; padding: 10px; border-radius: 6px; border: 1px solid #e2e8f0; line-height: 1.4;">
+                    <strong>Break Point:</strong> % Puntos ganados con posesion (saque propio). <br>
+                    <strong>Side-Out:</strong> % Puntos ganados recibiendo (saque rival).
+                </div>
+                <div class="metric-row" style="margin-top: 12px;">
+                    <span>Break Point % <span style="font-weight:normal; color:#6b7280; font-size:0.8em;">(${pointStats.bp.won}/${pointStats.bp.total} pts)</span></span>
+                    <span>${bpPct}%</span>
+                </div>
+                <div class="bar-container"><div class="bar-fill" style="width: ${bpPct}%; background-color: ${bpColor};"></div></div>
+
+                <div class="metric-row" style="margin-top: 12px;">
+                    <span>Side-Out % <span style="font-weight:normal; color:#6b7280; font-size:0.8em;">(${pointStats.so.won}/${pointStats.so.total} pts)</span></span>
+                    <span>${soPct}%</span>
+                </div>
+                <div class="bar-container"><div class="bar-fill" style="width: ${soPct}%; background-color: ${soColor};"></div></div>
+            </div>
+        `;
+        teamGrid.appendChild(scoringCard);
     }
 
     if (globalTotal > 0) {
