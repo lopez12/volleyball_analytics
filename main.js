@@ -54,7 +54,9 @@ function parseLog(logString) {
     // Accepts both player actions (e.g., 7S#) and team actions (e.g., S#)
     const regexPlayer = /^(\d+)([SREADB])([#+!-])$/;
     const regexTeam = /^([SREADB])([#+!-])$/;
-    const tokens = logString.trim().split(/\s+/);
+    // Split by lines first to preserve rally boundaries, then by spaces within each line
+    const lines = logString.trim().split(/\r?\n/);
+    const rallies = []; // Array of arrays — each sub-array is one rally's tokens
     const baseActions = () => ({'S':{tot:0,good:0},'R':{tot:0,good:0},'E':{tot:0,good:0},'A':{tot:0,good:0},'D':{tot:0,good:0},'B':{tot:0,good:0}});
     const baseGrades = () => ({'#':0,'+':0,'!':0,'-':0});
     const baseActionsByQuality = () => ({'#':[], '+':[], '!':[], '-':[]});
@@ -71,47 +73,40 @@ function parseLog(logString) {
         actionsByGradeCount: baseActionsByGradeCount()
     };
 
-    tokens.forEach(token => {
-        let match = token.match(regexPlayer);
-        if (match) {
-            const [_, num, action, grade] = match;
-            if (!players[num]) {
-                players[num] = {
-                    total: 0,
-                    scoreSum: 0,
-                    grades: baseGrades(),
-                    actions: baseActions(),
-                    actionsByQuality: baseActionsByQuality(),
-                    actionsByGradeCount: baseActionsByGradeCount()
-                };
-            }
-            // General stats
-            players[num].total++;
-            players[num].grades[grade]++;
-            players[num].scoreSum += (WEIGHTS[grade] || 0);
-            // Per-action stats
-            players[num].actions[action].tot++;
-            if (grade === '#' || grade === '+') {
-                players[num].actions[action].good++;
-            }
-            // For summary tables
-            players[num].actionsByQuality[grade].push(`${num}${action}${grade}`);
-            players[num].actionsByGradeCount[grade][action]++;
-            // Team aggregate
-            team.total++;
-            team.grades[grade]++;
-            team.scoreSum += (WEIGHTS[grade] || 0);
-            team.actions[action].tot++;
-            if (grade === '#' || grade === '+') {
-                team.actions[action].good++;
-            }
-            team.actionsByQuality[grade].push(`${num}${action}${grade}`);
-            team.actionsByGradeCount[grade][action]++;
-        } else {
-            match = token.match(regexTeam);
+    lines.forEach(line => {
+        const trimmed = line.trim();
+        // Skip empty lines and set separators
+        if (!trimmed || trimmed === '---') return;
+        const tokens = trimmed.split(/\s+/);
+        const rallyTokens = []; // Valid tokens for this rally
+
+        tokens.forEach(token => {
+            let match = token.match(regexPlayer);
             if (match) {
-                const [_, action, grade] = match;
-                // Team only
+                const [_, num, action, grade] = match;
+                if (!players[num]) {
+                    players[num] = {
+                        total: 0,
+                        scoreSum: 0,
+                        grades: baseGrades(),
+                        actions: baseActions(),
+                        actionsByQuality: baseActionsByQuality(),
+                        actionsByGradeCount: baseActionsByGradeCount()
+                    };
+                }
+                // General stats
+                players[num].total++;
+                players[num].grades[grade]++;
+                players[num].scoreSum += (WEIGHTS[grade] || 0);
+                // Per-action stats
+                players[num].actions[action].tot++;
+                if (grade === '#' || grade === '+') {
+                    players[num].actions[action].good++;
+                }
+                // For summary tables
+                players[num].actionsByQuality[grade].push(`${num}${action}${grade}`);
+                players[num].actionsByGradeCount[grade][action]++;
+                // Team aggregate
                 team.total++;
                 team.grades[grade]++;
                 team.scoreSum += (WEIGHTS[grade] || 0);
@@ -119,12 +114,33 @@ function parseLog(logString) {
                 if (grade === '#' || grade === '+') {
                     team.actions[action].good++;
                 }
-                team.actionsByQuality[grade].push(`T${action}${grade}`);
+                team.actionsByQuality[grade].push(`${num}${action}${grade}`);
                 team.actionsByGradeCount[grade][action]++;
+                rallyTokens.push(token);
+            } else {
+                match = token.match(regexTeam);
+                if (match) {
+                    const [_, action, grade] = match;
+                    // Team only
+                    team.total++;
+                    team.grades[grade]++;
+                    team.scoreSum += (WEIGHTS[grade] || 0);
+                    team.actions[action].tot++;
+                    if (grade === '#' || grade === '+') {
+                        team.actions[action].good++;
+                    }
+                    team.actionsByQuality[grade].push(`T${action}${grade}`);
+                    team.actionsByGradeCount[grade][action]++;
+                    rallyTokens.push(token);
+                }
             }
+        });
+
+        if (rallyTokens.length > 0) {
+            rallies.push(rallyTokens);
         }
     });
-    return { players, team };
+    return { players, team, rallies };
 }
 
 function calculateRating(playerData) {
@@ -133,114 +149,129 @@ function calculateRating(playerData) {
     return Math.max(1.0, Math.min(10.0, rawRating)).toFixed(1);
 }
 
-function calculatePhaseStats(tokens) {
+function calculatePhaseStats(rallies) {
+    // Now receives an array of rallies (each rally = array of tokens)
+    // Phase state resets at each rally boundary
     const stats = {
         so_good: { attempts: 0, kills: 0 }, // R# or R+
         so_bad: { attempts: 0, kills: 0 },  // R!
         trans: { attempts: 0, kills: 0 }    // D
     };
-    
-    let currentPhase = null;
-    let sawSet = false;
 
-    tokens.forEach(token => {
-        let match = token.match(/^(\d+)([SREADB])([#+!-])$/) || token.match(/^([SREADB])([#+!-])$/);
-        if (!match) return;
-        
-        const action = match.length === 4 ? match[2] : match[1];
-        const grade = match.length === 4 ? match[3] : match[2];
+    rallies.forEach(rally => {
+        // Reset phase tracking at the start of each rally
+        let currentPhase = null;
+        let sawSet = false;
 
-        if (action === 'R') {
-            // Side-Out Start
-            if (grade === '#' || grade === '+') {
-                currentPhase = 'so_good';
-                stats.so_good.attempts++;
-            } else if (grade === '!') {
-                currentPhase = 'so_bad';
-                stats.so_bad.attempts++;
+        rally.forEach(token => {
+            let match = token.match(/^(\d+)([SREADB])([#+!-])$/) || token.match(/^([SREADB])([#+!-])$/);
+            if (!match) return;
+
+            const action = match.length === 4 ? match[2] : match[1];
+            const grade = match.length === 4 ? match[3] : match[2];
+
+            if (action === 'R') {
+                // Side-Out Start
+                if (grade === '#' || grade === '+') {
+                    currentPhase = 'so_good';
+                    stats.so_good.attempts++;
+                } else if (grade === '!') {
+                    currentPhase = 'so_bad';
+                    stats.so_bad.attempts++;
+                } else {
+                    currentPhase = null;
+                }
+                sawSet = false;
+            } else if (action === 'D') {
+                // Transition Start (Dig)
+                currentPhase = 'trans';
+                stats.trans.attempts++;
+                sawSet = false;
+            } else if (action === 'E') {
+                if (currentPhase) sawSet = true;
+                else { currentPhase = null; sawSet = false; }
+            } else if (action === 'A') {
+                if (currentPhase && sawSet) {
+                    if (grade === '#') stats[currentPhase].kills++;
+                    currentPhase = null; sawSet = false;
+                } else {
+                    currentPhase = null; sawSet = false;
+                }
             } else {
-                currentPhase = null;
-            }
-            sawSet = false;
-        } else if (action === 'D') {
-            // Transition Start (Dig)
-            currentPhase = 'trans';
-            stats.trans.attempts++;
-            sawSet = false;
-        } else if (action === 'E') {
-            if (currentPhase) sawSet = true;
-            else { currentPhase = null; sawSet = false; }
-        } else if (action === 'A') {
-            if (currentPhase && sawSet) {
-                if (grade === '#') stats[currentPhase].kills++;
-                currentPhase = null; sawSet = false;
-            } else {
+                // S, B break the chain
                 currentPhase = null; sawSet = false;
             }
-        } else {
-            // S, B break the chain
-            currentPhase = null; sawSet = false;
-        }
+        });
     });
     return stats;
 }
 
-function calculatePointStats(tokens) {
+function calculatePointStats(rallies) {
+    // Now receives an array of rallies (each rally = array of tokens)
+    // Point outcome is determined per rally, then look at the NEXT rally
+    // to know if we won or lost the point.
     let bp = { total: 0, won: 0 };
     let so = { total: 0, won: 0 };
 
-    for (let i = 0; i < tokens.length; i++) {
-        const token = tokens[i];
-        let match = token.match(/^(\d*)([SREADB])([#+!-])$/);
-        if (!match) continue;
-        
-        const action = match[2];
+    for (let r = 0; r < rallies.length; r++) {
+        const rally = rallies[r];
+        if (rally.length === 0) continue;
 
-        if (action === 'S') {
+        // Determine the type of this rally from its first action
+        let rallyType = null; // 'serve' (BP) or 'receive' (SO)
+        for (let i = 0; i < rally.length; i++) {
+            let match = rally[i].match(/^(\d*)([SREADB])([#+!-])$/);
+            if (!match) continue;
+            const action = match[2];
+            if (action === 'S') { rallyType = 'serve'; break; }
+            if (action === 'R') { rallyType = 'receive'; break; }
+            // If rally starts with D (transition from previous), treat as continuation
+            // but we can't assign BP/SO without S or R, so skip
+            break;
+        }
+
+        if (!rallyType) continue;
+
+        if (rallyType === 'serve') {
             bp.total++;
-            // Look ahead to see who serves next
-            let outcomeKnown = false;
-            for (let j = i + 1; j < tokens.length; j++) {
-                let nextMatch = tokens[j].match(/^(\d*)([SREADB])([#+!-])$/);
-                if (!nextMatch) continue;
-                const nextAction = nextMatch[2];
-                
-                if (nextAction === 'S') {
-                    bp.won++; // We served, then served again = Point Won
-                    outcomeKnown = true;
-                    break;
-                } else if (nextAction === 'R') {
-                    outcomeKnown = true; // We served, then received = Point Lost
+            // Check next rally to determine outcome
+            let won = false;
+            if (r + 1 < rallies.length) {
+                const nextRally = rallies[r + 1];
+                for (let j = 0; j < nextRally.length; j++) {
+                    let nextMatch = nextRally[j].match(/^(\d*)([SREADB])([#+!-])$/);
+                    if (!nextMatch) continue;
+                    const nextAction = nextMatch[2];
+                    if (nextAction === 'S') { won = true; break; }  // We serve again = won point
+                    if (nextAction === 'R') { won = false; break; } // We receive = lost point
                     break;
                 }
+            } else {
+                // Last rally — check if it ended with a terminal win (#)
+                const lastToken = rally[rally.length - 1];
+                let lastMatch = lastToken.match(/^(\d*)([SREADB])([#+!-])$/);
+                if (lastMatch && lastMatch[3] === '#') won = true;
             }
-            // If end of log, check if rally ended with a terminal win (Ace/Kill/Block)
-            if (!outcomeKnown) {
-                for (let k = i; k < tokens.length; k++) {
-                     let kMatch = tokens[k].match(/^(\d*)([SREADB])([#+!-])$/);
-                     if (!kMatch) continue;
-                     if (k > i && (kMatch[2] === 'S' || kMatch[2] === 'R')) break;
-                     if (kMatch[3] === '#') { bp.won++; break; }
-                }
-            }
-        } else if (action === 'R') {
+            if (won) bp.won++;
+        } else if (rallyType === 'receive') {
             so.total++;
-            let outcomeKnown = false;
-            for (let j = i + 1; j < tokens.length; j++) {
-                let nextMatch = tokens[j].match(/^(\d*)([SREADB])([#+!-])$/);
-                if (!nextMatch) continue;
-                const nextAction = nextMatch[2];
-                if (nextAction === 'S') { so.won++; outcomeKnown = true; break; }
-                else if (nextAction === 'R') { outcomeKnown = true; break; }
-            }
-            if (!outcomeKnown) {
-                 for (let k = i; k < tokens.length; k++) {
-                     let kMatch = tokens[k].match(/^(\d*)([SREADB])([#+!-])$/);
-                     if (!kMatch) continue;
-                     if (k > i && (kMatch[2] === 'S' || kMatch[2] === 'R')) break;
-                     if (kMatch[3] === '#') { so.won++; break; }
+            let won = false;
+            if (r + 1 < rallies.length) {
+                const nextRally = rallies[r + 1];
+                for (let j = 0; j < nextRally.length; j++) {
+                    let nextMatch = nextRally[j].match(/^(\d*)([SREADB])([#+!-])$/);
+                    if (!nextMatch) continue;
+                    const nextAction = nextMatch[2];
+                    if (nextAction === 'S') { won = true; break; }  // We serve next = won point
+                    if (nextAction === 'R') { won = false; break; } // We receive again = lost point
+                    break;
                 }
+            } else {
+                const lastToken = rally[rally.length - 1];
+                let lastMatch = lastToken.match(/^(\d*)([SREADB])([#+!-])$/);
+                if (lastMatch && lastMatch[3] === '#') won = true;
             }
+            if (won) so.won++;
         }
     }
     return { bp, so };
@@ -248,7 +279,7 @@ function calculatePointStats(tokens) {
 
 function generateReport() {
     const logText = document.getElementById('matchLog').value;
-    const { players, team } = parseLog(logText);
+    const { players, team, rallies } = parseLog(logText);
     const grid = document.getElementById('playersGrid');
     const teamGrid = document.getElementById('teamActionsGrid');
 
@@ -381,8 +412,6 @@ function generateReport() {
     .sort((a, b) => b.rating - a.rating);
 
     playersArray.forEach(p => {
-        globalTotal += p.data.total;
-        globalPerfect += p.data.grades['#'];
         grid.appendChild(createCard(`#${p.num}`, p.data, p.rating));
     });
 
@@ -390,12 +419,12 @@ function generateReport() {
     if (team.total > 0) {
         let rating = calculateRating(team);
         teamGrid.appendChild(createCard('Equipo', team, rating, 'team-summary-card'));
-        globalTotal += team.total;
-        globalPerfect += team.grades['#'];
+        // team.total already includes all player + team-only actions
+        globalTotal = team.total;
+        globalPerfect = team.grades['#'];
 
         // Phase Analysis (Side-Out vs Transition)
-        const tokens = logText.trim().split(/\s+/);
-        const phaseStats = calculatePhaseStats(tokens);
+        const phaseStats = calculatePhaseStats(rallies);
         const phaseCard = document.createElement('div');
         phaseCard.className = 'player-card team-summary-card';
         phaseCard.style.marginTop = '10px';
@@ -439,7 +468,7 @@ function generateReport() {
         teamGrid.appendChild(phaseCard);
 
         // Point Scoring Stats (Break Point & Side Out)
-        const pointStats = calculatePointStats(tokens);
+        const pointStats = calculatePointStats(rallies);
         const scoringCard = document.createElement('div');
         scoringCard.className = 'player-card team-summary-card';
         scoringCard.style.marginTop = '10px';
