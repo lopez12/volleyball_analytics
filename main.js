@@ -64,6 +64,7 @@ function parseLog(logString) {
     const baseActionsByGradeCount = () => ({'#':{'S':0,'R':0,'E':0,'A':0,'D':0,'B':0},'+':{'S':0,'R':0,'E':0,'A':0,'D':0,'B':0},'!':{'S':0,'R':0,'E':0,'A':0,'D':0,'B':0},'-':{'S':0,'R':0,'E':0,'A':0,'D':0,'B':0}});
 
     const players = {};
+    const youtubeUrls = [];
     const team = {
         total: 0,
         scoreSum: 0,
@@ -77,6 +78,15 @@ function parseLog(logString) {
         const trimmed = line.trim();
         // Skip empty lines and set separators
         if (!trimmed || trimmed === '---') return;
+        // Extract YouTube metadata line
+        if (trimmed.toLowerCase().startsWith('@youtube:')) {
+            const url = trimmed.slice(9).trim();
+            // Only accept youtube.com and youtu.be URLs for safety
+            if (/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//.test(url)) {
+                youtubeUrls.push(url);
+            }
+            return;
+        }
         const tokens = trimmed.split(/\s+/);
         const rallyTokens = []; // Valid tokens for this rally
 
@@ -140,7 +150,7 @@ function parseLog(logString) {
             rallies.push(rallyTokens);
         }
     });
-    return { players, team, rallies };
+    return { players, team, rallies, youtubeUrls };
 }
 
 function calculateRating(playerData) {
@@ -279,7 +289,7 @@ function calculatePointStats(rallies) {
 
 function generateReport() {
     const logText = document.getElementById('matchLog').value;
-    const { players, team, rallies } = parseLog(logText);
+    const { players, team, rallies, youtubeUrls } = parseLog(logText);
     const grid = document.getElementById('playersGrid');
     const teamGrid = document.getElementById('teamActionsGrid');
 
@@ -508,6 +518,25 @@ function generateReport() {
         document.getElementById('teamRating').innerText = calculateRating(team);
         document.getElementById('perfectIndex').innerText = Math.round((globalPerfect / globalTotal) * 100) + '%';
         document.getElementById('dashboard').style.display = 'block';
+
+        // YouTube links (one per set)
+        const ytBanner = document.getElementById('youtubeLinks');
+        const ytList = document.getElementById('youtubeLinksList');
+        ytList.innerHTML = '';
+        if (youtubeUrls.length > 0) {
+            youtubeUrls.forEach((url, i) => {
+                const a = document.createElement('a');
+                a.href = url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.className = 'youtube-set-link';
+                a.textContent = `Set ${i + 1}`;
+                ytList.appendChild(a);
+            });
+            ytBanner.style.display = 'flex';
+        } else {
+            ytBanner.style.display = 'none';
+        }
         document.getElementById('btnDownload').style.display = 'inline-block';
     }
 }
