@@ -116,10 +116,6 @@
     border-radius: 0 8px 8px 0;
 }
 .summary-table tr {
-    transition: background 0.15s;
-}
-.summary-table tr:hover {
-    background: #f1f5f9;
 }
 .highlight-good {
     color: #16a34a !important;
@@ -351,12 +347,6 @@ button:active { transform: translateY(0); }
     border: 1px solid #e2e8f0;
     text-align: center;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-    transition: box-shadow 0.15s, transform 0.1s;
-}
-
-.stat-card:hover {
-    box-shadow: 0 4px 16px rgba(37,99,235,0.10);
-    transform: translateY(-2px);
 }
 
 .stat-value { font-size: 1.8rem; font-weight: 800; color: var(--text-main); line-height: 1; margin-bottom: 4px; }
@@ -374,12 +364,6 @@ button:active { transform: translateY(0); }
     overflow: hidden;
     background: #fff;
     page-break-inside: avoid;
-    transition: box-shadow 0.15s, transform 0.15s;
-}
-
-.player-card:hover {
-    box-shadow: 0 8px 24px rgba(0,0,0,0.10);
-    transform: translateY(-2px);
 }
 
 .card-header {
