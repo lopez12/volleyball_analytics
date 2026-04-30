@@ -1,4 +1,5 @@
 @youtube: https://youtu.be/uMV5thTivdE
+@youtube: https://youtu.be/CY_XNr2UaFM
 25S+ 4D-
 7R# 4E! 24A-
 7R# 4E# 24A! 25D! 23E+ 25A+ 25D+ 4E+ 25A#
@@ -36,3 +37,42 @@ AQUI PERDI COSAS JIJI
 25R+ 4A-
 25R+ 4A! 23B+ 25D-
 25R! 2E+ 1A-
+
+12S-
+8S+ 8D+ 20A-
+10R-
+10R! 24E+ 4A+ 24B#
+20S-
+10R# 4E# 24A+ 20D-
+24R! 24D# 12E# 24A+ 8D! 10D-
+8R! 24A+ 20D-
+12R! 8A+ 8D! 4D-
+24R! 24D# 4E# 24A+ 24B+ 10D+ 1A#
+4S+ 1D+ 12A+ 1D+ 12E+ 24A! 24D+ 12E! 10A+ 24A#
+4S#
+4S#
+4S+ 8D# 12E# 24A+ 24B-
+1D+ 12E+ 24A+ 10D+ 1E# 12A+ 8D-
+4R! 4A+ 1D# 12E+ 10A+ 8D+ 12E# 24A#
+24S#
+24S#
+24S+ 10D# 12E! 8A+ 24D-
+4R# 12E-
+10R-
+8R# 12E# 8A+ 8D3 12E+ 10A+ 8D# 12E# 8A#
+10S#
+10S-
+24R+ 12E+ 8A-
+4R! 8B+ 4D-
+4R! 10E+ 12A+ 10D! 8A#
+12S+ 8B! 20D-
+8R! 10D# 12E# 8A#
+8S+ 8D+ 12E# 20A! 4D+ 12E# 24A#
+8S+ 4D-
+12R! 4A+ 10D# 12E# 4A-
+10R-
+8R+ 25E+ 24A+ 24B-
+10R! 25E+ 10A-
+24R-
+8R# 25E# 24A-
+10R# 25E# 24A+ 8D-
