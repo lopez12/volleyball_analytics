@@ -398,6 +398,7 @@ function generateReport() {
                 <div class="bar-container"><div class="bar-fill" style="width: ${regularPct}%; background-color: var(--warning);"></div></div>
 
                 <div class="metric-row"><span>Error (-)</span><span style="color: var(--danger);">${errorPct}%</span></div>
+                <div class="bar-container"><div class="bar-fill" style="width: ${errorPct}%; background-color: var(--danger);"></div></div>
                 
                 <div class="action-section">
                     <div class="action-title">Efectividad por Acción (Buenos/Total)</div>
