@@ -388,17 +388,16 @@ function generateReport() {
                 <span class="player-rating" style="color: ${ratingColor}; background: white;">${rating}</span>
             </div>
             <div class="card-body">
-                <div class="metric-row"><span>Perfecto (#)</span><span>${perfectPct}%</span></div>
+                <div class="metric-row"><span>Perfecto (#)</span><span style="color: var(--success);">${perfectPct}%</span></div>
                 <div class="bar-container"><div class="bar-fill" style="width: ${perfectPct}%; background-color: var(--success);"></div></div>
 
-                <div class="metric-row"><span>Positivo (+)</span><span>${positivePct}%</span></div>
+                <div class="metric-row"><span>Positivo (+)</span><span style="color: var(--primary);">${positivePct}%</span></div>
                 <div class="bar-container"><div class="bar-fill" style="width: ${positivePct}%; background-color: var(--primary);"></div></div>
                 
-                <div class="metric-row"><span>Regular (!)</span><span>${regularPct}%</span></div>
+                <div class="metric-row"><span>Regular (!)</span><span style="color: var(--warning);">${regularPct}%</span></div>
                 <div class="bar-container"><div class="bar-fill" style="width: ${regularPct}%; background-color: var(--warning);"></div></div>
 
-                <div class="metric-row"><span>Error (-)</span><span>${errorPct}%</span></div>
-                <div class="bar-container"><div class="bar-fill" style="width: ${errorPct}%; background-color: var(--danger);"></div></div>
+                <div class="metric-row"><span>Error (-)</span><span style="color: var(--danger);">${errorPct}%</span></div>
                 
                 <div class="action-section">
                     <div class="action-title">Efectividad por Acción (Buenos/Total)</div>
@@ -454,7 +453,7 @@ function generateReport() {
             return `
                 <div class="metric-row" style="margin-top: 12px;">
                     <span>${item.label} <span style="font-weight:normal; color:#6b7280; font-size:0.8em;">(${s.kills}/${s.attempts} pts)</span></span>
-                    <span>${pct}%</span>
+                    <span style="color: ${barColor};">${pct}%</span>
                 </div>
                 <div class="bar-container">
                     <div class="bar-fill" style="width: ${pct}%; background-color: ${barColor};"></div>
@@ -499,13 +498,13 @@ function generateReport() {
                 </div>
                 <div class="metric-row" style="margin-top: 12px;">
                     <span>Break Point % <span style="font-weight:normal; color:#6b7280; font-size:0.8em;">(${pointStats.bp.won}/${pointStats.bp.total} pts)</span></span>
-                    <span>${bpPct}%</span>
+                    <span style="color: ${bpColor};">${bpPct}%</span>
                 </div>
                 <div class="bar-container"><div class="bar-fill" style="width: ${bpPct}%; background-color: ${bpColor};"></div></div>
 
                 <div class="metric-row" style="margin-top: 12px;">
                     <span>Side-Out % <span style="font-weight:normal; color:#6b7280; font-size:0.8em;">(${pointStats.so.won}/${pointStats.so.total} pts)</span></span>
-                    <span>${soPct}%</span>
+                    <span style="color: ${soColor};">${soPct}%</span>
                 </div>
                 <div class="bar-container"><div class="bar-fill" style="width: ${soPct}%; background-color: ${soColor};"></div></div>
             </div>

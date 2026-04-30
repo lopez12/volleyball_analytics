@@ -405,7 +405,8 @@ button:active { transform: translateY(0); }
 
 .card-body { padding: 12px; }
 
-.metric-row { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 0.75rem; font-weight: 600; color: #4b5563;}
+.metric-row { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; font-size: 0.75rem; font-weight: 500; color: #6b7280; }
+.metric-row span:last-child { font-weight: 800; font-size: 0.88rem; color: var(--text-main); }
 .bar-container { height: 6px; background: #f3f4f6; border-radius: 3px; margin-bottom: 6px; overflow: hidden; }
 .bar-fill { height: 100%; border-radius: 3px; }
 
@@ -433,4 +434,39 @@ button:active { transform: translateY(0); }
 .action-pill.high-perf { border-color: #86efac; background-color: #f0fdf4; color: #15803d; }
 .action-pill.low-perf { border-color: #fca5a5; background-color: #fef2f2; color: #dc2626; }
 
-.action-name { color: #64748b; margin-right: 4px; font-weight: 500;}\n.action-count { font-weight: 800; color: #0f172a; }\n\n/* Section title headings */\n.section-title {\n    display: flex;\n    align-items: center;\n    gap: 8px;\n    font-size: 0.78rem;\n    font-weight: 700;\n    text-transform: uppercase;\n    letter-spacing: 0.8px;\n    color: var(--text-muted);\n    margin: 22px 0 12px;\n    padding: 0;\n}\n\n.section-title::before {\n    content: '';\n    display: inline-block;\n    width: 4px;\n    height: 16px;\n    background: linear-gradient(180deg, var(--primary) 0%, #818cf8 100%);\n    border-radius: 2px;\n    flex-shrink: 0;\n}\n\n.section-title:first-of-type {\n    margin-top: 4px;\n}
+.action-name { color: #64748b; margin-right: 4px; font-weight: 500; }
+.action-count { font-weight: 500; color: #0f172a; }
+
+/* Count inherits the pill's semantic color on high/low performance */
+.action-pill.high-perf .action-name { color: #166534; }
+.action-pill.high-perf .action-count { color: #15803d; font-weight: 800; }
+.action-pill.low-perf .action-name { color: #991b1b; }
+.action-pill.low-perf .action-count { color: #dc2626; font-weight: 800; }
+
+/* Section title headings */
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-muted);
+    margin: 22px 0 12px;
+    padding: 0;
+}
+
+.section-title::before {
+    content: '';
+    display: inline-block;
+    width: 4px;
+    height: 16px;
+    background: linear-gradient(180deg, var(--primary) 0%, #818cf8 100%);
+    border-radius: 2px;
+    flex-shrink: 0;
+}
+
+.section-title:first-of-type {
+    margin-top: 4px;
+}
