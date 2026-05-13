@@ -7,6 +7,7 @@ static HTML reports in the docs/ folder for GitHub Pages.
 Usage: python generate.py
 """
 
+# pylint: disable=line-too-long
 import re
 import shutil
 import webbrowser
@@ -29,14 +30,16 @@ ACTIONS = list(FULL_NAMES.keys())
 GRADES = ['#', '+', '!', '-']
 
 _RE_PLAYER = re.compile(r'^(\d+)([SREADB])([#+!\-])$')
-_RE_TEAM   = re.compile(r'^([SREADB])([#+!\-])$')
-_RE_ANY    = re.compile(r'^(\d*)([SREADB])([#+!\-])$')
-_RE_PHASE  = re.compile(r'^(\d+)([SREADB])([#+!\-])$|^([SREADB])([#+!\-])$')
-_RE_YT     = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/')
+_RE_TEAM = re.compile(r'^([SREADB])([#+!\-])$')
+_RE_ANY = re.compile(r'^(\d*)([SREADB])([#+!\-])$')
+_RE_PHASE = re.compile(r'^(\d+)([SREADB])([#+!\-])$|^([SREADB])([#+!\-])$')
+_RE_YT = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/')
 
 # ---------------------------------------------------------------------------
 # Data helpers
 # ---------------------------------------------------------------------------
+
+
 def _new_stats():
     """Create and return a fresh, zeroed-out statistics dictionary for a player or team.
 
@@ -62,6 +65,7 @@ def _new_stats():
         'actions': {a: {'tot': 0, 'good': 0} for a in ACTIONS},
         'grade_count': {g: {a: 0 for a in ACTIONS} for g in GRADES},
     }
+
 
 def _record(stats, action, grade):
     """Record a single volleyball action into a statistics dictionary, updating all counters.
@@ -97,6 +101,8 @@ def _record(stats, action, grade):
 # ---------------------------------------------------------------------------
 # Parsing
 # ---------------------------------------------------------------------------
+
+
 def parse_log(log_string):
     """Parse a raw match log string and return structured statistics for all players and the team.
 
@@ -166,6 +172,8 @@ def parse_log(log_string):
 # ---------------------------------------------------------------------------
 # Calculations
 # ---------------------------------------------------------------------------
+
+
 def calculate_rating(data):
     """Compute the overall performance rating for a player or team on a 1–10 scale.
 
@@ -191,6 +199,7 @@ def calculate_rating(data):
         return 0.0
     raw = 6.0 + (data['score_sum'] / data['total']) * 4.0
     return round(max(1.0, min(10.0, raw)), 1)
+
 
 def calculate_phase_stats(rallies):
     """Compute kill-percentage statistics broken down by the three main game phases.
@@ -263,6 +272,7 @@ def calculate_phase_stats(rallies):
                 saw_set = False
     return stats
 
+
 def calculate_point_stats(rallies):
     """Compute Break Point % and Side-Out % by inferring which team won each rally.
 
@@ -316,6 +326,7 @@ def calculate_point_stats(rallies):
 
     return {'bp': bp, 'so': so}
 
+
 def _determine_win(r, rallies):
     """Determine whether the team won rally at index `r` by examining context clues.
 
@@ -350,6 +361,8 @@ def _determine_win(r, rallies):
 # ---------------------------------------------------------------------------
 # HTML helpers
 # ---------------------------------------------------------------------------
+
+
 def _pct(n, total):
     """Calculate an integer percentage, guarding against division by zero.
 
@@ -361,6 +374,7 @@ def _pct(n, total):
         int: Rounded integer percentage (0–100). Returns 0 if `total` is 0.
     """
     return round((n / total) * 100) if total > 0 else 0
+
 
 def _rating_color(rating):
     """Return a CSS hex colour string that visually encodes the performance rating tier.
@@ -385,6 +399,8 @@ def _rating_color(rating):
 # ---------------------------------------------------------------------------
 # Card HTML builders
 # ---------------------------------------------------------------------------
+
+
 def build_card_html(title, data, rating, extra_class=''):
     """Build and return the full HTML string for a single player or team statistics card.
 
@@ -409,16 +425,16 @@ def build_card_html(title, data, rating, extra_class=''):
     Returns:
         str: A self-contained HTML string representing the card element.
     """
-    total       = data['total']
-    grades      = data['grades']
-    actions     = data['actions']
+    total = data['total']
+    grades = data['grades']
+    actions = data['actions']
     grade_count = data['grade_count']
 
-    perfect_pct  = _pct(grades['#'], total)
+    perfect_pct = _pct(grades['#'], total)
     positive_pct = _pct(grades['+'], total)
-    regular_pct  = _pct(grades['!'], total)
-    error_pct    = _pct(grades['-'], total)
-    r_color      = _rating_color(rating)
+    regular_pct = _pct(grades['!'], total)
+    error_pct = _pct(grades['-'], total)
+    r_color = _rating_color(rating)
 
     # Action pills
     pills = []
@@ -427,10 +443,11 @@ def build_card_html(title, data, rating, extra_class=''):
         if a['tot'] == 0:
             continue
         eff = a['good'] / a['tot']
-        pill_class = 'high-perf' if eff == 1.0 else ('low-perf' if eff < 0.4 else '')
-        name  = FULL_NAMES[action]
-        good  = a['good']
-        tot   = a['tot']
+        pill_class = 'high-perf' if eff == 1.0 else (
+            'low-perf' if eff < 0.4 else '')
+        name = FULL_NAMES[action]
+        good = a['good']
+        tot = a['tot']
         pills.append(
             f'<div class="action-pill {pill_class}">'
             f'<span class="action-name">{name}</span>'
@@ -440,21 +457,22 @@ def build_card_html(title, data, rating, extra_class=''):
     pills_html = ''.join(pills)
 
     # Summary table – highlight max values per column
-    max_good    = max((max(grade_count['#'][a], grade_count['+'][a]) for a in ACTIONS), default=0)
+    max_good = max(
+        (max(grade_count['#'][a], grade_count['+'][a]) for a in ACTIONS), default=0)
     max_regular = max((grade_count['!'][a] for a in ACTIONS), default=0)
-    max_bad     = max((grade_count['-'][a] for a in ACTIONS), default=0)
+    max_bad = max((grade_count['-'][a] for a in ACTIONS), default=0)
 
     rows = []
     for action in ACTIONS:
-        perfect  = grade_count['#'][action]
+        perfect = grade_count['#'][action]
         positive = grade_count['+'][action]
-        regular  = grade_count['!'][action]
-        error    = grade_count['-'][action]
+        regular = grade_count['!'][action]
+        error = grade_count['-'][action]
         action_name = FULL_NAMES[action]
-        pc   = 'highlight-good'    if perfect  == max_good    and max_good    > 0 else ''
-        posc = 'highlight-good'    if positive == max_good    and max_good    > 0 else ''
-        rc   = 'highlight-regular' if regular  == max_regular and max_regular > 0 else ''
-        ec   = 'highlight-bad'     if error    == max_bad     and max_bad     > 0 else ''
+        pc = 'highlight-good' if perfect == max_good and max_good > 0 else ''
+        posc = 'highlight-good' if positive == max_good and max_good > 0 else ''
+        rc = 'highlight-regular' if regular == max_regular and max_regular > 0 else ''
+        ec = 'highlight-bad' if error == max_bad and max_bad > 0 else ''
         rows.append(
             f'<tr><td>{action_name}</td>'
             f'<td class="{pc}">{perfect}</td>'
@@ -521,13 +539,14 @@ def build_phase_card_html(phase_stats):
     ]
     parts = []
     for key, label in phases:
-        s       = phase_stats[key]
-        kills   = s['kills']
+        s = phase_stats[key]
+        kills = s['kills']
         attempts = s['attempts']
         if attempts == 0:
             continue
         p = _pct(kills, attempts)
-        bar_color = 'var(--success)' if p >= 50 else ('var(--primary)' if p >= 35 else 'var(--danger)')
+        bar_color = 'var(--success)' if p >= 50 else (
+            'var(--primary)' if p >= 35 else 'var(--danger)')
         parts.append(
             f'<div class="metric-row" style="margin-top:12px;">'
             f'<span>{label} <span style="font-weight:normal;color:#6b7280;font-size:0.8em;">({kills}/{attempts} pts)</span></span>'
@@ -570,14 +589,18 @@ def build_scoring_card_html(point_stats):
     Returns:
         str: A self-contained HTML string for the scoring-performance card element.
     """
-    bp       = point_stats['bp']
-    so       = point_stats['so']
-    bp_won   = bp['won'];  bp_total = bp['total']
-    so_won   = so['won'];  so_total = so['total']
-    bp_pct   = _pct(bp_won, bp_total)
-    so_pct   = _pct(so_won, so_total)
-    bp_color = 'var(--success)' if bp_pct >= 40 else ('var(--primary)' if bp_pct >= 30 else 'var(--danger)')
-    so_color = 'var(--success)' if so_pct >= 60 else ('var(--primary)' if so_pct >= 50 else 'var(--danger)')
+    bp = point_stats['bp']
+    so = point_stats['so']
+    bp_won = bp['won']
+    bp_total = bp['total']
+    so_won = so['won']
+    so_total = so['total']
+    bp_pct = _pct(bp_won, bp_total)
+    so_pct = _pct(so_won, so_total)
+    bp_color = 'var(--success)' if bp_pct >= 40 else (
+        'var(--primary)' if bp_pct >= 30 else 'var(--danger)')
+    so_color = 'var(--success)' if so_pct >= 60 else (
+        'var(--primary)' if so_pct >= 50 else 'var(--danger)')
     return (
         '<div class="player-card team-summary-card" style="margin-top:10px;">'
         '<div class="card-header"><span class="player-number">Rendimiento de Puntos</span></div>'
@@ -601,6 +624,8 @@ def build_scoring_card_html(point_stats):
 # ---------------------------------------------------------------------------
 # Page rendering
 # ---------------------------------------------------------------------------
+
+
 def format_title(stem):
     """Convert a match log filename stem into a human-readable match title.
 
@@ -640,14 +665,14 @@ def render_match_page(match_title, parsed, generated_date):
     Returns:
         str: A complete HTML document string (<!DOCTYPE html> … </html>).
     """
-    players      = parsed['players']
-    team         = parsed['team']
-    rallies      = parsed['rallies']
+    players = parsed['players']
+    team = parsed['team']
+    rallies = parsed['rallies']
     youtube_urls = parsed['youtube_urls']
 
-    team_rating  = calculate_rating(team)
+    team_rating = calculate_rating(team)
     total_actions = team['total']
-    perfect_pct  = _pct(team['grades']['#'], total_actions)
+    perfect_pct = _pct(team['grades']['#'], total_actions)
 
     # YouTube banner
     yt_html = ''
@@ -663,16 +688,19 @@ def render_match_page(match_title, parsed, generated_date):
             '</div>'
         )
 
-    team_card    = build_card_html('Equipo', team, team_rating, 'team-summary-card')
-    phase_card   = build_phase_card_html(calculate_phase_stats(rallies))
+    team_card = build_card_html(
+        'Equipo', team, team_rating, 'team-summary-card')
+    phase_card = build_phase_card_html(calculate_phase_stats(rallies))
     scoring_card = build_scoring_card_html(calculate_point_stats(rallies))
 
     players_sorted = sorted(
-        [(num, data, calculate_rating(data)) for num, data in players.items() if data['total'] > 0],
+        [(num, data, calculate_rating(data))
+         for num, data in players.items() if data['total'] > 0],
         key=lambda x: x[2],
         reverse=True,
     )
-    player_cards = ''.join(build_card_html(f'#{num}', data, rating) for num, data, rating in players_sorted)
+    player_cards = ''.join(build_card_html(
+        f'#{num}', data, rating) for num, data, rating in players_sorted)
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -742,11 +770,11 @@ def render_index_page(matches, generated_date):
     cards = []
     for m in matches:
         r_color = _rating_color(m['rating'])
-        title   = m['title']
-        rating  = m['rating']
-        tot     = m['total_actions']
-        pct     = m['perfect_pct']
-        href    = m['file']
+        title = m['title']
+        rating = m['rating']
+        tot = m['total_actions']
+        pct = m['perfect_pct']
+        href = m['file']
         cards.append(
             f'<div class="player-card">'
             f'<div class="card-header">'
@@ -786,6 +814,8 @@ def render_index_page(matches, generated_date):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
+
 def main():
     """Entry point: discover all .txt match logs, generate static HTML reports, and open the index.
 
@@ -816,16 +846,16 @@ def main():
 
     for txt_path in sorted(Path('.').glob('*.txt')):
         log_text = txt_path.read_text(encoding='utf-8')
-        parsed   = parse_log(log_text)
+        parsed = parse_log(log_text)
         if parsed['team']['total'] == 0:
             print(f'  Skipped (no data): {txt_path.name}')
             continue
 
-        stem   = txt_path.stem
-        title  = format_title(stem)
+        stem = txt_path.stem
+        title = format_title(stem)
         rating = calculate_rating(parsed['team'])
-        total  = parsed['team']['total']
-        pct    = _pct(parsed['team']['grades']['#'], total)
+        total = parsed['team']['total']
+        pct = _pct(parsed['team']['grades']['#'], total)
 
         out_file = f'{stem}.html'
         html = render_match_page(title, parsed, today)
