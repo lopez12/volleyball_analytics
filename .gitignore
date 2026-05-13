@@ -1,0 +1,9 @@
+# Generated static site (built by GitHub Actions, not committed)
+docs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
