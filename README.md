@@ -1,135 +1,137 @@
 # Volleyball Analytics
 
-A web-based volleyball analytics dashboard that runs entirely in your browser. Perfect for GitHub Pages deployment!
+A volleyball analytics dashboard that reads match log files and generates static HTML reports, deployed automatically to GitHub Pages via Python + GitHub Actions.
 
 ## Features
 
-- ✅ **100% Client-Side** - No server required, works on GitHub Pages
-- 📊 Parse volleyball match logs
-- 📈 Calculate player and team statistics  
-- 🎯 Generate detailed performance reports
-- 📄 Export reports to PDF
-- 🌐 Import match data from GitHub
-
-## Quick Start
-
-**Just open `index.html` in your browser - that's it!**
-
-No installation, no setup, no servers. Everything runs in your browser.
+- 📊 Parse volleyball match logs from `.txt` files
+- 📈 Player and team statistics with ratings (1–10 scale)
+- 🎯 Phase analysis: Side-Out and Transition efficiency
+- 🏆 Break Point and Side-Out point scoring stats
+- 🌐 Auto-deployed to GitHub Pages on every push
+- 🐍 Pure Python — no JavaScript knowledge required to maintain
 
 ## Tech Stack
 
-- HTML/CSS/JavaScript (vanilla)
-- html2pdf.js for PDF generation
-- Pure client-side processing
+- **Python 3.12** (standard library only — no dependencies)
+- **HTML/CSS** for report styling
+- **GitHub Actions** for automated builds and deployment
 
-## Deployment to GitHub Pages
+## Quick Start (local)
 
-1. Push this repository to GitHub
-2. Go to Settings → Pages
-3. Select your branch (usually `main`)
-4. Click Save
-5. Your site will be live at `https://yourusername.github.io/volleyball_analytics`
+```bash
+python generate.py
+```
 
-## Usage
+This reads all `*.txt` match files in the repo root, writes static HTML to `docs/`, and opens the index page in your browser.
 
-1. **Enter Match Data:**
-   - Paste volleyball match log in the text area
-   - Format: `[PlayerNumber][Action][Grade]` (e.g., `7S# 10R! 2E+ 7A-`)
+## Adding a New Match
 
-2. **Generate Report:**
-   - Click "📊 Generar Reporte" button
-   - The dashboard will display player statistics, team performance, and ratings
-
-3. **Import from GitHub:**
-   - Click "🌐 Importar desde GitHub" to load match files from the repository
-
-4. **Export PDF:**
-   - Click "📄 Descargar PDF" to download the report
+1. Create a new `.txt` file in the repo root, e.g. `vodkas_vs_newteam.txt`
+2. Paste the match log (see format below)
+3. Run `python generate.py` to preview locally
+4. Commit and push — GitHub Actions rebuilds and publishes the site automatically
 
 ## Match Log Format
 
+Each line is one rally. Tokens within a line are space-separated.
+
+### Token format
+
+```
+[PlayerNumber][Action][Grade]   e.g.  7S#
+[Action][Grade]                 e.g.  S#   (team action, no player number)
+```
+
 ### Actions
 
-- `S` - Saque (Serve)
-- `R` - Recepción de Saque (Reception)
-- `E` - Acomodo (Set)
-- `A` - Ataque (Attack)
-- `D` - Defensa (Defense)
-- `B` - Bloqueo (Block)
+| Code | Name |
+|------|------|
+| `S`  | Saque (Serve) |
+| `R`  | Recepción de Saque (Reception) |
+| `E`  | Acomodo (Set) |
+| `A`  | Ataque (Attack) |
+| `D`  | Defensa (Defense) |
+| `B`  | Bloqueo (Block) |
 
 ### Grades
 
-- `#` - Perfecto (Perfect) - +1.0 points
-- `+` - Positivo (Positive) - +0.4 points
-- `!` - Regular (Regular) - -0.3 points
-- `-` - Error (Error) - -1.0 points
+| Code | Name | Rating weight |
+|------|------|--------------|
+| `#`  | Perfecto (Perfect)  | +1.0 |
+| `+`  | Positivo (Positive) | +0.4 |
+| `!`  | Regular (Regular)   | −0.3 |
+| `-`  | Error (Error)       | −1.0 |
 
-### Examples
+### Special lines
 
-- `7S#` - Player 7, Serve, Perfect
-- `10R!` - Player 10, Reception, Regular
-- `2E+` - Player 2, Set, Positive
-- `7A-` - Player 7, Attack, Error
-- `S#` - Team serve (no player number)
+- `---` — set separator (resets rally context)
+- `@youtube: https://youtu.be/...` — links a YouTube video to this set
+
+### Example log
+
+```
+7S# 10R! 2E+ 7A-
+25R+ 2E+ 25A#
+8S-
+@youtube: https://youtu.be/example
+---
+2R# 25E+ 20A+
+```
 
 ## Project Structure
 
-```txt
+```
 volleyball_analytics/
-├── index.html             # Main HTML file
-├── main.js                # All parsing and UI logic
-├── styles.css             # Styles
-├── vodkas_vs_atlas.txt    # Sample match data
-├── README.md              # This file
-└── app.py*                # (Optional) Experimental Python backend
-└── requirements.txt*      # (Optional) Python dependencies
+├── generate.py                  # Python report generator (main script)
+├── styles.css                   # Shared CSS for all generated pages
+├── vodkas_vs_*.txt              # Match log files (one per match)
+├── .github/
+│   └── workflows/
+│       └── build.yml            # GitHub Actions: build + deploy on push
+├── index.html                   # Legacy browser-based tool (kept for reference)
+├── main.js                      # Legacy JavaScript logic (kept for reference)
+└── README.md
 ```
 
-*Python files are experimental and not needed for the main application.
+The `docs/` folder is generated automatically and is not committed to the repo.
 
-## Local Development
+## Deployment to GitHub Pages
 
-Simply open `index.html` in any modern browser. For a better development experience:
+**One-time setup:**
 
-### Using VS Code:
+1. Push this repository to GitHub
+2. Go to **Settings → Pages → Source**
+3. Select **"GitHub Actions"** (not "Deploy from a branch")
+4. Your site will be live at `https://yourusername.github.io/volleyball_analytics`
 
-Install the "Live Server" extension and right-click `index.html` → "Open with Live Server"
+After that, every `git push` to `main` triggers an automatic rebuild.
 
 ## How It Works
 
-All processing happens in JavaScript:
+1. `generate.py` reads each `*.txt` match log file
+2. `parse_log()` tokenizes lines into rallies and records per-player and team stats
+3. `calculate_rating()` computes a 1–10 rating: `6.0 + (score_sum / total) × 4.0`
+4. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
+5. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
+6. Static HTML pages are written to `docs/` — one per match plus an index
 
-1. User pastes match log
-2. `parseLog()` function parses the text
-3. `calculateRating()` computes player ratings (1-10 scale)
-4. Report is generated dynamically in the browser
-5. html2pdf.js converts the HTML to PDF when exporting
-
-No data leaves your browser!
+All data stays in the repository. No server, no database, no external services.
 
 ## Troubleshooting
 
-### PDF not generating?
-
-Make sure you have an internet connection (html2pdf.js loads from CDN)
-
 ### GitHub Pages not updating?
 
-- Check GitHub Actions tab for deployment status
-- Clear your browser cache
-- Wait a few minutes for propagation
+- Go to the **Actions** tab in GitHub and check the latest workflow run for errors
+- Make sure Pages source is set to **GitHub Actions**, not a branch
 
-## Optional: Python Backend (Experimental)
+### A match is skipped during generation?
 
-There's an experimental Python Flask backend in `app.py` if you want to explore server-side processing:
+The script prints `Skipped (no data): filename.txt` if a file contains no valid tokens. Check the log format.
 
-```bash
-pip install -r requirements.txt
-python app.py
-```
+### Browser opens but styles are missing?
 
-But it's **not required** for the main application and won't work on GitHub Pages.
+Make sure `styles.css` is in the repo root — `generate.py` copies it to `docs/` on each run.
 
 ## License
 
