@@ -537,20 +537,7 @@ function generateReport() {
         } else {
             ytBanner.style.display = 'none';
         }
-        document.getElementById('btnDownload').style.display = 'inline-block';
     }
 }
 
 
-
-function downloadPDF() {
-    const element = document.getElementById('dashboard');
-    const opt = {
-        margin:       10,
-        filename:     'Reporte_Partido_Voley.pdf',
-        image:        { type: 'jpeg', quality: 0.98 },
-        html2canvas:  { scale: 2 },
-        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-    };
-    html2pdf().set(opt).from(element).save();
-}
