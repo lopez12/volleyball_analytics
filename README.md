@@ -27,10 +27,24 @@ This reads all `*.txt` match files in the repo root, writes static HTML to `docs
 
 ## Adding a New Match
 
-1. Create a new `.txt` file in the repo root, e.g. `vodkas_vs_newteam.txt`
+1. Create a new `.txt` file in the repo root using the naming convention below
 2. Paste the match log (see format below)
 3. Run `python generate.py` to preview locally
 4. Commit and push — GitHub Actions rebuilds and publishes the site automatically
+
+### File naming convention
+
+Prefix every match file with a two-digit number representing the play order, followed by an underscore:
+
+```
+01_vodkas_vs_atlas.txt
+02_vodkas_vs_arcano.txt
+03_vodkas_vs_teletubbies.txt
+...
+12_vodkas_vs_diamantes.txt
+```
+
+The numeric prefix controls the order in which matches appear on the index page. The prefix is stripped automatically when generating titles and report filenames, so `01_vodkas_vs_atlas` becomes **"Vodkas vs Atlas"** in the report.
 
 ## Match Log Format
 
@@ -85,7 +99,7 @@ Each line is one rally. Tokens within a line are space-separated.
 volleyball_analytics/
 ├── generate.py                  # Python report generator (main script)
 ├── styles.css                   # Shared CSS for all generated pages
-├── vodkas_vs_*.txt              # Match log files (one per match)
+├── 01_vodkas_vs_*.txt           # Match log files — prefix controls display order
 ├── .github/
 │   └── workflows/
 │       └── build.yml            # GitHub Actions: build + deploy on push

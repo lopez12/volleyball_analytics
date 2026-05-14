@@ -61,6 +61,13 @@ def main():
     conn = sqlite3.connect(str(db_path))
     init_db(conn)
 
+    # Remove DB entries for stems that no longer have a matching .txt file
+    current_stems = [p.stem for p in Path('.').glob('*.txt')]
+    if current_stems:
+        placeholders = ','.join('?' * len(current_stems))
+        conn.execute(f"DELETE FROM matches WHERE stem NOT IN ({placeholders})", current_stems)
+        conn.commit()
+
     # Parse all .txt files and upsert into the database
     for txt_path in sorted(Path('.').glob('*.txt')):
         log_text = txt_path.read_text(encoding='utf-8')

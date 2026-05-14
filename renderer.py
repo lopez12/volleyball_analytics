@@ -4,6 +4,8 @@ Contains all HTML card builders and page renderers.
 No knowledge of SQLite or file I/O.
 """
 
+import re
+
 from analytics import (
     ACTIONS, FULL_NAMES, GRADES,
     calculate_rating, calculate_phase_stats, calculate_point_stats,
@@ -300,14 +302,17 @@ def format_title(stem):
 
     Example:
         'vodkas_vs_alaba' → 'Vodkas vs Alaba'
+        '01_vodkas_vs_alaba' → 'Vodkas vs Alaba'
 
     Args:
-        stem (str): The filename without extension, e.g. 'vodkas_vs_alaba'.
+        stem (str): The filename without extension, e.g. 'vodkas_vs_alaba' or
+            '01_vodkas_vs_alaba'.
 
     Returns:
         str: A formatted, human-readable match title.
     """
-    return stem.replace('_', ' ').title().replace(' Vs ', ' vs ')
+    clean = re.sub(r'^\d+_', '', stem)
+    return clean.replace('_', ' ').title().replace(' Vs ', ' vs ')
 
 
 def render_match_page(match_title, parsed, generated_date):
