@@ -26,6 +26,7 @@ _RE_TEAM = re.compile(r'^([SREADB])([#+!\-])$')
 _RE_ANY = re.compile(r'^(\d*)([SREADB])([#+!\-])$')
 _RE_PHASE = re.compile(r'^(\d+)([SREADB])([#+!\-])$|^([SREADB])([#+!\-])$')
 _RE_YT = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/')
+_RE_SET = re.compile(r'^@set:\s*(\d+)-(\d+)$', re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # Data helpers
@@ -104,6 +105,8 @@ def parse_log(log_string):
         - Set separator: '---'                       skipped silently.
         - YouTube link:  '@youtube: <url>'           URL stored if it is a valid
                                                      youtube.com or youtu.be address.
+        - Set score:     '@set: V-R'                 e.g. '@set: 25-18'. Vodkas score
+                                                     first, rival score second.
     Tokens that match neither the player nor team pattern are silently ignored.
     Player tokens are recorded in both the individual player's stats and the team stats.
     Team-only tokens are recorded only in team stats.
@@ -122,11 +125,14 @@ def parse_log(log_string):
                 Rallies with no valid tokens are omitted.
             'youtube_urls' (list[str]): Validated YouTube URLs found in
                 '@youtube:' lines, in the order they appear in the file.
+            'set_scores' (list[tuple[int, int]]): List of (vodkas, rival) score
+                tuples, one per '@set:' line, in file order. Empty list if none.
     """
     lines = log_string.strip().splitlines()
     rallies = []
     players = {}
     youtube_urls = []
+    set_scores = []
     team = _new_stats()
 
     for line in lines:
@@ -137,6 +143,10 @@ def parse_log(log_string):
             url = trimmed[9:].strip()
             if _RE_YT.match(url):
                 youtube_urls.append(url)
+            continue
+        m_set = _RE_SET.match(trimmed)
+        if m_set:
+            set_scores.append((int(m_set.group(1)), int(m_set.group(2))))
             continue
 
         tokens = trimmed.split()
@@ -161,7 +171,7 @@ def parse_log(log_string):
         if rally_tokens:
             rallies.append(rally_tokens)
 
-    return {'players': players, 'team': team, 'rallies': rallies, 'youtube_urls': youtube_urls}
+    return {'players': players, 'team': team, 'rallies': rallies, 'youtube_urls': youtube_urls, 'set_scores': set_scores}
 
 # ---------------------------------------------------------------------------
 # Calculations

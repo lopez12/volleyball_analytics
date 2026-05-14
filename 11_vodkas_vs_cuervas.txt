@@ -1,6 +1,9 @@
 @youtube: https://youtu.be/HRM0Bg3f6sw
 @youtube: https://youtu.be/yczzjs2p5as
 @youtube: https://youtu.be/SNpCPSxTT0Y
+@set: 26-8
+@set: 23-25
+@set: 15-8
 --- PRIMER SET ---
 25S+ 23D# 25E# 10A#
 25S+ 1D# 25E# 23A! 23B#

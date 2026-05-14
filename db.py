@@ -25,6 +25,14 @@ CREATE TABLE IF NOT EXISTS matches (
     youtube_urls   TEXT    NOT NULL DEFAULT '[]'
 );
 
+CREATE TABLE IF NOT EXISTS match_sets (
+    match_id   INTEGER NOT NULL REFERENCES matches(id) ON DELETE CASCADE,
+    set_number INTEGER NOT NULL,
+    vodkas     INTEGER NOT NULL,
+    rival      INTEGER NOT NULL,
+    PRIMARY KEY (match_id, set_number)
+);
+
 CREATE TABLE IF NOT EXISTS team_match_stats (
     match_id        INTEGER PRIMARY KEY REFERENCES matches(id) ON DELETE CASCADE,
     total           INTEGER NOT NULL,
@@ -222,9 +230,10 @@ def upsert_match(conn, stem, title, parsed):
     })
     team_row['match_id'] = match_id
 
-    # Delete existing team/player rows for idempotency
+    # Delete existing team/player/set rows for idempotency
     conn.execute("DELETE FROM team_match_stats WHERE match_id = ?", (match_id,))
     conn.execute("DELETE FROM player_match_stats WHERE match_id = ?", (match_id,))
+    conn.execute("DELETE FROM match_sets WHERE match_id = ?", (match_id,))
 
     cols = ', '.join(team_row.keys())
     placeholders = ', '.join(['?'] * len(team_row))
@@ -247,11 +256,37 @@ def upsert_match(conn, stem, title, parsed):
             list(p_row.values()),
         )
 
+    # Set scores
+    for set_number, (vodkas, rival) in enumerate(parsed.get('set_scores', []), start=1):
+        conn.execute(
+            "INSERT INTO match_sets (match_id, set_number, vodkas, rival) VALUES (?, ?, ?, ?)",
+            (match_id, set_number, vodkas, rival),
+        )
+
     conn.commit()
 
 # ---------------------------------------------------------------------------
 # Query helpers
 # ---------------------------------------------------------------------------
+
+
+def get_match_sets(conn, match_id):
+    """Return set scores for a match as an ordered list of (set_number, vodkas, rival) tuples.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+        match_id (int): The primary key of the match in the 'matches' table.
+
+    Returns:
+        list[tuple[int, int, int]]: One tuple per set, ordered by set_number.
+            Returns an empty list if no set scores are stored for this match.
+    """
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT set_number, vodkas, rival FROM match_sets WHERE match_id = ? ORDER BY set_number",
+        (match_id,),
+    ).fetchall()
+    return [(row['set_number'], row['vodkas'], row['rival']) for row in rows]
 
 
 def _row_to_stats(row):
@@ -432,6 +467,8 @@ def get_all_matches_meta(conn):
     Joins 'matches' and 'team_match_stats' to compute per-match summary values:
         - rating: calculated from score_sum / total via calculate_rating().
         - perfect_pct: integer percentage of '#'-grade actions over total.
+        - set_scores: list of (vodkas, rival) int tuples from match_sets.
+        - result: 'W' if Vodkas won more sets, 'L' if fewer, None if no set data.
 
     Results are ordered alphabetically by filename stem, which corresponds to
     chronological order when filenames follow the 'vodkas_vs_<opponent>' convention.
@@ -446,10 +483,12 @@ def get_all_matches_meta(conn):
             'rating'         (float): Team performance rating (1.0–10.0).
             'total_actions'  (int):   Total recorded team actions.
             'perfect_pct'    (int):   Percentage of Perfect ('#') grade actions.
+            'set_scores'     (list):  List of (vodkas, rival) tuples; empty if unknown.
+            'result'         (str|None): 'W', 'L', or None.
     """
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        """SELECT m.stem, m.title, t.total, t.score_sum, t.grade_perfect
+        """SELECT m.id, m.stem, m.title, t.total, t.score_sum, t.grade_perfect
            FROM matches m
            JOIN team_match_stats t ON t.match_id = m.id
            ORDER BY m.stem"""
@@ -460,11 +499,21 @@ def get_all_matches_meta(conn):
         total = row['total']
         rating = calculate_rating({'total': total, 'score_sum': row['score_sum']})
         pct = round((row['grade_perfect'] / total) * 100) if total > 0 else 0
+        set_rows = get_match_sets(conn, row['id'])
+        set_scores = [(v, r) for (_, v, r) in set_rows]
+        if set_scores:
+            vodkas_sets = sum(1 for v, r in set_scores if v > r)
+            rival_sets = sum(1 for v, r in set_scores if r > v)
+            result = 'W' if vodkas_sets > rival_sets else 'L'
+        else:
+            result = None
         matches.append({
             'title': row['title'],
             'file': f"{row['stem']}.html",
             'rating': rating,
             'total_actions': total,
             'perfect_pct': pct,
+            'set_scores': set_scores,
+            'result': result,
         })
     return matches

@@ -138,7 +138,7 @@ def build_card_html(title, data, rating, extra_class=''):
         )
     rows_html = ''.join(rows)
 
-    card_class = f'player-card {extra_class}'.strip()
+    card_class = f'stat-card {extra_class}'.strip()
     return (
         f'<div class="{card_class}">'
         f'<div class="card-header">'
@@ -220,7 +220,7 @@ def build_phase_card_html(phase_stats):
         'No hay secuencias suficientes</div>'
     )
     return (
-        '<div class="player-card team-summary-card" style="margin-top:10px;">'
+        '<div class="stat-card team-summary-card" style="margin-top:10px;">'
         '<div class="card-header"><span class="player-number">Eficacia por Fase de Juego</span></div>'
         '<div class="card-body">'
         '<div style="margin-bottom:15px;font-size:0.85rem;color:#4b5563;background:#f8fafc;'
@@ -270,7 +270,7 @@ def build_scoring_card_html(point_stats):
     so_color = 'var(--success)' if so_pct >= 60 else (
         'var(--primary)' if so_pct >= 50 else 'var(--danger)')
     return (
-        '<div class="player-card team-summary-card" style="margin-top:10px;">'
+        '<div class="stat-card team-summary-card" style="margin-top:10px;">'
         '<div class="card-header"><span class="player-number">Rendimiento de Puntos</span></div>'
         '<div class="card-body">'
         '<div style="margin-bottom:15px;font-size:0.85rem;color:#4b5563;background:#f8fafc;'
@@ -448,6 +448,7 @@ def render_index_page(matches, generated_date):
 
     Generates one summary card per match. Each card shows:
         - Match title with a colour-coded team rating badge.
+        - Win/Loss result badge and set score breakdown (if available).
         - Total recorded team actions.
         - Perfect-efficiency percentage.
         - A 'Ver Reporte →' link to the individual match HTML page.
@@ -460,6 +461,8 @@ def render_index_page(matches, generated_date):
                 'rating'         (float): Pre-calculated team rating (1.0–10.0).
                 'total_actions'  (int):   Total recorded team actions.
                 'perfect_pct'    (int):   Percentage of Perfect ('#') grade actions.
+                'set_scores'     (list):  List of (vodkas, rival) int tuples; empty if unknown.
+                'result'         (str|None): 'W', 'L', or None.
         generated_date (str): Date string displayed in the page header, 'DD/MM/YYYY'.
 
     Returns:
@@ -474,13 +477,33 @@ def render_index_page(matches, generated_date):
         tot = m['total_actions']
         pct = m['perfect_pct']
         href = m['file']
+        result = m.get('result')
+        set_scores = m.get('set_scores', [])
+
+        # Result badge
+        if result == 'W':
+            badge_html = '<span class="result-badge result-win">Victoria</span>'
+        elif result == 'L':
+            badge_html = '<span class="result-badge result-loss">Derrota</span>'
+        else:
+            badge_html = ''
+
+        # Set score line
+        if set_scores:
+            sets_str = ' / '.join(f'{v}-{r}' for v, r in set_scores)
+            sets_html = f'<div class="metric-row"><span>Sets</span><span>{sets_str}</span></div>'
+        else:
+            sets_html = ''
+
         cards.append(
-            f'<div class="player-card">'
+            f'<div class="match-card">'
             f'<div class="card-header">'
             f'<span class="player-number">{title}</span>'
             f'<span class="player-rating" style="color:{r_color};background:white;">{rating}</span>'
             f'</div>'
             f'<div class="card-body">'
+            f'{badge_html}'
+            f'{sets_html}'
             f'<div class="metric-row"><span>Acciones totales</span><span>{tot}</span></div>'
             f'<div class="metric-row"><span>Eficacia Perfecta</span><span style="color:var(--success);">{pct}%</span></div>'
             f'<a href="{href}" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'

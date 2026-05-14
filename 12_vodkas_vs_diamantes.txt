@@ -1,5 +1,7 @@
 @youtube: https://youtu.be/TFzI2Jew5J4
 @youtube: https://youtu.be/DqIzaPi8tvQ
+@set: 6-25
+@set: 16-25
 --- PRIMER SET ---
 12S+ 10D! 12E+ 10A+ 1D+ 12E+ 10A+ 1D+ 12E# 24A+ 24A+ 12D# 12E+ 24A#
 12S+ 24B+ 10D+ 12E+ 10A+ 1D# 12E! 10A#

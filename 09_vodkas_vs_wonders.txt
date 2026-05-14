@@ -1,5 +1,7 @@
 @youtube: https://youtu.be/uMV5thTivdE
 @youtube: https://youtu.be/CY_XNr2UaFM
+@set: 18-25
+@set: 16-25
 25S+ 4D-
 7R# 4E! 24A-
 7R# 4E# 24A! 25D! 23E+ 25A+ 25D+ 4E+ 25A#
