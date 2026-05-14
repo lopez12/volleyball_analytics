@@ -522,7 +522,7 @@ def render_index_page(matches, generated_date):
 <body>
 <div class="container">
   <div class="report-header">
-    <h1>🏐 Volleyball Analytics</h1>
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Volleyball Analytics</h1>
     <p>Generado: {generated_date}</p>
   </div>
   <h3 class="section-title">Partidos</h3>
