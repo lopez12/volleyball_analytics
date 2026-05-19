@@ -583,7 +583,7 @@ def render_match_page(match_title, parsed, generated_date):
 </head>
 <body>
 <div class="container">
-  {_back_link('index.html', '← Todos los partidos')}
+  {_back_link('matches.html', '← Todos los partidos')}
   <div class="report-header">
     <h1>Reporte: {match_title}</h1>
     <p>Generado: {generated_date}</p>
@@ -604,7 +604,7 @@ def render_match_page(match_title, parsed, generated_date):
 
   {_section('Detalle por Jugador', f'<div class="players-grid">{player_cards}</div>')}
 
-  {_back_nav('index.html', '← Todos los partidos')}
+  {_back_nav('matches.html', '← Todos los partidos')}
 </div>
 </body>
 </html>"""
@@ -854,7 +854,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 </head>
 <body>
 <div class="container">
-  {_back_link()}
+  {_back_link('players.html', '← Todos los jugadores')}
   <div class="report-header">
     <h1>{display_name} <span class="position-badge">{pos_label}</span></h1>
     <p>Temporada - Generado: {generated_date}</p>
@@ -907,7 +907,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     </table>
   </div>''')}
 
-  {_back_nav()}
+  {_back_nav('players.html', '← Todos los jugadores')}
 </div>
 </body>
 </html>"""
