@@ -4,12 +4,151 @@ Contains all HTML card builders and page renderers.
 No knowledge of SQLite or file I/O.
 """
 
+import json
 import re
+import statistics
 
 from analytics import (
     ACTIONS, FULL_NAMES, GRADES,
+    PLAYER_POSITIONS, POSITION_LABELS, PLAYER_NAMES,
     calculate_rating, calculate_phase_stats, calculate_point_stats,
 )
+
+# ---------------------------------------------------------------------------
+# Collapsible section helper
+# ---------------------------------------------------------------------------
+
+_COLLAPSIBLE_JS = """<script>
+function toggleSection(el) {
+  el.classList.toggle('collapsed');
+  var content = el.nextElementSibling;
+  content.classList.toggle('collapsed');
+}
+</script>"""
+
+
+def _section(title, content_html, collapsed=False):
+    """Wrap a section title and its content in a collapsible container."""
+    t_cls = 'section-title collapsed' if collapsed else 'section-title'
+    c_cls = 'section-content collapsed' if collapsed else 'section-content'
+    return (
+        f'<h3 class="{t_cls}" onclick="toggleSection(this)">'
+        f'<span class="section-title-text">{title}</span>'
+        f'<span class="chevron">▾</span>'
+        f'</h3>'
+        f'<div class="{c_cls}">{content_html}</div>'
+    )
+
+
+# Actions that are less relevant per position and should start collapsed
+_POSITION_COLLAPSED_ACTIONS = {
+    'L':   {'S', 'A', 'B', 'E'},   # Libero: Reception + Defense are primary
+    'MB':  {'R', 'D', 'E'},          # Middle Blocker: Attack + Block + Serve primary
+    'OH':  {'B', 'E'},              # Outside Hitter: Attack + Reception primary
+    'OPP': {'R', 'B'},              # Opposite: Attack focused
+    'S':   {'A', 'R', 'B'},         # Setter: Set is primary; no blocking
+    'U':   set(),                   # Universal: nothing collapsed
+}
+
+def _action_efficiency_charts(match_stats, chart_labels_json, canvas_prefix, collapsed_actions=None):
+    """Build collapsible dual-line (Perfecto / Positivo) efficiency charts for each action.
+
+    Args:
+        match_stats (list[dict]): Per-match stat rows (player or team).
+        chart_labels_json (str): JSON-encoded list of match label strings.
+        canvas_prefix (str): Prefix for canvas element IDs (e.g. 'chart-action' or 'chart-team-action').
+        collapsed_actions (set | None): Action codes whose section starts collapsed. Defaults to none.
+
+    Returns:
+        str: HTML string with one collapsible section per action.
+    """
+    if collapsed_actions is None:
+        collapsed_actions = set()
+    charts_html = ''
+    for action in ACTIONS:
+        a_lower = action.lower()
+        season_total = sum(m[f'{a_lower}_tot'] for m in match_stats)
+        if season_total < 5:
+            continue
+        positive_pcts = []
+        perfect_pcts = []
+        for m in match_stats:
+            tot = m[f'{a_lower}_tot']
+            good = m[f'{a_lower}_good']
+            perf = m[f'perfect_{a_lower}']
+            positive_pcts.append(round((good / tot) * 100) if tot > 0 else None)
+            perfect_pcts.append(round((perf / tot) * 100) if tot > 0 else None)
+        positive_json = json.dumps(positive_pcts)
+        perfect_json = json.dumps(perfect_pcts)
+        action_name = FULL_NAMES[action]
+        canvas_id = f'{canvas_prefix}-{a_lower}'
+        chart_html = f'''
+    <div class="stat-card" style="margin-top:8px;">
+      <div class="card-body"><canvas id="{canvas_id}" height="200"></canvas></div>
+    </div>
+    <script>
+    (function() {{
+      const labels = {chart_labels_json};
+      new Chart(document.getElementById('{canvas_id}'), {{
+        type: 'line',
+        data: {{
+          labels: labels,
+          datasets: [
+            {{ label: 'Positivo (#+ %)', data: {positive_json}, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', fill: true, tension: 0.3, spanGaps: true }},
+            {{ label: 'Perfecto (# %)',  data: {perfect_json},  borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.12)', fill: true, tension: 0.3, spanGaps: true }}
+          ]
+        }},
+        options: {{
+          responsive: true,
+          interaction: {{ mode: 'index', intersect: false }},
+          scales: {{ y: {{ min: 0, max: 100, ticks: {{ callback: v => v + '%' }} }} }},
+          plugins: {{
+            legend: {{ display: true, position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }},
+            tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—') }} }}
+          }}
+        }}
+      }});
+    }})();
+    </script>'''
+        charts_html += _section(
+            f'{action_name} — Eficiencia',
+            chart_html,
+            collapsed=(action in collapsed_actions),
+        )
+    return charts_html
+
+
+# Ordered grade symbol → DB column prefix pairs, used for cross-tab aggregation.
+_GRADE_PREFIXES = (('#', 'perfect'), ('+', 'positive'), ('!', 'regular'), ('-', 'error'))
+
+
+def _aggregate_season_data(match_stats):
+    """Aggregate per-match stat rows into a season totals dict for build_card_html.
+
+    Args:
+        match_stats (list[dict]): Per-match stat rows (player or team).
+
+    Returns:
+        dict: Keys 'total', 'grades', 'actions', 'grade_count' — compatible with build_card_html.
+    """
+    grades = {'#': 0, '+': 0, '!': 0, '-': 0}
+    grade_count = {g: {a: 0 for a in ACTIONS} for g in GRADES}
+    actions = {a: {'tot': 0, 'good': 0} for a in ACTIONS}
+    total = 0
+    for m in match_stats:
+        total += m['total']
+        grades['#'] += m['grade_perfect']
+        grades['+'] += m['grade_positive']
+        grades['!'] += m['grade_regular']
+        grades['-'] += m['grade_error']
+        for action in ACTIONS:
+            a_lower = action.lower()
+            actions[action]['tot'] += m[f'{a_lower}_tot']
+            actions[action]['good'] += m[f'{a_lower}_good']
+            for grade, prefix in _GRADE_PREFIXES:
+                grade_count[grade][action] += m[f'{prefix}_{a_lower}']
+    return {'total': total, 'grades': grades, 'actions': actions, 'grade_count': grade_count}
+
 
 # ---------------------------------------------------------------------------
 # HTML helpers
@@ -407,6 +546,7 @@ def render_match_page(match_title, parsed, generated_date):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{match_title} - Volleyball Analytics</title>
   <link rel="stylesheet" href="styles.css">
+  {_COLLAPSIBLE_JS}
 </head>
 <body>
 <div class="container">
@@ -416,24 +556,19 @@ def render_match_page(match_title, parsed, generated_date):
     {yt_html}
   </div>
 
-  <h3 class="section-title">Resumen Global</h3>
-  <div class="general-stats">
+  {_section('Resumen Global', f'''<div class="general-stats">
     <div class="stat-card"><div class="stat-value">{team_rating}</div><div class="stat-label">Rating Equipo</div></div>
     <div class="stat-card"><div class="stat-value">{total_actions}</div><div class="stat-label">Acciones Totales</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--success)">{perfect_pct}%</div><div class="stat-label">Eficacia Perfecta</div></div>
-  </div>
+  </div>''')}
 
-  <h3 class="section-title">Acciones de Equipo</h3>
-  <div class="players-grid">
+  {_section('Acciones de Equipo', f'''<div class="players-grid">
     {team_card}
     {phase_card}
     {scoring_card}
-  </div>
+  </div>''')}
 
-  <h3 class="section-title">Detalle por Jugador</h3>
-  <div class="players-grid">
-    {player_cards}
-  </div>
+  {_section('Detalle por Jugador', f'<div class="players-grid">{player_cards}</div>')}
 
   <div style="margin-top:24px;text-align:center;">
     <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Todos los partidos</a>
@@ -443,32 +578,68 @@ def render_match_page(match_title, parsed, generated_date):
 </html>"""
 
 
-def render_index_page(matches, generated_date):
-    """Render the static HTML index page that lists all available match reports.
+def render_index_page(matches, generated_date, player_summaries=None, team_season_summary=None):
+    """Render the static HTML index page as a navigation hub.
 
-    Generates one summary card per match. Each card shows:
-        - Match title with a colour-coded team rating badge.
-        - Win/Loss result badge and set score breakdown (if available).
-        - Total recorded team actions.
-        - Perfect-efficiency percentage.
-        - A 'Ver Reporte →' link to the individual match HTML page.
+    Sections (top to bottom): Team Season, Players, Matches.
 
     Args:
-        matches (list[dict]): Ordered list of match metadata dicts. Each dict
-            must contain:
-                'title'          (str):   Human-readable match title.
-                'file'           (str):   Relative filename, e.g. 'vodkas_vs_alaba.html'.
-                'rating'         (float): Pre-calculated team rating (1.0–10.0).
-                'total_actions'  (int):   Total recorded team actions.
-                'perfect_pct'    (int):   Percentage of Perfect ('#') grade actions.
-                'set_scores'     (list):  List of (vodkas, rival) int tuples; empty if unknown.
-                'result'         (str|None): 'W', 'L', or None.
-        generated_date (str): Date string displayed in the page header, 'DD/MM/YYYY'.
+        matches (list[dict]): Ordered list of match metadata dicts.
+        generated_date (str): Date string displayed in the page header.
+        player_summaries (list[dict], optional): Per-player season summary for the Players section.
+        team_season_summary (dict, optional): Team season summary for the Team Season link.
 
     Returns:
-        str: A complete HTML document string (<!DOCTYPE html> … </html>),
-            linking to the shared styles.css stylesheet.
+        str: A complete HTML document string.
     """
+    # --- Team Season card ---
+    team_section_html = ''
+    if team_season_summary:
+        ts = team_season_summary
+        r_color = _rating_color(ts['rating'])
+        wins = ts.get('wins', 0)
+        losses = ts.get('losses', 0)
+        team_section_html = (
+            '<div class="players-grid">'
+            '<div class="match-card">'
+            '<div class="card-header">'
+            '<span class="player-number">Vodkas — Temporada</span>'
+            f'<span class="player-rating" style="color:{r_color};background:white;">{ts["rating"]}</span>'
+            '</div>'
+            '<div class="card-body">'
+            f'<div class="metric-row"><span>Récord</span><span>{wins}W - {losses}L</span></div>'
+            f'<div class="metric-row"><span>Partidos</span><span>{ts["matches_played"]}</span></div>'
+            '<a href="team_season.html" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
+            'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Temporada →</a>'
+            '</div></div></div>'
+        )
+
+    # --- Players section ---
+    players_section_html = ''
+    if player_summaries:
+        p_cards = []
+        for ps in player_summaries:
+            r_color = _rating_color(ps['rating'])
+            pos_code = ps.get('position', 'U')
+            pos_label = POSITION_LABELS.get(pos_code, 'Universal')
+            display_name = ps.get('name', f'#{ps["player_num"]}')
+            p_cards.append(
+                '<div class="match-card">'
+                '<div class="card-header">'
+                f'<span class="player-number">{display_name}</span>'
+                f'<span class="player-rating" style="color:{r_color};background:white;">{ps["rating"]}</span>'
+                '</div>'
+                '<div class="card-body">'
+                f'<span class="position-badge">{pos_label}</span>'
+                f'<div class="metric-row"><span>Partidos</span><span>{ps["matches_played"]}</span></div>'
+                f'<div class="metric-row"><span>Acciones totales</span><span>{ps["total_actions"]}</span></div>'
+                f'<a href="player_{ps["player_num"]}.html" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
+                f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Temporada →</a>'
+                '</div></div>'
+            )
+        players_section_html = f'<div class="players-grid">{"".join(p_cards)}</div>'
+
+    # --- Match cards ---
     cards = []
     for m in matches:
         r_color = _rating_color(m['rating'])
@@ -511,6 +682,11 @@ def render_index_page(matches, generated_date):
             f'</div></div>'
         )
     cards_html = ''.join(cards)
+
+    team_block = _section('Temporada del Equipo', team_section_html) if team_section_html else ''
+    players_block = _section('Jugadores', players_section_html) if players_section_html else ''
+    matches_block = _section('Partidos', f'<div class="players-grid">{cards_html}</div>')
+
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -518,6 +694,7 @@ def render_index_page(matches, generated_date):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Volleyball Analytics</title>
   <link rel="stylesheet" href="styles.css">
+  {_COLLAPSIBLE_JS}
 </head>
 <body>
 <div class="container">
@@ -525,9 +702,349 @@ def render_index_page(matches, generated_date):
     <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Volleyball Analytics</h1>
     <p>Generado: {generated_date}</p>
   </div>
-  <h3 class="section-title">Partidos</h3>
-  <div class="players-grid">
-    {cards_html}
+  {team_block}
+  {players_block}
+  {matches_block}
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Player Season Page
+# ---------------------------------------------------------------------------
+
+
+def render_player_season_page(player_num, match_stats, team_match_ratings, generated_date):
+    """Render a complete season analytics page for a single player.
+
+    Args:
+        player_num (str): The player number.
+        match_stats (list[dict]): Output of get_player_season_stats().
+        team_match_ratings (list[float]): Team rating for each match (same order as match_stats matches).
+        generated_date (str): Date string for the header.
+
+    Returns:
+        str: Complete HTML document.
+    """
+    pos_code = PLAYER_POSITIONS.get(player_num, 'U')
+    pos_label = POSITION_LABELS.get(pos_code, 'Universal')
+    display_name = PLAYER_NAMES.get(player_num, f'#{player_num}')
+
+    # Season aggregations
+    ratings = [m['rating'] for m in match_stats]
+    season_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0.0
+    matches_played = len(match_stats)
+    total_actions = sum(m['total'] for m in match_stats)
+
+    best_match = max(match_stats, key=lambda m: m['rating'])
+    worst_match = min(match_stats, key=lambda m: m['rating'])
+
+    # Consistency
+    if len(ratings) >= 2:
+        std_dev = round(statistics.stdev(ratings), 2)
+        if std_dev < 0.5:
+            consistency_label = 'Consistente'
+            consistency_color = 'var(--success)'
+        elif std_dev < 1.0:
+            consistency_label = 'Moderado'
+            consistency_color = 'var(--warning)'
+        else:
+            consistency_label = 'Variable'
+            consistency_color = 'var(--danger)'
+    else:
+        std_dev = 0.0
+        consistency_label = 'N/A'
+        consistency_color = '#6b7280'
+
+    # Chart data
+    chart_labels = json.dumps([m['match_title'].replace('Vodkas vs ', '') for m in match_stats])
+    chart_ratings = json.dumps(ratings)
+    chart_team_ratings = json.dumps(team_match_ratings)
+
+    # Action efficiency trends (per match) — each action is its own collapsible section
+    collapsed_actions = _POSITION_COLLAPSED_ACTIONS.get(pos_code, set())
+    action_charts_html = _action_efficiency_charts(match_stats, chart_labels, 'chart-action', collapsed_actions)
+
+    # Season totals cross-tab
+    season_data = _aggregate_season_data(match_stats)
+    season_actions = season_data['actions']  # also used for strengths/weaknesses below
+
+    season_card = build_card_html(f'{display_name} — Temporada', season_data, season_rating, 'team-summary-card')
+
+    # Strengths & Improvement Areas
+    action_effs = []
+    for action in ACTIONS:
+        tot = season_actions[action]['tot']
+        if tot >= 10:
+            eff = round((season_actions[action]['good'] / tot) * 100)
+            action_effs.append((FULL_NAMES[action], eff))
+    action_effs.sort(key=lambda x: x[1], reverse=True)
+
+    strengths_html = ''
+    if action_effs:
+        strengths = action_effs[:2]
+        weaknesses = action_effs[-2:] if len(action_effs) >= 4 else action_effs[-1:]
+        s_items = ''.join(f'<div class="metric-row"><span>{name}</span><span style="color:var(--success);">{eff}%</span></div>' for name, eff in strengths)
+        w_items = ''.join(f'<div class="metric-row"><span>{name}</span><span style="color:var(--danger);">{eff}%</span></div>' for name, eff in weaknesses)
+        strengths_html = (
+            '<div class="stat-card" style="margin-top:16px;">'
+            '<div class="card-header"><span class="player-number">Fortalezas y Áreas de Mejora</span></div>'
+            '<div class="card-body">'
+            '<div class="action-title" style="margin-bottom:8px;">Fortalezas (mayor eficiencia)</div>'
+            f'{s_items}'
+            '<div class="action-title" style="margin-top:16px;margin-bottom:8px;">Áreas de Mejora (menor eficiencia)</div>'
+            f'{w_items}'
+            '</div></div>'
+        )
+
+    # Match-by-match table
+    match_rows = []
+    for m in match_stats:
+        opponent = m['match_title'].replace('Vodkas vs ', '')
+        rating = m['rating']
+        r_color = _rating_color(rating)
+        perfect_pct = _pct(m['grade_perfect'], m['total'])
+        error_pct = _pct(m['grade_error'], m['total'])
+        href = f'{m["match_stem"]}.html'
+        match_rows.append(
+            f'<tr>'
+            f'<td><a href="{href}" style="color:var(--primary);text-decoration:none;font-weight:500;">{opponent}</a></td>'
+            f'<td style="color:{r_color};font-weight:600;">{rating}</td>'
+            f'<td>{m["total"]}</td>'
+            f'<td style="color:var(--success);">{perfect_pct}%</td>'
+            f'<td style="color:var(--danger);">{error_pct}%</td>'
+            f'</tr>'
+        )
+    match_table_html = ''.join(match_rows)
+
+    r_color = _rating_color(season_rating)
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{display_name} - Temporada - Volleyball Analytics</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  {_COLLAPSIBLE_JS}
+</head>
+<body>
+<div class="container">
+  <div class="report-header">
+    <h1>{display_name} <span class="position-badge">{pos_label}</span></h1>
+    <p>Temporada — Generado: {generated_date}</p>
+  </div>
+
+  {_section('Resumen de Temporada', f'''<div class="general-stats">
+    <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating Temporada</div></div>
+    <div class="stat-card"><div class="stat-value">{matches_played}</div><div class="stat-label">Partidos Jugados</div></div>
+    <div class="stat-card"><div class="stat-value">{total_actions}</div><div class="stat-label">Acciones Totales</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:{consistency_color}">{consistency_label}</div><div class="stat-label" title="Desviación estándar del rating entre partidos. σ &lt; 0.5: Consistente | σ &lt; 1.0: Moderado | σ ≥ 1.0: Variable">Consistencia (σ={std_dev}) ⓘ</div></div>
+  </div>
+  <div class="general-stats" style="margin-top:12px;">
+    <div class="stat-card"><div class="stat-value" style="color:var(--success);">{best_match["rating"]}</div><div class="stat-label">Mejor: {best_match["match_title"].replace("Vodkas vs ", "")}</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{worst_match["rating"]}</div><div class="stat-label">Peor: {worst_match["match_title"].replace("Vodkas vs ", "")}</div></div>
+  </div>''')}
+
+  {_section('Progresión de Rating', f'''<div class="stat-card"><div class="card-body"><canvas id="chart-rating" height="250"></canvas></div></div>
+  <script>
+  (function() {{
+    new Chart(document.getElementById('chart-rating'), {{
+      type: 'line',
+      data: {{
+        labels: {chart_labels},
+        datasets: [
+          {{ label: '{display_name}', data: {chart_ratings}, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3 }},
+          {{ label: 'Equipo', data: {chart_team_ratings}, borderColor: '#9ca3af', borderDash: [5,5], fill: false, tension: 0.3 }}
+        ]
+      }},
+      options: {{
+        responsive: true,
+        interaction: {{ mode: 'index', intersect: false }},
+        scales: {{ y: {{ min: 4, max: 10 }} }},
+        plugins: {{
+          annotation: {{ annotations: {{ target: {{ type: 'line', yMin: 7, yMax: 7, borderColor: '#22c55e', borderDash: [3,3], borderWidth: 1 }} }} }},
+          tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y }} }}
+        }}
+      }}
+    }});
+  }})();
+  </script>''')}
+
+  {action_charts_html}
+
+  {_section('Estadísticas Acumuladas', f'<div class="players-grid">{season_card}{strengths_html}</div>')}
+
+  {_section('Detalle por Partido', f'''<div style="overflow-x:auto;">
+    <table class="summary-table">
+      <thead><tr><th>Rival</th><th>Rating</th><th>Acciones</th><th>Perfecto %</th><th>Error %</th></tr></thead>
+      <tbody>{match_table_html}</tbody>
+    </table>
+  </div>''')}
+
+  <div style="margin-top:24px;text-align:center;">
+    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Team Season Page
+# ---------------------------------------------------------------------------
+
+
+def render_team_season_page(team_stats, generated_date):
+    """Render a complete season analytics page for the team.
+
+    Args:
+        team_stats (list[dict]): Output of get_team_season_stats().
+        generated_date (str): Date string for the header.
+
+    Returns:
+        str: Complete HTML document.
+    """
+    ratings = [m['rating'] for m in team_stats]
+    season_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0.0
+    matches_played = len(team_stats)
+    wins = sum(1 for m in team_stats if m.get('result') == 'W')
+    losses = sum(1 for m in team_stats if m.get('result') == 'L')
+
+    chart_labels = json.dumps([m['match_title'].replace('Vodkas vs ', '') for m in team_stats])
+    chart_ratings = json.dumps(ratings)
+
+    # Action efficiency trends
+    action_charts_html = _action_efficiency_charts(team_stats, chart_labels, 'chart-team-action')
+
+    # Phase stats trends (BP%, SO%)
+    bp_pcts = []
+    so_pcts = []
+    for m in team_stats:
+        bp_total = m.get('bp_total', 0)
+        bp_won = m.get('bp_won', 0)
+        so_total = m.get('so_total', 0)
+        so_won = m.get('so_won', 0)
+        bp_pcts.append(round((bp_won / bp_total) * 100) if bp_total > 0 else None)
+        so_pcts.append(round((so_won / so_total) * 100) if so_total > 0 else None)
+
+    bp_json = json.dumps(bp_pcts)
+    so_json = json.dumps(so_pcts)
+
+    # Season totals
+    season_data = _aggregate_season_data(team_stats)
+    season_card = build_card_html('Equipo — Temporada', season_data, season_rating, 'team-summary-card')
+
+    # Match-by-match table
+    match_rows = []
+    for m in team_stats:
+        opponent = m['match_title'].replace('Vodkas vs ', '')
+        rating = m['rating']
+        r_color = _rating_color(rating)
+        result = m.get('result', '')
+        result_str = 'W' if result == 'W' else ('L' if result == 'L' else '—')
+        result_color = 'var(--success)' if result == 'W' else ('var(--danger)' if result == 'L' else '#6b7280')
+        sets = m.get('set_scores', [])
+        sets_str = ' / '.join(f'{v}-{r}' for v, r in sets) if sets else '—'
+        href = f'{m["match_stem"]}.html'
+        match_rows.append(
+            f'<tr>'
+            f'<td><a href="{href}" style="color:var(--primary);text-decoration:none;font-weight:500;">{opponent}</a></td>'
+            f'<td style="color:{result_color};font-weight:600;">{result_str}</td>'
+            f'<td style="color:{r_color};font-weight:600;">{rating}</td>'
+            f'<td>{sets_str}</td>'
+            f'</tr>'
+        )
+    match_table_html = ''.join(match_rows)
+
+    r_color = _rating_color(season_rating)
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vodkas - Temporada - Volleyball Analytics</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  {_COLLAPSIBLE_JS}
+</head>
+<body>
+<div class="container">
+  <div class="report-header">
+    <h1>🏐 Vodkas — Temporada</h1>
+    <p>Generado: {generated_date}</p>
+  </div>
+
+  {_section('Resumen de Temporada', f'''<div class="general-stats">
+    <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating Temporada</div></div>
+    <div class="stat-card"><div class="stat-value">{matches_played}</div><div class="stat-label">Partidos</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--success);">{wins}W</div><div class="stat-label">Victorias</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{losses}L</div><div class="stat-label">Derrotas</div></div>
+  </div>''')}
+
+  {_section('Progresión de Rating', f'''<div class="stat-card"><div class="card-body"><canvas id="chart-team-rating" height="250"></canvas></div></div>
+  <script>
+  (function() {{
+    new Chart(document.getElementById('chart-team-rating'), {{
+      type: 'line',
+      data: {{
+        labels: {chart_labels},
+        datasets: [
+          {{ label: 'Rating Equipo', data: {chart_ratings}, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3 }}
+        ]
+      }},
+      options: {{
+        responsive: true,
+        interaction: {{ mode: 'index', intersect: false }},
+        scales: {{ y: {{ min: 4, max: 10 }} }},
+        plugins: {{ tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y }} }} }}
+      }}
+    }});
+  }})();
+  </script>''')}
+
+  {_section('Rendimiento de Puntos (Tendencia)', f'''<div style="font-size:0.82rem;color:#6b7280;margin-bottom:14px;line-height:1.7;">
+    <span style="color:#f59e0b;font-weight:600;">Break Point %</span>: puntos ganados cuando el rival está al saque (pelota en contra). Ganar estos rallies rompe el servicio contrario.<br>
+    <span style="color:#22c55e;font-weight:600;">Side-Out %</span>: puntos ganados cuando el equipo recibe el saque (pelota a favor). Recuperar el servicio propio.
+  </div>
+  <div class="stat-card"><div class="card-body"><canvas id="chart-points" height="250"></canvas></div></div>
+  <script>
+  (function() {{
+    new Chart(document.getElementById('chart-points'), {{
+      type: 'line',
+      data: {{
+        labels: {chart_labels},
+        datasets: [
+          {{ label: 'Break Point %', data: {bp_json}, borderColor: '#f59e0b', fill: false, tension: 0.3, spanGaps: true }},
+          {{ label: 'Side-Out %', data: {so_json}, borderColor: '#22c55e', fill: false, tension: 0.3, spanGaps: true }}
+        ]
+      }},
+      options: {{
+        responsive: true,
+        interaction: {{ mode: 'index', intersect: false }},
+        scales: {{ y: {{ min: 0, max: 100, ticks: {{ callback: v => v + '%' }} }} }},
+        plugins: {{ tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—') }} }} }}
+      }}
+    }});
+  }})();
+  </script>''')}
+
+  {_section('Eficiencia por Acción (Tendencia)', action_charts_html)}
+
+  {_section('Estadísticas Acumuladas', f'<div class="players-grid">{season_card}</div>')}
+
+  {_section('Detalle por Partido', f'''<div style="overflow-x:auto;">
+    <table class="summary-table">
+      <thead><tr><th>Rival</th><th>Resultado</th><th>Rating</th><th>Sets</th></tr></thead>
+      <tbody>{match_table_html}</tbody>
+    </table>
+  </div>''')}
+
+  <div style="margin-top:24px;text-align:center;">
+    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
   </div>
 </div>
 </body>

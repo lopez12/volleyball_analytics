@@ -21,6 +21,35 @@ FULL_NAMES = {
 ACTIONS = list(FULL_NAMES.keys())
 GRADES = ['#', '+', '!', '-']
 
+# ---------------------------------------------------------------------------
+# Player position and identity config
+# ---------------------------------------------------------------------------
+PLAYER_POSITIONS = {
+    '1': 'L',    # Líbero
+    '2': 'OPP',  # Opuesto
+    '4': 'S',    # Acomodo
+    '7': 'OH',   # Esquina
+    '8': 'MB',   # Centro
+    '10': 'OH',  # Esquina
+    '12': 'S',   # Acomodo
+    '17': 'OH',  # Esquina
+    '20': 'OH',  # Esquina
+    '23': 'MB',  # Centro
+    '24': 'MB',  # Centro
+    '25': 'S',   # Acomodo
+}
+
+POSITION_LABELS = {
+    'S': 'Acomodo',
+    'OH': 'Esquina',
+    'OPP': 'Opuesto',
+    'MB': 'Centro',
+    'L': 'Líbero',
+    'U': 'Universal',
+}
+
+PLAYER_NAMES = {}  # Optional: {'1': 'Nombre', ...} — display only
+
 _RE_PLAYER = re.compile(r'^(\d+)([SREADB])([#+!\-])$')
 _RE_TEAM = re.compile(r'^([SREADB])([#+!\-])$')
 _RE_ANY = re.compile(r'^(\d*)([SREADB])([#+!\-])$')

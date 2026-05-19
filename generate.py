@@ -13,9 +13,16 @@ import webbrowser
 from pathlib import Path
 from datetime import date
 
-from analytics import parse_log
-from db import init_db, upsert_match, get_all_matches_meta, get_match, get_phase_stats_from_db, get_point_stats_from_db
-from renderer import format_title, render_match_page, render_index_page
+from analytics import parse_log, PLAYER_POSITIONS, POSITION_LABELS, PLAYER_NAMES, calculate_rating
+from db import (
+    init_db, upsert_match, get_all_matches_meta, get_match,
+    get_phase_stats_from_db, get_point_stats_from_db,
+    get_all_player_nums, get_player_season_stats, get_team_season_stats,
+)
+from renderer import (
+    format_title, render_match_page, render_index_page,
+    render_player_season_page, render_team_season_page,
+)
 
 
 def main():
@@ -99,11 +106,62 @@ def main():
         (output_dir / meta['file']).write_text(html, encoding='utf-8')
         print(f'  Generated: docs/{meta["file"]}')
 
-    # Render index page
-    index_html = render_index_page(matches_meta, today)
+    # --- Season pages ---
+    # Team season
+    team_season = get_team_season_stats(conn)
+    if team_season:
+        html = render_team_season_page(team_season, today)
+        (output_dir / 'team_season.html').write_text(html, encoding='utf-8')
+        print('  Generated: docs/team_season.html')
+
+    # Build team ratings lookup (match_id → rating) for player season comparison
+    team_ratings_by_match = {m['match_id']: m['rating'] for m in team_season}
+
+    # Player season pages
+    player_nums = get_all_player_nums(conn)
+    player_summaries = []
+    for pnum in player_nums:
+        pstats = get_player_season_stats(conn, pnum)
+        if not pstats:
+            continue
+        # Team ratings aligned to this player's matches
+        team_match_ratings = [team_ratings_by_match.get(m['match_id'], 0.0) for m in pstats]
+
+        html = render_player_season_page(pnum, pstats, team_match_ratings, today)
+        (output_dir / f'player_{pnum}.html').write_text(html, encoding='utf-8')
+        print(f'  Generated: docs/player_{pnum}.html')
+
+        # Summary for index page
+        ratings = [m['rating'] for m in pstats]
+        avg_rating = round(sum(ratings) / len(ratings), 1)
+        player_summaries.append({
+            'player_num': pnum,
+            'name': PLAYER_NAMES.get(pnum, f'#{pnum}'),
+            'position': PLAYER_POSITIONS.get(pnum, 'U'),
+            'rating': avg_rating,
+            'matches_played': len(pstats),
+            'total_actions': sum(m['total'] for m in pstats),
+        })
+
+    # Sort players by season rating descending
+    player_summaries.sort(key=lambda x: x['rating'], reverse=True)
+
+    # Team season summary for index
+    team_season_summary = None
+    if team_season:
+        team_ratings = [m['rating'] for m in team_season]
+        team_season_summary = {
+            'rating': round(sum(team_ratings) / len(team_ratings), 1),
+            'matches_played': len(team_season),
+            'wins': sum(1 for m in team_season if m.get('result') == 'W'),
+            'losses': sum(1 for m in team_season if m.get('result') == 'L'),
+        }
+
+    # Render index page with season data
+    index_html = render_index_page(matches_meta, today, player_summaries, team_season_summary)
     (output_dir / 'index.html').write_text(index_html, encoding='utf-8')
     print(f'  Generated: docs/index.html')
-    print(f'Done. {len(matches_meta)} match(es) processed.')
+    print(f'Done. {len(matches_meta)} match(es) + {len(player_summaries)} player(s) + team season processed.')
 
     conn.close()
 

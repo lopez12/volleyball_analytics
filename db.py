@@ -517,3 +517,72 @@ def get_all_matches_meta(conn):
             'result': result,
         })
     return matches
+
+
+# ---------------------------------------------------------------------------
+# Season-level queries
+# ---------------------------------------------------------------------------
+
+
+def get_all_player_nums(conn):
+    """Return a sorted list of all distinct player numbers in the database."""
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        "SELECT DISTINCT player_num FROM player_match_stats ORDER BY CAST(player_num AS INTEGER)"
+    ).fetchall()
+    return [row['player_num'] for row in rows]
+
+
+def get_player_season_stats(conn, player_num):
+    """Return per-match stats for a player across the season, ordered chronologically.
+
+    Returns:
+        list[dict]: One dict per match with keys: match_id, match_title, match_stem,
+            rating, and all stat columns from player_match_stats.
+    """
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """SELECT p.*, m.title AS match_title, m.stem AS match_stem
+           FROM player_match_stats p
+           JOIN matches m ON m.id = p.match_id
+           WHERE p.player_num = ?
+           ORDER BY m.id ASC""",
+        (player_num,),
+    ).fetchall()
+    results = []
+    for row in rows:
+        d = dict(row)
+        d['rating'] = calculate_rating({'total': d['total'], 'score_sum': d['score_sum']})
+        results.append(d)
+    return results
+
+
+def get_team_season_stats(conn):
+    """Return per-match team stats across the season, ordered chronologically.
+
+    Returns:
+        list[dict]: One dict per match with keys: match_id, match_title, match_stem,
+            rating, result, set_scores, and all stat columns from team_match_stats.
+    """
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """SELECT t.*, m.title AS match_title, m.stem AS match_stem, m.id AS mid
+           FROM team_match_stats t
+           JOIN matches m ON m.id = t.match_id
+           ORDER BY m.id ASC"""
+    ).fetchall()
+    results = []
+    for row in rows:
+        d = dict(row)
+        d['rating'] = calculate_rating({'total': d['total'], 'score_sum': d['score_sum']})
+        set_rows = get_match_sets(conn, d['mid'])
+        set_scores = [(v, r) for (_, v, r) in set_rows]
+        if set_scores:
+            vodkas_sets = sum(1 for v, r in set_scores if v > r)
+            rival_sets = sum(1 for v, r in set_scores if r > v)
+            d['result'] = 'W' if vodkas_sets > rival_sets else 'L'
+        else:
+            d['result'] = None
+        d['set_scores'] = set_scores
+        results.append(d)
+    return results
