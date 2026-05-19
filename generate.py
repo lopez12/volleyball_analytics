@@ -22,6 +22,7 @@ from db import (
 from renderer import (
     format_title, render_match_page, render_index_page,
     render_player_season_page, render_team_season_page,
+    render_players_page, render_matches_page,
 )
 
 
@@ -161,6 +162,16 @@ def main():
     index_html = render_index_page(matches_meta, today, player_summaries, team_season_summary)
     (output_dir / 'index.html').write_text(index_html, encoding='utf-8')
     print(f'  Generated: docs/index.html')
+
+    # Render intermediate pages
+    players_html = render_players_page(player_summaries, today)
+    (output_dir / 'players.html').write_text(players_html, encoding='utf-8')
+    print(f'  Generated: docs/players.html')
+
+    matches_html = render_matches_page(matches_meta, today)
+    (output_dir / 'matches.html').write_text(matches_html, encoding='utf-8')
+    print(f'  Generated: docs/matches.html')
+
     print(f'Done. {len(matches_meta)} match(es) + {len(player_summaries)} player(s) + team season processed.')
 
     conn.close()

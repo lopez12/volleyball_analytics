@@ -104,14 +104,14 @@ def _action_efficiency_charts(match_stats, chart_labels_json, canvas_prefix, col
           scales: {{ y: {{ min: 0, max: 100, ticks: {{ callback: v => v + '%' }} }} }},
           plugins: {{
             legend: {{ display: true, position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }},
-            tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—') }} }}
+            tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '-') }} }}
           }}
         }}
       }});
     }})();
     </script>'''
         charts_html += _section(
-            f'{action_name} — Eficiencia',
+            f'{action_name} - Eficiencia',
             chart_html,
             collapsed=(action in collapsed_actions),
         )
@@ -592,100 +592,57 @@ def render_index_page(matches, generated_date, player_summaries=None, team_seaso
     Returns:
         str: A complete HTML document string.
     """
-    # --- Team Season card ---
-    team_section_html = ''
+    # --- Hero stats ---
     if team_season_summary:
         ts = team_season_summary
         r_color = _rating_color(ts['rating'])
         wins = ts.get('wins', 0)
         losses = ts.get('losses', 0)
-        team_section_html = (
-            '<div class="players-grid">'
-            '<div class="match-card">'
-            '<div class="card-header">'
-            '<span class="player-number">Vodkas — Temporada</span>'
-            f'<span class="player-rating" style="color:{r_color};background:white;">{ts["rating"]}</span>'
-            '</div>'
-            '<div class="card-body">'
-            f'<div class="metric-row"><span>Récord</span><span>{wins}W - {losses}L</span></div>'
-            f'<div class="metric-row"><span>Partidos</span><span>{ts["matches_played"]}</span></div>'
-            '<a href="team_season.html" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
-            'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Temporada →</a>'
-            '</div></div></div>'
-        )
+        rating_val = ts['rating']
+        matches_played = ts['matches_played']
+    else:
+        r_color = '#6b7280'
+        wins = 0
+        losses = 0
+        rating_val = 0.0
+        matches_played = len(matches)
 
-    # --- Players section ---
-    players_section_html = ''
+    # --- Tile data ---
+    player_count = len(player_summaries) if player_summaries else 0
+    top_player_html = ''
     if player_summaries:
-        p_cards = []
-        for ps in player_summaries:
-            r_color = _rating_color(ps['rating'])
-            pos_code = ps.get('position', 'U')
-            pos_label = POSITION_LABELS.get(pos_code, 'Universal')
-            display_name = ps.get('name', f'#{ps["player_num"]}')
-            p_cards.append(
-                '<div class="match-card">'
-                '<div class="card-header">'
-                f'<span class="player-number">{display_name}</span>'
-                f'<span class="player-rating" style="color:{r_color};background:white;">{ps["rating"]}</span>'
-                '</div>'
-                '<div class="card-body">'
-                f'<span class="position-badge">{pos_label}</span>'
-                f'<div class="metric-row"><span>Partidos</span><span>{ps["matches_played"]}</span></div>'
-                f'<div class="metric-row"><span>Acciones totales</span><span>{ps["total_actions"]}</span></div>'
-                f'<a href="player_{ps["player_num"]}.html" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
-                f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Temporada →</a>'
-                '</div></div>'
-            )
-        players_section_html = f'<div class="players-grid">{"".join(p_cards)}</div>'
+        top = player_summaries[0]
+        top_player_html = f'MVP: <strong>{top["name"]}</strong> ({top["rating"]})'
 
-    # --- Match cards ---
-    cards = []
-    for m in matches:
-        r_color = _rating_color(m['rating'])
-        title = m['title']
-        rating = m['rating']
-        tot = m['total_actions']
-        pct = m['perfect_pct']
-        href = m['file']
-        result = m.get('result')
-        set_scores = m.get('set_scores', [])
-
-        # Result badge
-        if result == 'W':
-            badge_html = '<span class="result-badge result-win">Victoria</span>'
-        elif result == 'L':
-            badge_html = '<span class="result-badge result-loss">Derrota</span>'
+    last_match_html = ''
+    if matches:
+        lm = matches[-1]
+        lm_r_color = _rating_color(lm['rating'])
+        lm_result = lm.get('result')
+        if lm_result == 'W':
+            lm_badge = '<span class="result-badge result-win">Victoria</span>'
+        elif lm_result == 'L':
+            lm_badge = '<span class="result-badge result-loss">Derrota</span>'
         else:
-            badge_html = ''
-
-        # Set score line
-        if set_scores:
-            sets_str = ' / '.join(f'{v}-{r}' for v, r in set_scores)
-            sets_html = f'<div class="metric-row"><span>Sets</span><span>{sets_str}</span></div>'
-        else:
-            sets_html = ''
-
-        cards.append(
-            f'<div class="match-card">'
-            f'<div class="card-header">'
-            f'<span class="player-number">{title}</span>'
-            f'<span class="player-rating" style="color:{r_color};background:white;">{rating}</span>'
+            lm_badge = ''
+        last_match_html = (
+            f'<div class="hub-last-match">'
+            f'<span class="hub-last-match-label">Último Partido</span>'
+            f'<span class="hub-last-match-title">{lm["title"]}</span>'
+            f'{lm_badge}'
+            f'<span class="hub-last-match-rating" style="color:{lm_r_color};">{lm["rating"]}</span>'
+            f'<a href="{lm["file"]}">Ver Reporte →</a>'
             f'</div>'
-            f'<div class="card-body">'
-            f'{badge_html}'
-            f'{sets_html}'
-            f'<div class="metric-row"><span>Acciones totales</span><span>{tot}</span></div>'
-            f'<div class="metric-row"><span>Eficacia Perfecta</span><span style="color:var(--success);">{pct}%</span></div>'
-            f'<a href="{href}" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
-            f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Reporte →</a>'
-            f'</div></div>'
         )
-    cards_html = ''.join(cards)
 
-    team_block = _section('Temporada del Equipo', team_section_html) if team_section_html else ''
-    players_block = _section('Jugadores', players_section_html) if players_section_html else ''
-    matches_block = _section('Partidos', f'<div class="players-grid">{cards_html}</div>')
+    # Last match info for tile
+    last_match_tile_stat = ''
+    if matches:
+        lm = matches[-1]
+        lm_result = lm.get('result')
+        result_text = 'Victoria' if lm_result == 'W' else ('Derrota' if lm_result == 'L' else '-')
+        opponent = lm['title'].replace('Vodkas vs ', '')
+        last_match_tile_stat = f'Último: <strong>{result_text}</strong> vs {opponent}'
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -694,17 +651,50 @@ def render_index_page(matches, generated_date, player_summaries=None, team_seaso
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Volleyball Analytics</title>
   <link rel="stylesheet" href="styles.css">
-  {_COLLAPSIBLE_JS}
 </head>
 <body>
 <div class="container">
-  <div class="report-header">
-    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Volleyball Analytics</h1>
-    <p>Generado: {generated_date}</p>
+  <div class="hub-hero">
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Vodkas - Volleyball Analytics</h1>
+    <p class="hub-subtitle">Generado: {generated_date}</p>
+    <div class="hub-hero-stats">
+      <div class="hub-hero-stat">
+        <div class="stat-value" style="color:{r_color};">{rating_val}</div>
+        <div class="stat-label">Rating</div>
+      </div>
+      <div class="hub-hero-stat">
+        <div class="stat-value">{wins}W - {losses}L</div>
+        <div class="stat-label">Récord</div>
+      </div>
+      <div class="hub-hero-stat">
+        <div class="stat-value">{matches_played}</div>
+        <div class="stat-label">Partidos</div>
+      </div>
+    </div>
   </div>
-  {team_block}
-  {players_block}
-  {matches_block}
+
+  <div class="hub-nav">
+    <a href="team_season.html" class="hub-tile">
+      <span class="hub-tile-icon">📊</span>
+      <span class="hub-tile-title">Equipo</span>
+      <span class="hub-tile-stat">Rating <strong>{rating_val}</strong> · {wins}W-{losses}L</span>
+      <span class="hub-tile-btn">Ver Temporada →</span>
+    </a>
+    <a href="players.html" class="hub-tile">
+      <span class="hub-tile-icon">👥</span>
+      <span class="hub-tile-title">Jugadores</span>
+      <span class="hub-tile-stat">{player_count} jugadores · {top_player_html}</span>
+      <span class="hub-tile-btn">Ver Jugadores →</span>
+    </a>
+    <a href="matches.html" class="hub-tile">
+      <span class="hub-tile-icon">🏐</span>
+      <span class="hub-tile-title">Partidos</span>
+      <span class="hub-tile-stat">{len(matches)} partidos · {last_match_tile_stat}</span>
+      <span class="hub-tile-btn">Ver Partidos →</span>
+    </a>
+  </div>
+
+  {last_match_html}
 </div>
 </body>
 </html>"""
@@ -770,7 +760,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     season_data = _aggregate_season_data(match_stats)
     season_actions = season_data['actions']  # also used for strengths/weaknesses below
 
-    season_card = build_card_html(f'{display_name} — Temporada', season_data, season_rating, 'team-summary-card')
+    season_card = build_card_html(f'{display_name} - Temporada', season_data, season_rating, 'team-summary-card')
 
     # Strengths & Improvement Areas
     action_effs = []
@@ -834,7 +824,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 <div class="container">
   <div class="report-header">
     <h1>{display_name} <span class="position-badge">{pos_label}</span></h1>
-    <p>Temporada — Generado: {generated_date}</p>
+    <p>Temporada - Generado: {generated_date}</p>
   </div>
 
   {_section('Resumen de Temporada', f'''<div class="general-stats">
@@ -935,7 +925,7 @@ def render_team_season_page(team_stats, generated_date):
 
     # Season totals
     season_data = _aggregate_season_data(team_stats)
-    season_card = build_card_html('Equipo — Temporada', season_data, season_rating, 'team-summary-card')
+    season_card = build_card_html('Equipo - Temporada', season_data, season_rating, 'team-summary-card')
 
     # Match-by-match table
     match_rows = []
@@ -944,10 +934,10 @@ def render_team_season_page(team_stats, generated_date):
         rating = m['rating']
         r_color = _rating_color(rating)
         result = m.get('result', '')
-        result_str = 'W' if result == 'W' else ('L' if result == 'L' else '—')
+        result_str = 'W' if result == 'W' else ('L' if result == 'L' else '-')
         result_color = 'var(--success)' if result == 'W' else ('var(--danger)' if result == 'L' else '#6b7280')
         sets = m.get('set_scores', [])
-        sets_str = ' / '.join(f'{v}-{r}' for v, r in sets) if sets else '—'
+        sets_str = ' / '.join(f'{v}-{r}' for v, r in sets) if sets else '-'
         href = f'{m["match_stem"]}.html'
         match_rows.append(
             f'<tr>'
@@ -973,8 +963,11 @@ def render_team_season_page(team_stats, generated_date):
 </head>
 <body>
 <div class="container">
+  <div style="margin-bottom:12px;">
+    <a href="index.html" class="back-link" style="color:var(--primary);text-decoration:none;font-weight:600;font-size:0.88rem;">← Inicio</a>
+  </div>
   <div class="report-header">
-    <h1>🏐 Vodkas — Temporada</h1>
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Vodkas - Temporada</h1>
     <p>Generado: {generated_date}</p>
   </div>
 
@@ -1007,8 +1000,8 @@ def render_team_season_page(team_stats, generated_date):
   </script>''')}
 
   {_section('Rendimiento de Puntos (Tendencia)', f'''<div style="font-size:0.82rem;color:#6b7280;margin-bottom:14px;line-height:1.7;">
-    <span style="color:#f59e0b;font-weight:600;">Break Point %</span>: puntos ganados cuando el rival está al saque (pelota en contra). Ganar estos rallies rompe el servicio contrario.<br>
-    <span style="color:#22c55e;font-weight:600;">Side-Out %</span>: puntos ganados cuando el equipo recibe el saque (pelota a favor). Recuperar el servicio propio.
+    <span style="color:#f59e0b;font-weight:600;">Break Point %</span>: % Puntos ganados con posesión (saque propio).<br>
+    <span style="color:#22c55e;font-weight:600;">Side-Out %</span>: % Puntos ganados recibiendo (saque rival).
   </div>
   <div class="stat-card"><div class="card-body"><canvas id="chart-points" height="250"></canvas></div></div>
   <script>
@@ -1026,7 +1019,7 @@ def render_team_season_page(team_stats, generated_date):
         responsive: true,
         interaction: {{ mode: 'index', intersect: false }},
         scales: {{ y: {{ min: 0, max: 100, ticks: {{ callback: v => v + '%' }} }} }},
-        plugins: {{ tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '—') }} }} }}
+        plugins: {{ tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '-') }} }} }}
       }}
     }});
   }})();
@@ -1043,6 +1036,147 @@ def render_team_season_page(team_stats, generated_date):
     </table>
   </div>''')}
 
+  <div style="margin-top:24px;text-align:center;">
+    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Players Intermediate Page
+# ---------------------------------------------------------------------------
+
+
+def render_players_page(player_summaries, generated_date):
+    """Render the intermediate players listing page.
+
+    Args:
+        player_summaries (list[dict]): Per-player season summary dicts.
+        generated_date (str): Date string for the header.
+
+    Returns:
+        str: Complete HTML document.
+    """
+    p_cards = []
+    for ps in player_summaries:
+        r_color = _rating_color(ps['rating'])
+        pos_code = ps.get('position', 'U')
+        pos_label = POSITION_LABELS.get(pos_code, 'Universal')
+        display_name = ps.get('name', f'#{ps["player_num"]}')
+        p_cards.append(
+            '<div class="match-card">'
+            '<div class="card-header">'
+            f'<span class="player-number">{display_name}</span>'
+            f'<span class="player-rating" style="color:{r_color};background:white;">{ps["rating"]}</span>'
+            '</div>'
+            '<div class="card-body">'
+            f'<span class="position-badge">{pos_label}</span>'
+            f'<div class="metric-row"><span>Partidos</span><span>{ps["matches_played"]}</span></div>'
+            f'<div class="metric-row"><span>Acciones totales</span><span>{ps["total_actions"]}</span></div>'
+            f'<a href="player_{ps["player_num"]}.html" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
+            f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Temporada →</a>'
+            '</div></div>'
+        )
+    cards_html = ''.join(p_cards)
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jugadores - Volleyball Analytics</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <div class="page-header">
+    <a href="index.html" class="back-link">← Inicio</a>
+    <h1><span style="-webkit-text-fill-color:initial;">👥</span> Jugadores</h1>
+  </div>
+  <p style="color:#6b7280;font-size:0.85rem;margin:0 0 20px;">Generado: {generated_date}</p>
+  <div class="players-grid">{cards_html}</div>
+  <div style="margin-top:24px;text-align:center;">
+    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
+  </div>
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Matches Intermediate Page
+# ---------------------------------------------------------------------------
+
+
+def render_matches_page(matches, generated_date):
+    """Render the intermediate matches listing page.
+
+    Args:
+        matches (list[dict]): Ordered list of match metadata dicts.
+        generated_date (str): Date string for the header.
+
+    Returns:
+        str: Complete HTML document.
+    """
+    cards = []
+    for m in matches:
+        r_color = _rating_color(m['rating'])
+        title = m['title']
+        rating = m['rating']
+        tot = m['total_actions']
+        pct = m['perfect_pct']
+        href = m['file']
+        result = m.get('result')
+        set_scores = m.get('set_scores', [])
+
+        if result == 'W':
+            badge_html = '<span class="result-badge result-win">Victoria</span>'
+        elif result == 'L':
+            badge_html = '<span class="result-badge result-loss">Derrota</span>'
+        else:
+            badge_html = ''
+
+        if set_scores:
+            sets_str = ' / '.join(f'{v}-{r}' for v, r in set_scores)
+            sets_html = f'<div class="metric-row"><span>Sets</span><span>{sets_str}</span></div>'
+        else:
+            sets_html = ''
+
+        cards.append(
+            f'<div class="match-card">'
+            f'<div class="card-header">'
+            f'<span class="player-number">{title}</span>'
+            f'<span class="player-rating" style="color:{r_color};background:white;">{rating}</span>'
+            f'</div>'
+            f'<div class="card-body">'
+            f'{badge_html}'
+            f'{sets_html}'
+            f'<div class="metric-row"><span>Acciones totales</span><span>{tot}</span></div>'
+            f'<div class="metric-row"><span>Eficacia Perfecta</span><span style="color:var(--success);">{pct}%</span></div>'
+            f'<a href="{href}" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
+            f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Reporte →</a>'
+            f'</div></div>'
+        )
+    cards_html = ''.join(cards)
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Partidos - Volleyball Analytics</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <div class="page-header">
+    <a href="index.html" class="back-link">← Inicio</a>
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Partidos</h1>
+  </div>
+  <p style="color:#6b7280;font-size:0.85rem;margin:0 0 20px;">Generado: {generated_date}</p>
+  <div class="players-grid">{cards_html}</div>
   <div style="margin-top:24px;text-align:center;">
     <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
   </div>
