@@ -27,6 +27,39 @@ function toggleSection(el) {
 </script>"""
 
 
+# ---------------------------------------------------------------------------
+# Shared layout helpers
+# ---------------------------------------------------------------------------
+
+
+def _back_link(href='index.html', label='← Inicio'):
+    """Return a top-of-page back-link div."""
+    return (
+        f'<div style="margin-bottom:12px;">'
+        f'<a href="{href}" style="color:var(--primary);text-decoration:none;'
+        f'font-weight:600;font-size:0.88rem;">{label}</a>'
+        f'</div>'
+    )
+
+
+def _back_nav(href='index.html', label='← Inicio'):
+    """Return a prominent centered bottom navigation button."""
+    return (
+        f'<div style="margin-top:24px;text-align:center;">'
+        f'<a href="{href}" style="display:inline-block;padding:10px 22px;'
+        f'background:var(--primary);color:white;border-radius:8px;'
+        f'text-decoration:none;font-weight:600;">{label}</a>'
+        f'</div>'
+    )
+
+
+# Shared scoring metric descriptions used in match cards and team season trend.
+_SCORING_DESCRIPTIONS = {
+    'bp': '% Puntos ganados con posesión (saque propio).',
+    'so': '% Puntos ganados recibiendo (saque rival).',
+}
+
+
 def _section(title, content_html, collapsed=False):
     """Wrap a section title and its content in a collapsible container."""
     t_cls = 'section-title collapsed' if collapsed else 'section-title'
@@ -414,8 +447,8 @@ def build_scoring_card_html(point_stats):
         '<div class="card-body">'
         '<div style="margin-bottom:15px;font-size:0.85rem;color:#4b5563;background:#f8fafc;'
         'padding:10px;border-radius:6px;border:1px solid #e2e8f0;line-height:1.4;">'
-        '<strong>Break Point:</strong> % Puntos ganados con posesión (saque propio).<br>'
-        '<strong>Side-Out:</strong> % Puntos ganados recibiendo (saque rival).'
+        f'<strong>Break Point:</strong> {_SCORING_DESCRIPTIONS["bp"]}<br>'
+        f'<strong>Side-Out:</strong> {_SCORING_DESCRIPTIONS["so"]}'
         '</div>'
         f'<div class="metric-row" style="margin-top:12px;">'
         f'<span>Break Point % <span style="font-weight:normal;color:#6b7280;font-size:0.8em;">({bp_won}/{bp_total} pts)</span></span>'
@@ -550,6 +583,7 @@ def render_match_page(match_title, parsed, generated_date):
 </head>
 <body>
 <div class="container">
+  {_back_link('index.html', '← Todos los partidos')}
   <div class="report-header">
     <h1>Reporte: {match_title}</h1>
     <p>Generado: {generated_date}</p>
@@ -570,9 +604,7 @@ def render_match_page(match_title, parsed, generated_date):
 
   {_section('Detalle por Jugador', f'<div class="players-grid">{player_cards}</div>')}
 
-  <div style="margin-top:24px;text-align:center;">
-    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Todos los partidos</a>
-  </div>
+  {_back_nav('index.html', '← Todos los partidos')}
 </div>
 </body>
 </html>"""
@@ -822,6 +854,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 </head>
 <body>
 <div class="container">
+  {_back_link()}
   <div class="report-header">
     <h1>{display_name} <span class="position-badge">{pos_label}</span></h1>
     <p>Temporada - Generado: {generated_date}</p>
@@ -874,9 +907,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     </table>
   </div>''')}
 
-  <div style="margin-top:24px;text-align:center;">
-    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
-  </div>
+  {_back_nav()}
 </div>
 </body>
 </html>"""
@@ -963,9 +994,7 @@ def render_team_season_page(team_stats, generated_date):
 </head>
 <body>
 <div class="container">
-  <div style="margin-bottom:12px;">
-    <a href="index.html" class="back-link" style="color:var(--primary);text-decoration:none;font-weight:600;font-size:0.88rem;">← Inicio</a>
-  </div>
+  {_back_link()}
   <div class="report-header">
     <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Vodkas - Temporada</h1>
     <p>Generado: {generated_date}</p>
@@ -1000,8 +1029,8 @@ def render_team_season_page(team_stats, generated_date):
   </script>''')}
 
   {_section('Rendimiento de Puntos (Tendencia)', f'''<div style="font-size:0.82rem;color:#6b7280;margin-bottom:14px;line-height:1.7;">
-    <span style="color:#f59e0b;font-weight:600;">Break Point %</span>: % Puntos ganados con posesión (saque propio).<br>
-    <span style="color:#22c55e;font-weight:600;">Side-Out %</span>: % Puntos ganados recibiendo (saque rival).
+    <span style="color:#f59e0b;font-weight:600;">Break Point %</span>: {_SCORING_DESCRIPTIONS['bp']}<br>
+    <span style="color:#22c55e;font-weight:600;">Side-Out %</span>: {_SCORING_DESCRIPTIONS['so']}
   </div>
   <div class="stat-card"><div class="card-body"><canvas id="chart-points" height="250"></canvas></div></div>
   <script>
@@ -1036,9 +1065,7 @@ def render_team_season_page(team_stats, generated_date):
     </table>
   </div>''')}
 
-  <div style="margin-top:24px;text-align:center;">
-    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
-  </div>
+  {_back_nav()}
 </div>
 </body>
 </html>"""
@@ -1097,9 +1124,7 @@ def render_players_page(player_summaries, generated_date):
   </div>
   <p style="color:#6b7280;font-size:0.85rem;margin:0 0 20px;">Generado: {generated_date}</p>
   <div class="players-grid">{cards_html}</div>
-  <div style="margin-top:24px;text-align:center;">
-    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
-  </div>
+  {_back_nav()}
 </div>
 </body>
 </html>"""
@@ -1177,9 +1202,7 @@ def render_matches_page(matches, generated_date):
   </div>
   <p style="color:#6b7280;font-size:0.85rem;margin:0 0 20px;">Generado: {generated_date}</p>
   <div class="players-grid">{cards_html}</div>
-  <div style="margin-top:24px;text-align:center;">
-    <a href="index.html" style="display:inline-block;padding:10px 22px;background:var(--primary);color:white;border-radius:8px;text-decoration:none;font-weight:600;">← Inicio</a>
-  </div>
+  {_back_nav()}
 </div>
 </body>
 </html>"""
