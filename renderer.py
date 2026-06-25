@@ -864,7 +864,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating Temporada</div></div>
     <div class="stat-card"><div class="stat-value">{matches_played}</div><div class="stat-label">Partidos Jugados</div></div>
     <div class="stat-card"><div class="stat-value">{total_actions}</div><div class="stat-label">Acciones Totales</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:{consistency_color}">{consistency_label}</div><div class="stat-label" title="Desviación estándar del rating entre partidos. σ &lt; 0.5: Consistente | σ &lt; 1.0: Moderado | σ ≥ 1.0: Variable">Consistencia (σ={std_dev}) ⓘ</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:{consistency_color};font-size:1.2rem;word-break:break-word;">{consistency_label}<span style="display:block;font-size:0.75em;color:#6b7280;font-weight:normal;">σ={std_dev}</span></div><div class="stat-label" title="Desviación estándar del rating entre partidos. σ &lt; 0.5: Consistente | σ &lt; 1.0: Moderado | σ ≥ 1.0: Variable">Consistencia ⓘ</div></div>
   </div>
   <div class="general-stats" style="margin-top:12px;">
     <div class="stat-card"><div class="stat-value" style="color:var(--success);">{best_match["rating"]}</div><div class="stat-label">Mejor: {best_match["match_title"].replace("Vodkas vs ", "")}</div></div>
