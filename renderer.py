@@ -10,7 +10,7 @@ import statistics
 
 from analytics import (
     ACTIONS, FULL_NAMES, GRADES, POSITION_LABELS,
-    calculate_rating, calculate_phase_stats, calculate_point_stats,
+    calculate_rating, calculate_efficiency, calculate_phase_stats, calculate_point_stats,
 )
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ def _action_efficiency_charts(match_stats, chart_labels_json, canvas_prefix, col
 _GRADE_PREFIXES = (('#', 'perfect'), ('+', 'positive'), ('!', 'regular'), ('-', 'error'))
 
 
-def _aggregate_season_data(match_stats):
+def aggregate_season_data(match_stats):
     """Aggregate per-match stat rows into a season totals dict for build_card_html.
 
     Args:
@@ -650,7 +650,8 @@ def render_index_page(matches, generated_date, team_name, tournament_name, team_
     top_player_html = ''
     if player_summaries:
         top = player_summaries[0]
-        top_player_html = f'MVP: <strong>{top["name"]}</strong> ({top["rating"]})'
+        top_pos = POSITION_LABELS.get(top.get('position', 'U'), 'Universal')
+        top_player_html = f'MVP: <strong>{top["name"]}</strong> ({top["rating"]}) · {top_pos}'
 
     last_match_html = ''
     if matches:
@@ -804,8 +805,9 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     action_charts_html = _action_efficiency_charts(match_stats, chart_labels, 'chart-action', collapsed_actions)
 
     # Season totals cross-tab
-    season_data = _aggregate_season_data(match_stats)
+    season_data = aggregate_season_data(match_stats)
     season_actions = season_data['actions']  # also used for strengths/weaknesses below
+    season_efficiency = calculate_efficiency(season_data)
 
     season_card = build_card_html(f'{display_name} - {comp_label}', season_data, season_rating, 'team-summary-card')
 
@@ -915,6 +917,8 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 
   {_section('Estadísticas Acumuladas', f'<div class="players-grid">{season_card}{strengths_html}</div>')}
 
+  {_section('Eficiencia por Fundamento', _efficiency_block_html(season_efficiency))}
+
   {_section('Detalle por Partido', f'''<div style="overflow-x:auto;">
     <table class="summary-table">
       <thead><tr><th>Rival</th><th>Rating</th><th>Acciones</th><th>Perfecto %</th><th>Error %</th></tr></thead>
@@ -975,7 +979,8 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
     so_json = json.dumps(so_pcts)
 
     # Season totals
-    season_data = _aggregate_season_data(team_stats)
+    season_data = aggregate_season_data(team_stats)
+    team_efficiency = calculate_efficiency(season_data)
     season_card = build_card_html(f'{team_name} - {comp_label}', season_data, season_rating, 'team-summary-card')
 
     # Match-by-match table
@@ -1078,6 +1083,8 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
 
   {_section('Estadísticas Acumuladas', f'<div class="players-grid">{season_card}</div>')}
 
+  {_section('Eficiencia por Fundamento', _efficiency_block_html(team_efficiency))}
+
   {_section('Detalle por Partido', f'''<div style="overflow-x:auto;">
     <table class="summary-table">
       <thead><tr><th>Rival</th><th>Resultado</th><th>Rating</th><th>Sets</th></tr></thead>
@@ -1095,6 +1102,86 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
 # Players Intermediate Page
 # ---------------------------------------------------------------------------
 
+# Display order of positions for the players page grouping. Unknown codes are
+# appended after these, in encounter order.
+_POSITION_ORDER = ['S', 'OH', 'OPP', 'MB', 'L', 'U']
+
+# Honesty caveat (Phase 2): a kill (A#) currently includes points won on rival
+# errors, so attack efficiency reads slightly high until grade integrity lands.
+_ATTACK_EFF_NOTE = 'La eficiencia de ataque incluye puntos por error rival (pendiente Fase 2).'
+
+
+def _fmt_pct(value):
+    """Format a 0..1 ratio as an integer percentage, or an em dash if None."""
+    if value is None:
+        return '—'
+    return f'{round(value * 100)}%'
+
+
+def _fmt_signed_pct(value):
+    """Format a ratio in [-1, 1] as a signed integer percentage, or em dash if None."""
+    if value is None:
+        return '—'
+    return f'{round(value * 100):+d}%'
+
+
+def _headline_efficiency(pos_code, eff):
+    """Pick the position-appropriate headline efficiency metric for display.
+
+    Args:
+        pos_code (str): Position code (e.g. 'OH', 'S', 'L').
+        eff (dict): Output of calculate_efficiency().
+
+    Returns:
+        tuple[str, str, str]: (label, display_value, tooltip). tooltip may be ''.
+    """
+    if pos_code == 'L':
+        return ('Recepción +', _fmt_pct(eff.get('reception_pos')), '')
+    if pos_code == 'S':
+        return ('Acomodo +', _fmt_pct(eff.get('set_pos')), '')
+    return ('Eficiencia ataque', _fmt_signed_pct(eff.get('attack_eff')), _ATTACK_EFF_NOTE)
+
+
+def _efficiency_block_html(eff):
+    """Build the per-skill efficiency grid HTML from a calculate_efficiency() dict."""
+    cards = [
+        ('Ataque (Efic.)', _fmt_signed_pct(eff['attack_eff'])),
+        ('Recepción +', _fmt_pct(eff['reception_pos'])),
+        ('Saque Ace', _fmt_pct(eff['serve_ace_pct'])),
+        ('Saque Error', _fmt_pct(eff['serve_err_pct'])),
+        ('Acomodo +', _fmt_pct(eff['set_pos'])),
+        ('Bloqueos Punto', str(eff['block_kills'])),
+    ]
+    items = ''.join(
+        f'<div class="stat-card"><div class="stat-value">{value}</div>'
+        f'<div class="stat-label">{label}</div></div>'
+        for label, value in cards
+    )
+    glossary_items = [
+        ('Ataque (Efic.)',
+         'Eficiencia de ataque = (ataques ganados − ataques error) ÷ total de ataques. '
+         'Rango: −100% a +100%'),
+        ('Recepción +',
+         'Porcentaje de recepciones buenas (perfectas o positivas) sobre el total. '
+         ),
+        ('Acomodo +',
+         'Porcentaje de acomodos buenos sobre el total.')
+    ]
+    glossary_rows = ''.join(
+        f'<div style="margin-bottom:6px;"><strong style="color:#374151;">{label}:</strong> '
+        f'<span style="color:#6b7280;">{desc}</span></div>'
+        for label, desc in glossary_items
+    )
+    glossary = (
+        '<div style="margin-top:14px;font-size:0.8rem;line-height:1.5;">'
+        f'{glossary_rows}'
+        '</div>'
+    )
+    note = (
+        f'<p style="color:#9ca3af;font-size:0.75rem;margin:12px 0 0;">* {_ATTACK_EFF_NOTE}</p>'
+    )
+    return f'<div class="general-stats">{items}</div>{glossary}{note}'
+
 
 def render_players_page(player_summaries, generated_date):
     """Render the intermediate players listing page.
@@ -1106,27 +1193,46 @@ def render_players_page(player_summaries, generated_date):
     Returns:
         str: Complete HTML document.
     """
-    p_cards = []
+    # Group players by position, then order groups by _POSITION_ORDER (unknown
+    # codes last). Within each group, rank by season rating descending.
+    groups = {}
     for ps in player_summaries:
-        r_color = _rating_color(ps['rating'])
-        pos_code = ps.get('position', 'U')
-        pos_label = POSITION_LABELS.get(pos_code, 'Universal')
-        display_name = ps.get('name', f'#{ps["player_num"]}')
-        p_cards.append(
-            '<div class="match-card">'
-            '<div class="card-header">'
-            f'<span class="player-number">{display_name}</span>'
-            f'<span class="player-rating" style="color:{r_color};background:white;">{ps["rating"]}</span>'
-            '</div>'
-            '<div class="card-body">'
-            f'<span class="position-badge">{pos_label}</span>'
-            f'<div class="metric-row"><span>Partidos</span><span>{ps["matches_played"]}</span></div>'
-            f'<div class="metric-row"><span>Acciones totales</span><span>{ps["total_actions"]}</span></div>'
-            f'<a href="player_{ps["player_num"]}.html" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
-            f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Detalle →</a>'
-            '</div></div>'
+        groups.setdefault(ps.get('position', 'U'), []).append(ps)
+    ordered_codes = [c for c in _POSITION_ORDER if c in groups]
+    ordered_codes += [c for c in groups if c not in _POSITION_ORDER]
+
+    sections = []
+    for code in ordered_codes:
+        members = sorted(groups[code], key=lambda x: x['rating'], reverse=True)
+        pos_label = POSITION_LABELS.get(code, 'Universal')
+        p_cards = []
+        for rank, ps in enumerate(members, start=1):
+            r_color = _rating_color(ps['rating'])
+            display_name = ps.get('name', f'#{ps["player_num"]}')
+            eff = ps.get('efficiency') or {}
+            head_label, head_value, head_tip = _headline_efficiency(code, eff)
+            tip_attr = f' title="{head_tip}"' if head_tip else ''
+            p_cards.append(
+                '<div class="match-card">'
+                '<div class="card-header">'
+                f'<span class="player-number">{display_name}</span>'
+                f'<span class="player-rating" style="color:{r_color};background:white;">{ps["rating"]}</span>'
+                '</div>'
+                '<div class="card-body">'
+                f'<span class="position-badge">{pos_label} · {rank}.º</span>'
+                f'<div class="metric-row"{tip_attr}><span>{head_label}</span><span>{head_value}</span></div>'
+                f'<div class="metric-row"><span>Partidos</span><span>{ps["matches_played"]}</span></div>'
+                f'<div class="metric-row"><span>Acciones totales</span><span>{ps["total_actions"]}</span></div>'
+                f'<a href="player_{ps["player_num"]}.html" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
+                f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Detalle →</a>'
+                '</div></div>'
+            )
+        sections.append(
+            f'<h2 style="margin:28px 0 12px;font-size:1.1rem;">{pos_label} '
+            f'<span style="color:#9ca3af;font-weight:400;font-size:0.85rem;">({len(members)})</span></h2>'
+            f'<div class="players-grid">{"".join(p_cards)}</div>'
         )
-    cards_html = ''.join(p_cards)
+    cards_html = ''.join(sections)
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -1143,7 +1249,7 @@ def render_players_page(player_summaries, generated_date):
     <h1><span style="-webkit-text-fill-color:initial;">👥</span> Jugadores</h1>
   </div>
   <p style="color:#6b7280;font-size:0.85rem;margin:0 0 20px;">Generado: {generated_date}</p>
-  <div class="players-grid">{cards_html}</div>
+  {cards_html}
   {_back_nav()}
 </div>
 </body>

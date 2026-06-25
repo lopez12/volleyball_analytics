@@ -22,6 +22,19 @@ FULL_NAMES = {
 ACTIONS = list(FULL_NAMES.keys())
 GRADES = ['#', '+', '!', '-']
 
+# Per-action leverage weights for the rating. Terminal, point-scoring actions
+# matter most; setting is a low-risk continuation and is intentionally
+# discounted. ACTION_WEIGHTS['E'] is the primary tuning dial: lower it to
+# further reduce setter inflation, raise it to reward playmaking.
+ACTION_WEIGHTS = {
+    'A': 1.3,   # Ataque   - terminal, scores points
+    'B': 1.2,   # Bloqueo  - terminal, scores points
+    'S': 1.1,   # Saque    - can ace or break serve-receive
+    'R': 1.0,   # Recepción - baseline
+    'D': 1.0,   # Defensa  - baseline
+    'E': 0.65,  # Acomodo  - low-risk continuation (primary dial)
+}
+
 # ---------------------------------------------------------------------------
 # Player position config
 # ---------------------------------------------------------------------------
@@ -238,27 +251,80 @@ def parse_log(log_string):
 def calculate_rating(data):
     """Compute the overall performance rating for a player or team on a 1–10 scale.
 
-    Formula:
-        raw    = 6.0 + (score_sum / total) * 4.0
-        rating = clamp(raw, 1.0, 10.0)
+    The rating is action-weighted ("leverage-scaled"): each recorded touch
+    contributes its grade weight (WEIGHTS) multiplied by its action's leverage
+    weight (ACTION_WEIGHTS), and the sum is divided by the raw touch count.
 
-    The baseline of 6.0 represents neutral performance. The multiplier of 4.0
-    scales the normalised weighted average so that a perfect score (all '#')
-    produces 10.0, while consistent errors ('-') approach 1.0.
+        weighted = Σ_action Σ_grade  grade_count[grade][action]
+                                      * WEIGHTS[grade] * ACTION_WEIGHTS[action]
+        raw      = 6.0 + (weighted / total) * 4.0
+        rating   = clamp(raw, 1.0, 10.0)
+
+    Dividing by the raw count (not by Σ count*ACTION_WEIGHTS) is deliberate: it
+    makes low-leverage actions such as setting contribute *less* to the rating,
+    instead of merely re-weighting an average (which would leave a pure-setting
+    profile unchanged). Elite terminal performances may reach the 10.0 clamp.
 
     Args:
         data (dict): A statistics dictionary with at minimum:
             'total' (int): Total number of recorded actions.
-            'score_sum' (float): Cumulative weighted score from _record().
+            'grade_count' (dict): Cross-tab of grade -> action -> count, as
+                produced by _new_stats()/_record() or _row_to_stats().
 
     Returns:
         float: Rounded performance rating in the inclusive range [1.0, 10.0].
             Returns 0.0 if 'total' is 0 (no recorded actions).
     """
-    if data['total'] == 0:
+    total = data['total']
+    if total == 0:
         return 0.0
-    raw = 6.0 + (data['score_sum'] / data['total']) * 4.0
+    grade_count = data['grade_count']
+    weighted = 0.0
+    for grade in GRADES:
+        for action in ACTIONS:
+            weighted += grade_count[grade][action] * WEIGHTS[grade] * ACTION_WEIGHTS[action]
+    raw = 6.0 + (weighted / total) * 4.0
     return round(max(1.0, min(10.0, raw)), 1)
+
+
+def calculate_efficiency(data):
+    """Compute standard per-skill efficiency metrics from a stats dictionary.
+
+    Uses only counts already present in a stats dict (from parse_log,
+    _row_to_stats, or a season aggregate). Each ratio metric is None when its
+    action has zero attempts, so callers can render an em dash.
+
+    Note: 'attack_eff' uses the current kill definition (an A# attack). Until
+    Phase 2 (grade integrity) separates execution from outcome, A# can include
+    points won on rival errors, so attack efficiency is slightly optimistic.
+
+    Args:
+        data (dict): A stats dict with 'actions' and 'grade_count' keys.
+
+    Returns:
+        dict: {
+            'attack_eff'    (float|None): (A# - A-) / A_tot, range [-1, 1].
+            'reception_pos' (float|None): (R# + R+) / R_tot, range [0, 1].
+            'serve_ace_pct' (float|None): S# / S_tot.
+            'serve_err_pct' (float|None): S- / S_tot.
+            'set_pos'       (float|None): (E# + E+) / E_tot.
+            'block_kills'   (int): count of B# (stuff blocks).
+        }
+    """
+    actions = data['actions']
+    gc = data['grade_count']
+    a_tot = actions['A']['tot']
+    r_tot = actions['R']['tot']
+    s_tot = actions['S']['tot']
+    e_tot = actions['E']['tot']
+    return {
+        'attack_eff': ((gc['#']['A'] - gc['-']['A']) / a_tot) if a_tot else None,
+        'reception_pos': (actions['R']['good'] / r_tot) if r_tot else None,
+        'serve_ace_pct': (gc['#']['S'] / s_tot) if s_tot else None,
+        'serve_err_pct': (gc['-']['S'] / s_tot) if s_tot else None,
+        'set_pos': (actions['E']['good'] / e_tot) if e_tot else None,
+        'block_kills': gc['#']['B'],
+    }
 
 
 def calculate_phase_stats(rallies):

@@ -128,14 +128,21 @@ Each line is one rally. Tokens within a line are space-separated.
 
 ### Actions
 
-| Code | Name |
-|------|------|
-| `S`  | Saque (Serve) |
-| `R`  | Recepción de Saque (Reception) |
-| `E`  | Acomodo (Set) |
-| `A`  | Ataque (Attack) |
-| `D`  | Defensa (Defense) |
-| `B`  | Bloqueo (Block) |
+| Code | Name | Leverage weight |
+|------|------|-----------------|
+| `A`  | Ataque (Attack) | 1.3 |
+| `B`  | Bloqueo (Block) | 1.2 |
+| `S`  | Saque (Serve) | 1.1 |
+| `R`  | Recepción de Saque (Reception) | 1.0 |
+| `D`  | Defensa (Defense) | 1.0 |
+| `E`  | Acomodo (Set) | 0.65 |
+
+The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much each
+action contributes to the rating. Terminal, point-scoring actions (attack,
+block) count for more; setting is a low-risk continuation and is discounted so
+the rating no longer favours setters simply because they touch the ball most.
+`ACTION_WEIGHTS['E']` (0.65) is the primary tuning dial — lower it to discount
+setting further, raise it to reward playmaking.
 
 ### Grades
 
@@ -221,7 +228,14 @@ After that, every `git push` to `main` triggers an automatic rebuild.
 1. `generate.py` discovers every dataset folder under `teams/` that contains a `team.json`
 2. For each dataset it parses the `matches/*.txt` logs into a dedicated `data/<team>/<tournament>/volleyball.db`
 3. `parse_log()` tokenizes lines into rallies and records per-player and team stats
-4. `calculate_rating()` computes a 1–10 rating: `6.0 + (score_sum / total) × 4.0`
+4. `calculate_rating()` computes an action-weighted 1–10 rating:
+   `6.0 + 4.0 × (Σ grade_count × grade_weight × action_weight) / total`, then
+   clamped to `[1.0, 10.0]`. Dividing by the raw touch count (not by the weighted
+   count) is what makes low-leverage actions such as setting contribute less.
+   `calculate_efficiency()` derives per-skill metrics: attack efficiency
+   `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity,
+   and block kills. (Attack efficiency still counts rival-error points as kills
+   until the Phase 2 grade-integrity work lands.)
 5. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
 6. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
 7. Static HTML is written to `docs/<team>/<tournament>/`, and a root `docs/index.html` selector links to every dataset

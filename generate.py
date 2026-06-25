@@ -24,7 +24,7 @@ import webbrowser
 from pathlib import Path
 from datetime import date
 
-from analytics import parse_log, load_team_config
+from analytics import parse_log, load_team_config, calculate_efficiency
 from db import (
     init_db, upsert_match, get_all_matches_meta, get_match,
     get_phase_stats_from_db, get_point_stats_from_db,
@@ -34,6 +34,7 @@ from renderer import (
     format_title, render_match_page, render_index_page,
     render_player_season_page, render_team_season_page,
     render_players_page, render_matches_page, render_root_index_page,
+    aggregate_season_data,
 )
 
 TEAMS_ROOT = Path('teams')
@@ -157,6 +158,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
 
         ratings = [m['rating'] for m in pstats]
         avg_rating = round(sum(ratings) / len(ratings), 1)
+        season_efficiency = calculate_efficiency(aggregate_season_data(pstats))
         player_summaries.append({
             'player_num': pnum,
             'name': names.get(pnum, f'#{pnum}'),
@@ -164,6 +166,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
             'rating': avg_rating,
             'matches_played': len(pstats),
             'total_actions': sum(m['total'] for m in pstats),
+            'efficiency': season_efficiency,
         })
 
     player_summaries.sort(key=lambda x: x['rating'], reverse=True)

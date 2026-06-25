@@ -488,7 +488,7 @@ def get_all_matches_meta(conn):
     """
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        """SELECT m.id, m.stem, m.title, t.total, t.score_sum, t.grade_perfect
+        """SELECT m.id AS mid, m.stem, m.title, t.*
            FROM matches m
            JOIN team_match_stats t ON t.match_id = m.id
            ORDER BY m.stem"""
@@ -497,9 +497,9 @@ def get_all_matches_meta(conn):
     matches = []
     for row in rows:
         total = row['total']
-        rating = calculate_rating({'total': total, 'score_sum': row['score_sum']})
+        rating = calculate_rating(_row_to_stats(dict(row)))
         pct = round((row['grade_perfect'] / total) * 100) if total > 0 else 0
-        set_rows = get_match_sets(conn, row['id'])
+        set_rows = get_match_sets(conn, row['mid'])
         set_scores = [(v, r) for (_, v, r) in set_rows]
         if set_scores:
             team_sets = sum(1 for v, r in set_scores if v > r)
@@ -552,7 +552,7 @@ def get_player_season_stats(conn, player_num):
     results = []
     for row in rows:
         d = dict(row)
-        d['rating'] = calculate_rating({'total': d['total'], 'score_sum': d['score_sum']})
+        d['rating'] = calculate_rating(_row_to_stats(d))
         results.append(d)
     return results
 
@@ -574,7 +574,7 @@ def get_team_season_stats(conn):
     results = []
     for row in rows:
         d = dict(row)
-        d['rating'] = calculate_rating({'total': d['total'], 'score_sum': d['score_sum']})
+        d['rating'] = calculate_rating(_row_to_stats(d))
         set_rows = get_match_sets(conn, d['mid'])
         set_scores = [(v, r) for (_, v, r) in set_rows]
         if set_scores:
