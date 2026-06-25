@@ -9,8 +9,7 @@ import re
 import statistics
 
 from analytics import (
-    ACTIONS, FULL_NAMES, GRADES,
-    PLAYER_POSITIONS, POSITION_LABELS, PLAYER_NAMES,
+    ACTIONS, FULL_NAMES, GRADES, POSITION_LABELS,
     calculate_rating, calculate_phase_stats, calculate_point_stats,
 )
 
@@ -466,25 +465,26 @@ def build_scoring_card_html(point_stats):
 # ---------------------------------------------------------------------------
 
 
-def format_title(stem):
-    """Convert a match log filename stem into a human-readable match title.
+def format_title(stem, team_name):
+    """Compose a human-readable match title from a log filename stem.
 
-    Replaces underscores with spaces, title-cases all words, then corrects
-    'Vs' back to lowercase 'vs' to follow standard volleyball naming conventions.
+    Filenames follow the 'NN_<opponent>' convention (e.g. '01_alaba'). The
+    leading numeric ordering prefix is stripped, the opponent slug is
+    title-cased, and the title is composed as '<team_name> vs <Opponent>'.
 
     Example:
-        'vodkas_vs_alaba' → 'Vodkas vs Alaba'
-        '01_vodkas_vs_alaba' → 'Vodkas vs Alaba'
+        format_title('01_alaba', 'Vodkas') -> 'Vodkas vs Alaba'
+        format_title('03_san_jose', 'Nova') -> 'Nova vs San Jose'
 
     Args:
-        stem (str): The filename without extension, e.g. 'vodkas_vs_alaba' or
-            '01_vodkas_vs_alaba'.
+        stem (str): The filename without extension, e.g. '01_alaba'.
+        team_name (str): The display name of the home team for this dataset.
 
     Returns:
         str: A formatted, human-readable match title.
     """
-    clean = re.sub(r'^\d+_', '', stem)
-    return clean.replace('_', ' ').title().replace(' Vs ', ' vs ')
+    opponent = re.sub(r'^\d+_', '', stem).replace('_', ' ').title()
+    return f'{team_name} vs {opponent}'
 
 
 def render_match_page(match_title, parsed, generated_date):
@@ -610,20 +610,26 @@ def render_match_page(match_title, parsed, generated_date):
 </html>"""
 
 
-def render_index_page(matches, generated_date, player_summaries=None, team_season_summary=None):
-    """Render the static HTML index page as a navigation hub.
+def render_index_page(matches, generated_date, team_name, tournament_name, team_type='tournament',
+                      player_summaries=None, team_season_summary=None):
+    """Render the static HTML index page as a navigation hub for one dataset.
 
     Sections (top to bottom): Team Season, Players, Matches.
 
     Args:
         matches (list[dict]): Ordered list of match metadata dicts.
         generated_date (str): Date string displayed in the page header.
+        team_name (str): Display name of the dataset's team (e.g. 'Vodkas').
+        tournament_name (str): Display name of the tournament/competition.
+        team_type (str): 'tournament' or 'friendly' (controls aggregate label).
         player_summaries (list[dict], optional): Per-player season summary for the Players section.
         team_season_summary (dict, optional): Team season summary for the Team Season link.
 
     Returns:
         str: A complete HTML document string.
     """
+    comp_label = 'Amistosos' if team_type == 'friendly' else 'Torneo'
+    team_prefix = f'{team_name} vs '
     # --- Hero stats ---
     if team_season_summary:
         ts = team_season_summary
@@ -673,7 +679,7 @@ def render_index_page(matches, generated_date, player_summaries=None, team_seaso
         lm = matches[-1]
         lm_result = lm.get('result')
         result_text = 'Victoria' if lm_result == 'W' else ('Derrota' if lm_result == 'L' else '-')
-        opponent = lm['title'].replace('Vodkas vs ', '')
+        opponent = lm['title'].replace(team_prefix, '')
         last_match_tile_stat = f'Último: <strong>{result_text}</strong> vs {opponent}'
 
     return f"""<!DOCTYPE html>
@@ -681,13 +687,14 @@ def render_index_page(matches, generated_date, player_summaries=None, team_seaso
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Volleyball Analytics</title>
+  <title>{team_name} - {tournament_name}</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="container">
   <div class="hub-hero">
-    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Vodkas - Volleyball Analytics</h1>
+    <p style="margin:0 0 6px;"><a href="../../index.html" class="back-link">← Equipos</a></p>
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> {team_name} - {tournament_name}</h1>
     <p class="hub-subtitle">Generado: {generated_date}</p>
     <div class="hub-hero-stats">
       <div class="hub-hero-stat">
@@ -710,7 +717,7 @@ def render_index_page(matches, generated_date, player_summaries=None, team_seaso
       <span class="hub-tile-icon">📊</span>
       <span class="hub-tile-title">Equipo</span>
       <span class="hub-tile-stat">Rating <strong>{rating_val}</strong> · {wins}W-{losses}L</span>
-      <span class="hub-tile-btn">Ver Temporada →</span>
+      <span class="hub-tile-btn">Ver {comp_label} →</span>
     </a>
     <a href="players.html" class="hub-tile">
       <span class="hub-tile-icon">👥</span>
@@ -737,7 +744,8 @@ def render_index_page(matches, generated_date, player_summaries=None, team_seaso
 # ---------------------------------------------------------------------------
 
 
-def render_player_season_page(player_num, match_stats, team_match_ratings, generated_date):
+def render_player_season_page(player_num, match_stats, team_match_ratings, generated_date,
+                              positions, names, team_name, tournament_name, team_type='tournament'):
     """Render a complete season analytics page for a single player.
 
     Args:
@@ -745,13 +753,20 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
         match_stats (list[dict]): Output of get_player_season_stats().
         team_match_ratings (list[float]): Team rating for each match (same order as match_stats matches).
         generated_date (str): Date string for the header.
+        positions (dict): Maps player number -> position code (from team.json).
+        names (dict): Maps player number -> display name (from team.json).
+        team_name (str): Display name of the dataset's team (e.g. 'Vodkas').
+        tournament_name (str): Display name of the tournament/competition.
+        team_type (str): 'tournament' or 'friendly' (controls aggregate label).
 
     Returns:
         str: Complete HTML document.
     """
-    pos_code = PLAYER_POSITIONS.get(player_num, 'U')
+    comp_label = 'Amistosos' if team_type == 'friendly' else 'Torneo'
+    team_prefix = f'{team_name} vs '
+    pos_code = positions.get(player_num, 'U')
     pos_label = POSITION_LABELS.get(pos_code, 'Universal')
-    display_name = PLAYER_NAMES.get(player_num, f'#{player_num}')
+    display_name = names.get(player_num, f'#{player_num}')
 
     # Season aggregations
     ratings = [m['rating'] for m in match_stats]
@@ -780,7 +795,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
         consistency_color = '#6b7280'
 
     # Chart data
-    chart_labels = json.dumps([m['match_title'].replace('Vodkas vs ', '') for m in match_stats])
+    chart_labels = json.dumps([m['match_title'].replace(team_prefix, '') for m in match_stats])
     chart_ratings = json.dumps(ratings)
     chart_team_ratings = json.dumps(team_match_ratings)
 
@@ -792,7 +807,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     season_data = _aggregate_season_data(match_stats)
     season_actions = season_data['actions']  # also used for strengths/weaknesses below
 
-    season_card = build_card_html(f'{display_name} - Temporada', season_data, season_rating, 'team-summary-card')
+    season_card = build_card_html(f'{display_name} - {comp_label}', season_data, season_rating, 'team-summary-card')
 
     # Strengths & Improvement Areas
     action_effs = []
@@ -823,7 +838,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     # Match-by-match table
     match_rows = []
     for m in match_stats:
-        opponent = m['match_title'].replace('Vodkas vs ', '')
+        opponent = m['match_title'].replace(team_prefix, '')
         rating = m['rating']
         r_color = _rating_color(rating)
         perfect_pct = _pct(m['grade_perfect'], m['total'])
@@ -847,7 +862,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{display_name} - Temporada - Volleyball Analytics</title>
+  <title>{display_name} - {tournament_name} - {team_name}</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   {_COLLAPSIBLE_JS}
@@ -857,18 +872,18 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
   {_back_link('players.html', '← Todos los jugadores')}
   <div class="report-header">
     <h1>{display_name} <span class="position-badge">{pos_label}</span></h1>
-    <p>Temporada - Generado: {generated_date}</p>
+    <p>{tournament_name} - Generado: {generated_date}</p>
   </div>
 
-  {_section('Resumen de Temporada', f'''<div class="general-stats">
-    <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating Temporada</div></div>
+  {_section('Resumen de ' + comp_label, f'''<div class="general-stats">
+    <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating {comp_label}</div></div>
     <div class="stat-card"><div class="stat-value">{matches_played}</div><div class="stat-label">Partidos Jugados</div></div>
     <div class="stat-card"><div class="stat-value">{total_actions}</div><div class="stat-label">Acciones Totales</div></div>
     <div class="stat-card"><div class="stat-value" style="color:{consistency_color};font-size:1.2rem;word-break:break-word;">{consistency_label}<span style="display:block;font-size:0.75em;color:#6b7280;font-weight:normal;">σ={std_dev}</span></div><div class="stat-label" title="Desviación estándar del rating entre partidos. σ &lt; 0.5: Consistente | σ &lt; 1.0: Moderado | σ ≥ 1.0: Variable">Consistencia ⓘ</div></div>
   </div>
   <div class="general-stats" style="margin-top:12px;">
-    <div class="stat-card"><div class="stat-value" style="color:var(--success);">{best_match["rating"]}</div><div class="stat-label">Mejor: {best_match["match_title"].replace("Vodkas vs ", "")}</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{worst_match["rating"]}</div><div class="stat-label">Peor: {worst_match["match_title"].replace("Vodkas vs ", "")}</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--success);">{best_match["rating"]}</div><div class="stat-label">Mejor: {best_match["match_title"].replace(team_prefix, "")}</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{worst_match["rating"]}</div><div class="stat-label">Peor: {worst_match["match_title"].replace(team_prefix, "")}</div></div>
   </div>''')}
 
   {_section('Progresión de Rating', f'''<div class="stat-card"><div class="card-body"><canvas id="chart-rating" height="250"></canvas></div></div>
@@ -918,23 +933,28 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 # ---------------------------------------------------------------------------
 
 
-def render_team_season_page(team_stats, generated_date):
+def render_team_season_page(team_stats, generated_date, team_name, tournament_name, team_type='tournament'):
     """Render a complete season analytics page for the team.
 
     Args:
         team_stats (list[dict]): Output of get_team_season_stats().
         generated_date (str): Date string for the header.
+        team_name (str): Display name of the dataset's team (e.g. 'Vodkas').
+        tournament_name (str): Display name of the tournament/competition.
+        team_type (str): 'tournament' or 'friendly' (controls aggregate label).
 
     Returns:
         str: Complete HTML document.
     """
+    comp_label = 'Amistosos' if team_type == 'friendly' else 'Torneo'
+    team_prefix = f'{team_name} vs '
     ratings = [m['rating'] for m in team_stats]
     season_rating = round(sum(ratings) / len(ratings), 1) if ratings else 0.0
     matches_played = len(team_stats)
     wins = sum(1 for m in team_stats if m.get('result') == 'W')
     losses = sum(1 for m in team_stats if m.get('result') == 'L')
 
-    chart_labels = json.dumps([m['match_title'].replace('Vodkas vs ', '') for m in team_stats])
+    chart_labels = json.dumps([m['match_title'].replace(team_prefix, '') for m in team_stats])
     chart_ratings = json.dumps(ratings)
 
     # Action efficiency trends
@@ -956,12 +976,12 @@ def render_team_season_page(team_stats, generated_date):
 
     # Season totals
     season_data = _aggregate_season_data(team_stats)
-    season_card = build_card_html('Equipo - Temporada', season_data, season_rating, 'team-summary-card')
+    season_card = build_card_html(f'{team_name} - {comp_label}', season_data, season_rating, 'team-summary-card')
 
     # Match-by-match table
     match_rows = []
     for m in team_stats:
-        opponent = m['match_title'].replace('Vodkas vs ', '')
+        opponent = m['match_title'].replace(team_prefix, '')
         rating = m['rating']
         r_color = _rating_color(rating)
         result = m.get('result', '')
@@ -987,7 +1007,7 @@ def render_team_season_page(team_stats, generated_date):
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Vodkas - Temporada - Volleyball Analytics</title>
+  <title>{team_name} - {tournament_name}</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   {_COLLAPSIBLE_JS}
@@ -996,12 +1016,12 @@ def render_team_season_page(team_stats, generated_date):
 <div class="container">
   {_back_link()}
   <div class="report-header">
-    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Vodkas - Temporada</h1>
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> {team_name} - {tournament_name}</h1>
     <p>Generado: {generated_date}</p>
   </div>
 
-  {_section('Resumen de Temporada', f'''<div class="general-stats">
-    <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating Temporada</div></div>
+  {_section('Resumen de ' + comp_label, f'''<div class="general-stats">
+    <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating {comp_label}</div></div>
     <div class="stat-card"><div class="stat-value">{matches_played}</div><div class="stat-label">Partidos</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--success);">{wins}W</div><div class="stat-label">Victorias</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{losses}L</div><div class="stat-label">Derrotas</div></div>
@@ -1103,7 +1123,7 @@ def render_players_page(player_summaries, generated_date):
             f'<div class="metric-row"><span>Partidos</span><span>{ps["matches_played"]}</span></div>'
             f'<div class="metric-row"><span>Acciones totales</span><span>{ps["total_actions"]}</span></div>'
             f'<a href="player_{ps["player_num"]}.html" style="display:block;margin-top:14px;padding:8px 0;background:var(--primary);'
-            f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Temporada →</a>'
+            f'color:white;text-align:center;border-radius:6px;text-decoration:none;font-weight:600;">Ver Detalle →</a>'
             '</div></div>'
         )
     cards_html = ''.join(p_cards)
@@ -1203,6 +1223,105 @@ def render_matches_page(matches, generated_date):
   <p style="color:#6b7280;font-size:0.85rem;margin:0 0 20px;">Generado: {generated_date}</p>
   <div class="players-grid">{cards_html}</div>
   {_back_nav()}
+</div>
+</body>
+</html>"""
+
+
+# ---------------------------------------------------------------------------
+# Root Index Page (team / tournament selector)
+# ---------------------------------------------------------------------------
+
+
+def render_root_index_page(datasets, generated_date):
+    """Render the top-level selector hub listing every team and its datasets.
+
+    Datasets are grouped by team. Within each team, tournament datasets are
+    listed first, followed by a separate "Amistosos" (friendly) group when
+    present. Each dataset links to its own dashboard one level down.
+
+    Args:
+        datasets (list[dict]): One dict per generated dataset, each with keys:
+            'team' (str), 'tournament' (str), 'type' (str),
+            'href' (str): relative path to the dataset index (e.g.
+                'vodkas/atlas-chapalita-cup-2026/index.html'),
+            'rating' (float), 'matches_played' (int),
+            'wins' (int), 'losses' (int).
+        generated_date (str): Date string displayed in the page header.
+
+    Returns:
+        str: A complete HTML document string.
+    """
+    # Group datasets by team (preserve first-seen order).
+    teams = {}
+    for ds in datasets:
+        teams.setdefault(ds['team'], []).append(ds)
+
+    def _dataset_card(ds):
+        r_color = _rating_color(ds.get('rating', 0.0))
+        wins = ds.get('wins', 0)
+        losses = ds.get('losses', 0)
+        played = ds.get('matches_played', 0)
+        return (
+            f'<a href="{ds["href"]}" class="hub-tile">'
+            f'<span class="hub-tile-icon">🏐</span>'
+            f'<span class="hub-tile-title">{ds["tournament"]}</span>'
+            f'<span class="hub-tile-stat">Rating <strong style="color:{r_color};">{ds.get("rating", 0.0)}</strong>'
+            f' · {wins}W-{losses}L · {played} partidos</span>'
+            f'<span class="hub-tile-btn">Ver →</span>'
+            f'</a>'
+        )
+
+    team_sections = []
+    for team_name, team_datasets in teams.items():
+        tournaments = [d for d in team_datasets if d.get('type') != 'friendly']
+        friendlies = [d for d in team_datasets if d.get('type') == 'friendly']
+
+        groups_html = ''
+        if tournaments:
+            cards = ''.join(_dataset_card(d) for d in tournaments)
+            groups_html += (
+                '<h3 style="margin:18px 0 10px;color:#374151;font-size:1rem;">Torneos</h3>'
+                f'<div class="hub-nav">{cards}</div>'
+            )
+        if friendlies:
+            cards = ''.join(_dataset_card(d) for d in friendlies)
+            groups_html += (
+                '<h3 style="margin:18px 0 10px;color:#374151;font-size:1rem;">Amistosos</h3>'
+                f'<div class="hub-nav">{cards}</div>'
+            )
+
+        team_sections.append(
+            '<div class="stat-card" style="margin-bottom:24px;">'
+            '<div class="card-body">'
+            f'<h2 style="margin:0;color:var(--primary);">🏐 {team_name}</h2>'
+            f'{groups_html}'
+            '</div></div>'
+        )
+
+    sections_html = ''.join(team_sections)
+    if not sections_html:
+        sections_html = (
+            '<div class="stat-card"><div class="card-body">'
+            '<p style="color:#6b7280;">Aún no hay datos disponibles.</p>'
+            '</div></div>'
+        )
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Volleyball Analytics</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+  <div class="hub-hero">
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Volleyball Analytics</h1>
+    <p class="hub-subtitle">Selecciona un equipo y torneo · Generado: {generated_date}</p>
+  </div>
+  {sections_html}
 </div>
 </body>
 </html>"""

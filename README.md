@@ -23,28 +23,97 @@ A volleyball analytics dashboard that reads match log files and generates static
 python generate.py
 ```
 
-This reads all `*.txt` match files in the repo root, writes static HTML to `docs/`, and opens the index page in your browser.
+This discovers every dataset under `teams/`, writes static HTML to `docs/`, and opens the root selector page in your browser.
+
+## Data Layout
+
+The project supports **multiple teams**, each playing **multiple tournaments** (and friendly matches). Every `(team, tournament)` pair is an independent **dataset** with its own roster, database, and dashboard.
+
+```
+teams/
+└── <team_slug>/
+    └── <tournament_slug>/
+        ├── team.json                 # roster + team/tournament metadata
+        └── matches/
+            ├── 01_<opponent>.txt
+            ├── 02_<opponent>.txt
+            └── ...
+```
+
+- `team_slug` and `tournament_slug` are lowercase, hyphen-separated folder names (e.g. `vodkas`, `atlas-chapalita-cup-2026`).
+- Tournament slugs carry a **year suffix** (e.g. `apertura-2026`) so the same competition in different years stays separate.
+- Friendly matches go in a dataset whose `type` is `"friendly"` (slug `amistosos`, no year).
+
+The generated output mirrors this layout and is **not committed**:
+
+```
+data/<team_slug>/<tournament_slug>/volleyball.db   # SQLite (generated)
+data/<team_slug>/<tournament_slug>/*.csv           # CSV export (generated)
+docs/<team_slug>/<tournament_slug>/...             # dataset dashboard (generated)
+docs/index.html                                    # root team/tournament selector
+```
+
+### `team.json` format
+
+```json
+{
+  "team": "Vodkas",
+  "tournament": "Atlas Chapalita Cup",
+  "type": "tournament",
+  "roster": {
+    "7":  { "name": "Gio", "position": "OH" },
+    "8":  { "name": "DaniRdz", "position": "MB" }
+  }
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `team` | Display team name (shown on every page). |
+| `tournament` | Display competition name (use `"Amistosos"` for friendlies). |
+| `type` | `"tournament"` or `"friendly"`. |
+| `roster` | Maps player number → `{ "name", "position" }`. Positions: `S`, `OH`, `OPP`, `MB`, `L`. |
+
+Players without a name fall back to `#<number>` in the reports.
+
+## Adding a New Team
+
+1. Create `teams/<team_slug>/<tournament_slug>/team.json` with the roster and metadata.
+2. Add match logs under `teams/<team_slug>/<tournament_slug>/matches/`.
+3. Run `python generate.py` to preview, then commit and push.
+
+## Adding a New Tournament (new season / competition)
+
+1. Create a new dataset folder for the team: `teams/<team_slug>/<new-tournament-slug>/`.
+2. Add its `team.json` (roster may differ from other tournaments) and a `matches/` folder.
+3. Run `python generate.py`. The new tournament appears under the team on the root selector.
+
+## Recording a Friendly Match
+
+1. Use (or create) the team's `teams/<team_slug>/amistosos/` dataset with `"type": "friendly"` and `"tournament": "Amistosos"` in `team.json`.
+2. Drop the match log in its `matches/` folder.
+3. Run `python generate.py`. Friendlies are grouped separately under the team on the root selector and labelled **Amistosos**.
 
 ## Adding a New Match
 
-1. Create a new `.txt` file in the repo root using the naming convention below
-2. Paste the match log (see format below)
-3. Run `python generate.py` to preview locally
-4. Commit and push — GitHub Actions rebuilds and publishes the site automatically
+1. Create a `.txt` file in the dataset's `matches/` folder using the naming convention below.
+2. Paste the match log (see format below).
+3. Run `python generate.py` to preview locally.
+4. Commit and push — GitHub Actions rebuilds and publishes the site automatically.
 
 ### File naming convention
 
-Prefix every match file with a two-digit number representing the play order, followed by an underscore:
+Match files live inside a dataset's `matches/` folder and are named `NN_<opponent>.txt`:
 
 ```
-01_vodkas_vs_atlas.txt
-02_vodkas_vs_arcano.txt
-03_vodkas_vs_teletubbies.txt
-...
-12_vodkas_vs_diamantes.txt
+teams/vodkas/atlas-chapalita-cup-2026/matches/
+├── 01_atlas.txt
+├── 02_arcano.txt
+├── 03_teletubbies.txt
+└── ...
 ```
 
-The numeric prefix controls the order in which matches appear on the index page. The prefix is stripped automatically when generating titles and report filenames, so `01_vodkas_vs_atlas` becomes **"Vodkas vs Atlas"** in the report.
+The two-digit prefix controls the order in which matches appear. The prefix is stripped and the team name is prepended automatically, so `01_atlas.txt` for team **Vodkas** becomes **"Vodkas vs Atlas"** in the report.
 
 ## Match Log Format
 
@@ -95,42 +164,46 @@ Each line is one rally. Tokens within a line are space-separated.
 
 ## Exporting Data to CSV
 
-To export all match data to CSV files (readable in Excel or Google Sheets):
+To export every dataset's match data to CSV files (readable in Excel or Google Sheets):
 
 ```bash
 python export_csv.py
 ```
 
-Three files will be written to `data/`:
+For each dataset, three files are written next to its database in `data/<team_slug>/<tournament_slug>/`:
 
 | File | Contents |
 |------|----------|
-| `data/matches.csv` | One row per match — title, date, YouTube URLs |
-| `data/team_match_stats.csv` | Aggregated team stats for every match |
-| `data/player_match_stats.csv` | Per-player stats for every match |
+| `matches.csv` | One row per match — title, date, YouTube URLs |
+| `team_match_stats.csv` | Aggregated team stats for every match |
+| `player_match_stats.csv` | Per-player stats for every match |
 
-> **Note:** Run `python generate.py` first to make sure the database is up to date before exporting.
+> **Note:** Run `python generate.py` first to make sure the databases are up to date before exporting.
 
 ## Project Structure
 
 ```
 volleyball_analytics/
-├── generate.py                  # Python report generator (main script)
-├── export_csv.py                # Export database tables to CSV files
+├── analytics.py                 # Parsing + calculations + load_team_config()
+├── db.py                        # SQLite persistence (one DB per dataset)
+├── renderer.py                  # HTML page builders
+├── generate.py                  # Orchestrator: discover datasets → DB → HTML
+├── export_csv.py                # Export each dataset's tables to CSV files
 ├── styles.css                   # Shared CSS for all generated pages
-├── 01_vodkas_vs_*.txt           # Match log files — prefix controls display order
-├── .github/
-│   └── workflows/
-│       └── build.yml            # GitHub Actions: build + deploy on push
-├── data/
-│   └── volleyball.db            # SQLite database (generated by generate.py)
-├── index.html                   # Legacy browser-based tool (kept for reference)
-├── main.js                      # Legacy JavaScript logic (kept for reference)
+├── teams/                       # COMMITTED source data
+│   └── <team>/<tournament>/
+│       ├── team.json            # roster + metadata
+│       └── matches/NN_*.txt     # match logs (prefix controls order)
+├── .github/workflows/build.yml  # GitHub Actions: build + deploy on push
+├── data/                        # GENERATED databases + CSVs (not committed)
+│   └── <team>/<tournament>/volleyball.db
+├── docs/                        # GENERATED static site (not committed)
+│   ├── index.html               # root team/tournament selector
+│   └── <team>/<tournament>/...  # per-dataset dashboard
 └── README.md
 ```
 
-The `docs/` folder is generated automatically and is not committed to the repo.
-The `data/*.csv` files are generated by `export_csv.py` and are not committed to the repo.
+The `docs/` folder and the per-dataset `data/**/*.db` and `data/**/*.csv` files are generated automatically and are **not committed** to the repo. Only the `teams/` source tree is committed.
 
 ## Deployment to GitHub Pages
 
@@ -145,14 +218,15 @@ After that, every `git push` to `main` triggers an automatic rebuild.
 
 ## How It Works
 
-1. `generate.py` reads each `*.txt` match log file
-2. `parse_log()` tokenizes lines into rallies and records per-player and team stats
-3. `calculate_rating()` computes a 1–10 rating: `6.0 + (score_sum / total) × 4.0`
-4. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
-5. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
-6. Static HTML pages are written to `docs/` — one per match plus an index
+1. `generate.py` discovers every dataset folder under `teams/` that contains a `team.json`
+2. For each dataset it parses the `matches/*.txt` logs into a dedicated `data/<team>/<tournament>/volleyball.db`
+3. `parse_log()` tokenizes lines into rallies and records per-player and team stats
+4. `calculate_rating()` computes a 1–10 rating: `6.0 + (score_sum / total) × 4.0`
+5. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
+6. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
+7. Static HTML is written to `docs/<team>/<tournament>/`, and a root `docs/index.html` selector links to every dataset
 
-All data stays in the repository. No server, no database, no external services.
+Datasets with no valid match data (e.g. a brand-new team folder) are skipped automatically. All data stays in the repository. No server, no external services.
 
 ## Troubleshooting
 

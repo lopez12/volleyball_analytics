@@ -4,6 +4,7 @@ Contains all constants, data structures, parsing logic, and statistical
 calculations. No knowledge of HTML or SQLite.
 """
 
+import json
 import re
 
 # ---------------------------------------------------------------------------
@@ -22,22 +23,11 @@ ACTIONS = list(FULL_NAMES.keys())
 GRADES = ['#', '+', '!', '-']
 
 # ---------------------------------------------------------------------------
-# Player position and identity config
+# Player position config
 # ---------------------------------------------------------------------------
-PLAYER_POSITIONS = {
-    '1': 'L',    # Líbero
-    '2': 'OPP',  # Opuesto
-    '4': 'S',    # Acomodo
-    '7': 'OH',   # Esquina
-    '8': 'MB',   # Centro
-    '10': 'OH',  # Esquina
-    '12': 'S',   # Acomodo
-    '17': 'OH',  # Esquina
-    '20': 'OH',  # Esquina
-    '23': 'MB',  # Centro
-    '24': 'MB',  # Centro
-    '25': 'S',   # Acomodo
-}
+# Per-team rosters (player number -> position / name) are NOT defined here.
+# They live in each dataset's team.json and are loaded via load_team_config().
+# Only the universal position label map is global.
 
 POSITION_LABELS = {
     'S': 'Acomodo',
@@ -48,7 +38,45 @@ POSITION_LABELS = {
     'U': 'Universal',
 }
 
-PLAYER_NAMES = {}  # Optional: {'1': 'Nombre', ...} — display only
+
+def load_team_config(path):
+    """Load a per-dataset team.json and return team/tournament metadata plus roster maps.
+
+    The team.json schema is:
+        {
+            "team": "Vodkas",
+            "tournament": "Atlas Chapalita Cup",
+            "type": "tournament",            # "tournament" or "friendly"
+            "roster": {
+                "7": { "name": "Gio", "position": "OH" },
+                ...
+            }
+        }
+
+    Args:
+        path (str | Path): Path to a dataset's team.json file.
+
+    Returns:
+        dict with keys:
+            'team' (str): Display team name.
+            'tournament' (str): Display tournament/competition name.
+            'type' (str): 'tournament' or 'friendly'.
+            'positions' (dict): Maps player number string -> position code.
+            'names' (dict): Maps player number string -> display name. Players
+                without a name are omitted so callers can fall back to '#<num>'.
+    """
+    with open(path, encoding='utf-8') as f:
+        cfg = json.load(f)
+    roster = cfg.get('roster', {})
+    positions = {num: info.get('position', 'U') for num, info in roster.items()}
+    names = {num: info['name'] for num, info in roster.items() if info.get('name')}
+    return {
+        'team': cfg.get('team', ''),
+        'tournament': cfg.get('tournament', ''),
+        'type': cfg.get('type', 'tournament'),
+        'positions': positions,
+        'names': names,
+    }
 
 _RE_PLAYER = re.compile(r'^(\d+)([SREADB])([#+!\-])$')
 _RE_TEAM = re.compile(r'^([SREADB])([#+!\-])$')
@@ -134,7 +162,7 @@ def parse_log(log_string):
         - Set separator: '---'                       skipped silently.
         - YouTube link:  '@youtube: <url>'           URL stored if it is a valid
                                                      youtube.com or youtu.be address.
-        - Set score:     '@set: V-R'                 e.g. '@set: 25-18'. Vodkas score
+        - Set score:     '@set: V-R'                 e.g. '@set: 25-18'. Team score
                                                      first, rival score second.
     Tokens that match neither the player nor team pattern are silently ignored.
     Player tokens are recorded in both the individual player's stats and the team stats.
@@ -154,7 +182,7 @@ def parse_log(log_string):
                 Rallies with no valid tokens are omitted.
             'youtube_urls' (list[str]): Validated YouTube URLs found in
                 '@youtube:' lines, in the order they appear in the file.
-            'set_scores' (list[tuple[int, int]]): List of (vodkas, rival) score
+            'set_scores' (list[tuple[int, int]]): List of (team, rival) score
                 tuples, one per '@set:' line, in file order. Empty list if none.
     """
     lines = log_string.strip().splitlines()

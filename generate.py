@@ -1,8 +1,19 @@
 #!/usr/bin/env python3
 """Volleyball Analytics - Static Report Generator
 
-Reads .txt match log files, stores parsed data in a SQLite database,
-and generates static HTML reports in the docs/ folder for GitHub Pages.
+Discovers every (team, tournament) dataset under 'teams/', stores parsed
+match data in a per-dataset SQLite database, and generates static HTML
+reports under 'docs/' for GitHub Pages. A root selector page at
+'docs/index.html' links to every dataset dashboard.
+
+Source tree (committed):
+    teams/<team_slug>/<tournament_slug>/team.json
+    teams/<team_slug>/<tournament_slug>/matches/NN_<opponent>.txt
+
+Generated trees (git-ignored):
+    data/<team_slug>/<tournament_slug>/volleyball.db
+    docs/<team_slug>/<tournament_slug>/...
+    docs/index.html
 
 Usage: python generate.py
 """
@@ -13,7 +24,7 @@ import webbrowser
 from pathlib import Path
 from datetime import date
 
-from analytics import parse_log, PLAYER_POSITIONS, POSITION_LABELS, PLAYER_NAMES, calculate_rating
+from analytics import parse_log, load_team_config
 from db import (
     init_db, upsert_match, get_all_matches_meta, get_match,
     get_phase_stats_from_db, get_point_stats_from_db,
@@ -22,100 +33,111 @@ from db import (
 from renderer import (
     format_title, render_match_page, render_index_page,
     render_player_season_page, render_team_season_page,
-    render_players_page, render_matches_page,
+    render_players_page, render_matches_page, render_root_index_page,
 )
 
+TEAMS_ROOT = Path('teams')
+DOCS_ROOT = Path('docs')
+DATA_ROOT = Path('data')
 
-def main():
-    """Entry point: parse all .txt match files, persist to DB, render static HTML, open browser.
 
-    Execution steps:
-        1. Create 'docs/' and 'data/' directories if they do not exist.
-        2. Copy 'styles.css' into 'docs/' so all report pages share the same stylesheet.
-        3. Open (or create) 'data/volleyball.db' and call init_db() to ensure
-           all tables exist.
-        4. For each '*.txt' file in the current directory (sorted alphabetically):
-               a. Read and parse the file via parse_log().
-               b. Skip files with no recorded team actions (no valid tokens).
-               c. Upsert parsed data into the database via upsert_match().
-        5. For each match stored in the database:
-               a. Reconstruct the parsed dict via get_match().
-               b. Fetch pre-computed phase and point stats from the DB and inject
-                  them into the parsed dict so the renderer can build the cards
-                  without needing raw rallies.
-               c. Render the match HTML page via render_match_page() and write
-                  it to 'docs/<stem>.html'.
-        6. Fetch all match metadata via get_all_matches_meta(), render
-           'docs/index.html' via render_index_page(), and write it.
-        7. Close the database connection.
-        8. Open 'docs/index.html' in the default system web browser.
-
-    Prints one status line per stored match and generated file, plus a final
-    summary count. Files with no valid data are reported as skipped.
+def discover_datasets():
+    """Find every dataset folder under teams/ that contains a team.json.
 
     Returns:
-        None
+        list[tuple[str, str, Path]]: Sorted (team_slug, tournament_slug, dataset_dir)
+            triples, one per dataset folder holding a team.json file.
     """
-    output_dir = Path('docs')
-    output_dir.mkdir(exist_ok=True)
-    data_dir = Path('data')
-    data_dir.mkdir(exist_ok=True)
-    shutil.copy('styles.css', output_dir / 'styles.css')
+    datasets = []
+    if not TEAMS_ROOT.is_dir():
+        return datasets
+    for team_dir in sorted(p for p in TEAMS_ROOT.iterdir() if p.is_dir()):
+        for ds_dir in sorted(p for p in team_dir.iterdir() if p.is_dir()):
+            if (ds_dir / 'team.json').exists():
+                datasets.append((team_dir.name, ds_dir.name, ds_dir))
+    return datasets
 
-    today = date.today().strftime('%d/%m/%Y')
 
-    # Open (or create) the SQLite database
-    db_path = data_dir / 'volleyball.db'
-    conn = sqlite3.connect(str(db_path))
+def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
+    """Build the SQLite DB and all HTML pages for a single dataset.
+
+    Args:
+        team_slug (str): Folder-safe team identifier (e.g. 'vodkas').
+        tournament_slug (str): Folder-safe dataset identifier (e.g. 'apertura-2026').
+        ds_dir (Path): Path to the dataset source folder under teams/.
+        today (str): Formatted generation date for page headers.
+
+    Returns:
+        dict | None: A root-index summary dict for this dataset, or None if the
+            dataset has no valid match data (in which case nothing is rendered).
+    """
+    config = load_team_config(ds_dir / 'team.json')
+    team_name = config['team']
+    tournament_name = config['tournament']
+    team_type = config['type']
+    positions = config['positions']
+    names = config['names']
+
+    matches_dir = ds_dir / 'matches'
+    out_dir = DOCS_ROOT / team_slug / tournament_slug
+    data_dir = DATA_ROOT / team_slug / tournament_slug
+    data_dir.mkdir(parents=True, exist_ok=True)
+
+    conn = sqlite3.connect(str(data_dir / 'volleyball.db'))
     init_db(conn)
 
+    txt_files = sorted(matches_dir.glob('*.txt')) if matches_dir.is_dir() else []
+
     # Remove DB entries for stems that no longer have a matching .txt file
-    current_stems = [p.stem for p in Path('.').glob('*.txt')]
+    current_stems = [p.stem for p in txt_files]
     if current_stems:
         placeholders = ','.join('?' * len(current_stems))
         conn.execute(f"DELETE FROM matches WHERE stem NOT IN ({placeholders})", current_stems)
-        conn.commit()
+    else:
+        conn.execute("DELETE FROM matches")
+    conn.commit()
 
     # Parse all .txt files and upsert into the database
-    for txt_path in sorted(Path('.').glob('*.txt')):
+    for txt_path in txt_files:
         log_text = txt_path.read_text(encoding='utf-8')
         parsed = parse_log(log_text)
         if parsed['team']['total'] == 0:
-            print(f'  Skipped (no data): {txt_path.name}')
+            print(f'  Skipped (no data): {team_slug}/{tournament_slug}/{txt_path.name}')
             continue
-
         stem = txt_path.stem
-        title = format_title(stem)
+        title = format_title(stem, team_name)
         upsert_match(conn, stem, title, parsed)
-        print(f'  Stored: {txt_path.name}')
+        print(f'  Stored: {team_slug}/{tournament_slug}/{txt_path.name}')
+
+    matches_meta = get_all_matches_meta(conn)
+    if not matches_meta:
+        print(f'  Skipped dataset (no matches): {team_slug}/{tournament_slug}')
+        conn.close()
+        return None
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy('styles.css', out_dir / 'styles.css')
 
     # Render match pages from DB
-    matches_meta = get_all_matches_meta(conn)
     for meta in matches_meta:
         stem = meta['file'].replace('.html', '')
         parsed = get_match(conn, stem)
         if not parsed:
             continue
-
-        # Inject pre-calculated phase/point stats so renderer works without rallies
-        phase_stats = get_phase_stats_from_db(conn, stem)
-        point_stats = get_point_stats_from_db(conn, stem)
-        parsed['_phase_stats'] = phase_stats
-        parsed['_point_stats'] = point_stats
-
+        parsed['_phase_stats'] = get_phase_stats_from_db(conn, stem)
+        parsed['_point_stats'] = get_point_stats_from_db(conn, stem)
         html = render_match_page(meta['title'], parsed, today)
-        (output_dir / meta['file']).write_text(html, encoding='utf-8')
-        print(f'  Generated: docs/{meta["file"]}')
+        (out_dir / meta['file']).write_text(html, encoding='utf-8')
+        print(f'  Generated: docs/{team_slug}/{tournament_slug}/{meta["file"]}')
 
-    # --- Season pages ---
-    # Team season
+    # --- Season (dataset aggregate) pages ---
     team_season = get_team_season_stats(conn)
     if team_season:
-        html = render_team_season_page(team_season, today)
-        (output_dir / 'team_season.html').write_text(html, encoding='utf-8')
-        print('  Generated: docs/team_season.html')
+        html = render_team_season_page(team_season, today, team_name, tournament_name, team_type)
+        (out_dir / 'team_season.html').write_text(html, encoding='utf-8')
+        print(f'  Generated: docs/{team_slug}/{tournament_slug}/team_season.html')
 
-    # Build team ratings lookup (match_id → rating) for player season comparison
+    # Build team ratings lookup (match_id -> rating) for player season comparison
     team_ratings_by_match = {m['match_id']: m['rating'] for m in team_season}
 
     # Player season pages
@@ -125,29 +147,28 @@ def main():
         pstats = get_player_season_stats(conn, pnum)
         if not pstats:
             continue
-        # Team ratings aligned to this player's matches
         team_match_ratings = [team_ratings_by_match.get(m['match_id'], 0.0) for m in pstats]
+        html = render_player_season_page(
+            pnum, pstats, team_match_ratings, today,
+            positions, names, team_name, tournament_name, team_type,
+        )
+        (out_dir / f'player_{pnum}.html').write_text(html, encoding='utf-8')
+        print(f'  Generated: docs/{team_slug}/{tournament_slug}/player_{pnum}.html')
 
-        html = render_player_season_page(pnum, pstats, team_match_ratings, today)
-        (output_dir / f'player_{pnum}.html').write_text(html, encoding='utf-8')
-        print(f'  Generated: docs/player_{pnum}.html')
-
-        # Summary for index page
         ratings = [m['rating'] for m in pstats]
         avg_rating = round(sum(ratings) / len(ratings), 1)
         player_summaries.append({
             'player_num': pnum,
-            'name': PLAYER_NAMES.get(pnum, f'#{pnum}'),
-            'position': PLAYER_POSITIONS.get(pnum, 'U'),
+            'name': names.get(pnum, f'#{pnum}'),
+            'position': positions.get(pnum, 'U'),
             'rating': avg_rating,
             'matches_played': len(pstats),
             'total_actions': sum(m['total'] for m in pstats),
         })
 
-    # Sort players by season rating descending
     player_summaries.sort(key=lambda x: x['rating'], reverse=True)
 
-    # Team season summary for index
+    # Dataset aggregate summary for the dataset index hero
     team_season_summary = None
     if team_season:
         team_ratings = [m['rating'] for m in team_season]
@@ -158,25 +179,75 @@ def main():
             'losses': sum(1 for m in team_season if m.get('result') == 'L'),
         }
 
-    # Render index page with season data
-    index_html = render_index_page(matches_meta, today, player_summaries, team_season_summary)
-    (output_dir / 'index.html').write_text(index_html, encoding='utf-8')
-    print(f'  Generated: docs/index.html')
+    index_html = render_index_page(
+        matches_meta, today, team_name, tournament_name, team_type,
+        player_summaries, team_season_summary,
+    )
+    (out_dir / 'index.html').write_text(index_html, encoding='utf-8')
+    print(f'  Generated: docs/{team_slug}/{tournament_slug}/index.html')
 
-    # Render intermediate pages
     players_html = render_players_page(player_summaries, today)
-    (output_dir / 'players.html').write_text(players_html, encoding='utf-8')
-    print(f'  Generated: docs/players.html')
+    (out_dir / 'players.html').write_text(players_html, encoding='utf-8')
+    print(f'  Generated: docs/{team_slug}/{tournament_slug}/players.html')
 
     matches_html = render_matches_page(matches_meta, today)
-    (output_dir / 'matches.html').write_text(matches_html, encoding='utf-8')
-    print(f'  Generated: docs/matches.html')
-
-    print(f'Done. {len(matches_meta)} match(es) + {len(player_summaries)} player(s) + team season processed.')
+    (out_dir / 'matches.html').write_text(matches_html, encoding='utf-8')
+    print(f'  Generated: docs/{team_slug}/{tournament_slug}/matches.html')
 
     conn.close()
 
-    index_path = (output_dir / 'index.html').resolve().as_uri()
+    summary = {
+        'team': team_name,
+        'tournament': tournament_name,
+        'type': team_type,
+        'href': f'{team_slug}/{tournament_slug}/index.html',
+        'rating': team_season_summary['rating'] if team_season_summary else 0.0,
+        'matches_played': team_season_summary['matches_played'] if team_season_summary else 0,
+        'wins': team_season_summary['wins'] if team_season_summary else 0,
+        'losses': team_season_summary['losses'] if team_season_summary else 0,
+    }
+    return summary
+
+
+def main():
+    """Entry point: discover all datasets, render each, then build the root selector.
+
+    For every dataset folder under 'teams/' that contains a team.json, this
+    parses its match logs into a per-dataset SQLite database and renders a full
+    dashboard under 'docs/<team>/<tournament>/'. Datasets with no valid match
+    data are skipped. Finally a root 'docs/index.html' selector page links to
+    every generated dataset, and the result is opened in the default browser.
+
+    Returns:
+        None
+    """
+    # Wipe previously generated HTML so stale pages never linger, then rebuild.
+    if DOCS_ROOT.exists():
+        shutil.rmtree(DOCS_ROOT)
+    DOCS_ROOT.mkdir(exist_ok=True)
+    DATA_ROOT.mkdir(exist_ok=True)
+    shutil.copy('styles.css', DOCS_ROOT / 'styles.css')
+
+    today = date.today().strftime('%d/%m/%Y')
+
+    datasets = discover_datasets()
+    if not datasets:
+        print('No datasets found under teams/. Nothing to generate.')
+
+    summaries = []
+    for team_slug, tournament_slug, ds_dir in datasets:
+        summary = _generate_dataset(team_slug, tournament_slug, ds_dir, today)
+        if summary:
+            summaries.append(summary)
+
+    # Root selector page
+    root_html = render_root_index_page(summaries, today)
+    (DOCS_ROOT / 'index.html').write_text(root_html, encoding='utf-8')
+    print(f'  Generated: docs/index.html (root selector, {len(summaries)} dataset(s))')
+
+    print(f'Done. {len(summaries)} dataset(s) processed.')
+
+    index_path = (DOCS_ROOT / 'index.html').resolve().as_uri()
     webbrowser.open(index_path)
 
 
