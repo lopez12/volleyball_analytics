@@ -1,0 +1,38 @@
+@youtube: https://youtu.be/3RawBoCtQ5M
+@set: 25-11
+13S-
+fallo_enemigo
+7S#
+7S#
+7S+ 2D# 12E! 11A#
+7S+ 11B! 2D-
+fallo_enemigo
+2S#
+2S#
+2S+ 11D# 12E+ 8A#
+2S#
+2S+ 8D+ 12E# 11A#
+2S+ 7D# 12E# 7A#
+2S+ 2D! 12E! 2A-
+fallo_enemigo
+11S#
+11S#
+11S+ 8D! 12E+ 11A! 12D+ 7E+ 8A+ 7D# 12E# 13A#
+11S#
+11S#
+11S+ 13B! 7D-
+11R! 12E+ 13A-
+8R# 12E# 13A+ 2D# 12E! 13A+ 7D! 2E! 7A-
+8R! 12E+ 11A-
+7R# 12E# 8A+ 13D! 12E+ 7A+ 7D+ 12E+ 8A+ 13B-
+13R! 12A+ 12A! 2D-
+fallo_enemigo
+12S+ 7D# 12E+ 13A#
+12S+ 2D# 12E# 8A#
+12S#
+12S+ 2D! 12E# 7A+ 22D+ 12E# 22A#
+12S-
+fallo_enemigo
+8S#
+8S+ 22D# 12E+ 2A-
+2R# 12E# 2A#
