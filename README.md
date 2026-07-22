@@ -157,16 +157,78 @@ setting further, raise it to reward playmaking.
 
 - `---` — set separator (resets rally context)
 - `@youtube: https://youtu.be/...` — links a YouTube video to this set
+- `@set: V-R` — final set score (team score first, rival second), e.g. `@set: 25-18`
+- `@won` / `@lost` / `@won:re` / `@won:se` — **rally outcome** (see below)
+
+### Rally outcome tokens (grade integrity)
+
+A rally line may end with **one** inline outcome token that records who won the
+point, independent of how the touch was graded. Tokens are case-insensitive.
+
+| Token | Meaning |
+|-------|---------|
+| `@won` | We scored the rally by our own play (a kill / ace / stuff block). |
+| `@lost` | The opponent scored the rally. |
+| `@won:re` | We scored, but the cause was a **rival error** — a gifted point. |
+| `@won:se` | We scored because the opponent **faulted their serve** — a free point we never touched (a subset of `@won:re`). |
+
+```
+2R# 25E# 7A#  @won       # real kill terminated the rally — credited to #7
+2R# 25E! 7A!  @won:re    # honest execution; point from a rival error; no kill credit
+@won:se                  # opponent missed their serve — free point, no touch from us
+8A-           @lost      # our attack error gave them the point
+20R+ 25E+ 7A+            # no token → engine falls back to the old win heuristic
+```
+
+Outcome tokens are **optional**. When present they are ground truth; when absent
+the engine falls back to the legacy heuristic, so old logs keep working
+unchanged. A line consisting **only** of an outcome token is a valid *touchless*
+rally (used for the opponent serve-fault case). If several outcome tokens appear
+on one line, the first is used and the rest ignored.
+
+### Grading Philosophy: execution, not outcome
+
+Grade the **touch**, not the **scoreboard**. Ask *"how well was this ball played?"*,
+never *"did we win the point?"*.
+
+- A great attack that wins → `A#`. A scared lob the opponent then shanks → `A!`
+  (honest) plus `@won:re`. Same scoreboard, different truth.
+- On a **terminal** action (`A`, `S`, `B`): `#` = the action *won the point by
+  its own quality* (kill / ace / stuff block); `-` = the action *lost the point*
+  (attack error / service fault / blocked back).
+- On a **continuation** action (`R`, `E`, `D`): grades are pure execution quality
+  (`#` flawless … `-` shanked); they are never terminal.
+- A point won because the **opponent erred** is nobody's `#`. Grade your last
+  touch honestly (`!` / `+`) and mark the rally `@won:re` (or `@won:se` for a
+  free serve fault). Such points are credited to no player.
+
+This keeps a `#` meaning "perfect execution" and never "we happened to win", so
+attack efficiency and the rating stay honest.
+
+#### Re-grading a legacy match (incremental)
+
+Backfilling is **incremental** — old matches keep working via the heuristic
+fallback and only gain outcome data as you re-grade them. To re-grade a match:
+
+1. Find `#` grades on terminal actions (`A#`, `S#`, `B#`) that were really won on
+   a **rival error**, and restore the honest grade (`A!` / `A+`).
+2. Add the matching outcome token at the end of that rally line (`@won:re`).
+3. Add `@won` / `@lost` to the remaining rallies as needed, and a standalone
+   `@won:se` line for each opponent serve fault.
+
+The **earned vs. gifted points** report only appears for matches that carry
+outcome tokens; un-graded matches show a *"sin marcadores de resultado"* note.
 
 ### Example log
 
 ```
 7S# 10R! 2E+ 7A-
-25R+ 2E+ 25A#
-8S-
+25R+ 2E+ 25A#   @won
+8S-            @lost
+@won:se
 @youtube: https://youtu.be/example
 ---
-2R# 25E+ 20A+
+2R# 25E+ 20A+  @won:re
 ```
 
 ## Exporting Data to CSV

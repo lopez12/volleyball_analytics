@@ -97,6 +97,40 @@ _RE_ANY = re.compile(r'^(\d*)([SREADB])([#+!\-])$')
 _RE_PHASE = re.compile(r'^(\d+)([SREADB])([#+!\-])$|^([SREADB])([#+!\-])$')
 _RE_YT = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/')
 _RE_SET = re.compile(r'^@set:\s*(\d+)-(\d+)$', re.IGNORECASE)
+# Inline trailing rally-outcome tokens (Phase 2 - grade integrity).
+#   @won        -> we scored the rally by our own play (a kill).
+#   @won:re     -> we scored, cause = rival error (gifted point).
+#   @won:se     -> we scored because the opponent faulted their serve
+#                  (a subset of :re; a "free" side-out won with zero touches).
+#   @lost       -> the opponent scored the rally.
+# Tokens are case-insensitive and consumed as the rally outcome (not stored as
+# action tokens). See ARCHITECT-BRIEF-scoring-phase2.md.
+_RE_OUTCOME = re.compile(r'^@(won|lost)(?::(re|se))?$', re.IGNORECASE)
+
+
+def _parse_outcome_token(token):
+    """Parse an inline rally-outcome token (Phase 2), or return None if not one.
+
+    Recognises the ``@won`` / ``@lost`` grammar (optionally with a ``:re`` or
+    ``:se`` cause suffix), case-insensitively. Cause suffixes only apply to
+    ``@won``; any cause attached to ``@lost`` is ignored.
+
+    Args:
+        token (str): A single whitespace-delimited token from a rally line.
+
+    Returns:
+        dict | None: ``{'result': 'won'|'lost', 'cause': 're'|'se'|None}`` when
+            the token is a valid outcome token, otherwise None. A ``'se'`` cause
+            implies (and is a subset of) a ``'re'`` rival-error gift.
+    """
+    m = _RE_OUTCOME.match(token)
+    if not m:
+        return None
+    result = m.group(1).lower()
+    cause = m.group(2).lower() if m.group(2) else None
+    if result == 'lost':
+        cause = None
+    return {'result': result, 'cause': cause}
 
 # ---------------------------------------------------------------------------
 # Data helpers
@@ -177,6 +211,13 @@ def parse_log(log_string):
                                                      youtube.com or youtu.be address.
         - Set score:     '@set: V-R'                 e.g. '@set: 25-18'. Team score
                                                      first, rival score second.
+        - Rally outcome: '@won' / '@lost' / '@won:re' / '@won:se'  (inline,
+                                                     trailing, case-insensitive).
+                                                     Consumed as the rally's
+                                                     outcome, not a played token.
+                                                     A line consisting solely of
+                                                     an outcome token is a valid
+                                                     "touchless" rally.
     Tokens that match neither the player nor team pattern are silently ignored.
     Player tokens are recorded in both the individual player's stats and the team stats.
     Team-only tokens are recorded only in team stats.
@@ -192,7 +233,17 @@ def parse_log(log_string):
                 including both player-tagged tokens and bare team tokens.
             'rallies' (list[list[str]]): Ordered list of rallies; each rally is
                 a list of valid token strings in the order they appeared on that line.
-                Rallies with no valid tokens are omitted.
+                Rallies with no valid tokens are omitted, unless the line carried
+                an outcome token (a "touchless" rally, e.g. a standalone '@won:se'),
+                in which case an empty token list is kept so its outcome is aligned.
+            'rally_outcomes' (list[dict]): One entry per rally in 'rallies' (same
+                order/length), each {'result': 'won'|'lost'|None, 'cause':
+                're'|'se'|None}. 'result' is None when the rally carried no
+                explicit outcome token (heuristic-fallback marker). 'se' implies
+                a gifted serve-error point and is a subset of 're'.
+            'points' (dict): Team-level earned/gifted point summary derived from
+                the explicit outcomes: 'won', 'won_kill', 'won_rival_error',
+                'won_serve_error', 'lost'.
             'youtube_urls' (list[str]): Validated YouTube URLs found in
                 '@youtube:' lines, in the order they appear in the file.
             'set_scores' (list[tuple[int, int]]): List of (team, rival) score
@@ -200,6 +251,7 @@ def parse_log(log_string):
     """
     lines = log_string.strip().splitlines()
     rallies = []
+    rally_outcomes = []
     players = {}
     youtube_urls = []
     set_scores = []
@@ -221,8 +273,17 @@ def parse_log(log_string):
 
         tokens = trimmed.split()
         rally_tokens = []
+        outcome = {'result': None, 'cause': None}
+        outcome_seen = False
 
         for token in tokens:
+            parsed_outcome = _parse_outcome_token(token)
+            if parsed_outcome is not None:
+                # First outcome token wins; duplicates on the same line are ignored.
+                if not outcome_seen:
+                    outcome = parsed_outcome
+                    outcome_seen = True
+                continue
             m = _RE_PLAYER.match(token)
             if m:
                 num, action, grade = m.group(1), m.group(2), m.group(3)
@@ -238,10 +299,22 @@ def parse_log(log_string):
                     _record(team, action, grade)
                     rally_tokens.append(token)
 
-        if rally_tokens:
+        # Keep the rally when it has playable tokens OR carried an explicit
+        # outcome (a touchless rally, e.g. an opponent serve fault '@won:se').
+        if rally_tokens or outcome_seen:
             rallies.append(rally_tokens)
+            rally_outcomes.append(outcome)
 
-    return {'players': players, 'team': team, 'rallies': rallies, 'youtube_urls': youtube_urls, 'set_scores': set_scores}
+    points = calculate_earned_points(rally_outcomes)
+    return {
+        'players': players,
+        'team': team,
+        'rallies': rallies,
+        'rally_outcomes': rally_outcomes,
+        'points': points,
+        'youtube_urls': youtube_urls,
+        'set_scores': set_scores,
+    }
 
 # ---------------------------------------------------------------------------
 # Calculations
@@ -327,7 +400,7 @@ def calculate_efficiency(data):
     }
 
 
-def calculate_phase_stats(rallies):
+def calculate_phase_stats(rallies, rally_outcomes=None):
     """Compute kill-percentage statistics broken down by the three main game phases.
 
     Iterates through every rally token-by-token, tracking state to identify
@@ -344,9 +417,17 @@ def calculate_phase_stats(rallies):
     is completed without interruption. Any action other than E or A after the
     trigger resets the phase state without counting a kill.
 
+    When explicit rally outcomes are supplied (Phase 2), a terminal A# in a
+    rally that was explicitly lost (@lost) is NOT counted as a kill. Rallies
+    with no explicit outcome (heuristic fallback) behave exactly as before, so
+    token-less logs are unaffected.
+
     Args:
         rallies (list[list[str]]): Output of parse_log()['rallies']. Each
             element is a list of token strings representing one rally.
+        rally_outcomes (list[dict] | None): Optional per-rally explicit outcomes
+            from parse_log()['rally_outcomes'], aligned to `rallies`. When None,
+            the legacy behaviour (count every completed A#) is used.
 
     Returns:
         dict: Three keys ('so_good', 'so_bad', 'trans'), each mapping to:
@@ -358,7 +439,9 @@ def calculate_phase_stats(rallies):
         'so_bad':  {'attempts': 0, 'kills': 0},
         'trans':   {'attempts': 0, 'kills': 0},
     }
-    for rally in rallies:
+    for i, rally in enumerate(rallies):
+        outcome = rally_outcomes[i] if rally_outcomes and i < len(rally_outcomes) else None
+        rally_lost = bool(outcome and outcome.get('result') == 'lost')
         current_phase = None
         saw_set = False
         for token in rally:
@@ -391,7 +474,7 @@ def calculate_phase_stats(rallies):
                     current_phase = None
                     saw_set = False
             elif action == 'A':
-                if current_phase and saw_set and grade == '#':
+                if current_phase and saw_set and grade == '#' and not rally_lost:
                     stats[current_phase]['kills'] += 1
                 current_phase = None
                 saw_set = False
@@ -401,21 +484,26 @@ def calculate_phase_stats(rallies):
     return stats
 
 
-def calculate_point_stats(rallies):
-    """Compute Break Point % and Side-Out % by inferring which team won each rally.
+def calculate_point_stats(rallies, rally_outcomes=None):
+    """Compute Break Point % and Side-Out % from explicit outcomes or heuristics.
 
     Rally type is determined by the first recognised action token:
         - First action is 'S' (Serve)  → Break Point rally (team is serving).
         - First action is 'R' (Receive) → Side-Out rally (team is receiving).
-    Rallies where neither S nor R appears first are skipped.
+    Rallies where neither S nor R appears first are skipped, except touchless
+    serve-error gifts (a standalone '@won:se' line), which are counted as a
+    Side-Out won with zero touches (we were receiving; C8).
 
-    Win/loss is determined by _determine_win():
+    Win/loss uses _determine_win(), which returns the explicit outcome when one
+    is present for the rally and otherwise falls back to the legacy heuristic:
         - Non-final rallies: won if the next rally also starts with 'S'
           (team retained or gained the serve).
         - Final rally: won if its last token has grade '#' (terminal kill).
 
     Args:
         rallies (list[list[str]]): Output of parse_log()['rallies'].
+        rally_outcomes (list[dict] | None): Optional per-rally explicit outcomes
+            from parse_log()['rally_outcomes'], aligned to `rallies`.
 
     Returns:
         dict with two keys:
@@ -426,8 +514,16 @@ def calculate_point_stats(rallies):
     so = {'total': 0, 'won': 0}
 
     for r, rally in enumerate(rallies):
+        outcome = rally_outcomes[r] if rally_outcomes and r < len(rally_outcomes) else None
+
         if not rally:
+            # Touchless rally: only the opponent serve-error gift is classifiable
+            # (we were receiving), counting as a Side-Out won with zero touches.
+            if outcome and outcome.get('cause') == 'se':
+                so['total'] += 1
+                so['won'] += 1
             continue
+
         rally_type = None
         for token in rally:
             m = _RE_ANY.match(token)
@@ -443,7 +539,7 @@ def calculate_point_stats(rallies):
         if not rally_type:
             continue
 
-        won = _determine_win(r, rallies)
+        won = _determine_win(r, rallies, rally_outcomes)
         if rally_type == 'serve':
             bp['total'] += 1
             if won:
@@ -456,10 +552,57 @@ def calculate_point_stats(rallies):
     return {'bp': bp, 'so': so}
 
 
-def _determine_win(r, rallies):
-    """Determine whether the team won the rally at index `r` using context heuristics.
+def calculate_earned_points(rally_outcomes):
+    """Summarise earned vs. gifted points from a list of explicit rally outcomes.
 
-    Heuristic logic (in order):
+    Separates points we earned by our own play (a terminal kill) from points the
+    opponent handed us (rival errors), and isolates the "free" serve-error gifts
+    where the opponent faulted their own serve. Rallies without an explicit
+    outcome (heuristic fallback) contribute nothing to any counter.
+
+    Subset relationship: won_serve_error ⊆ won_rival_error ⊆ won. A '@won'
+    without a cause is treated as an earned kill; '@won:re' as a rival-error
+    gift; '@won:se' as both a rival-error gift and a serve-error gift.
+
+    Args:
+        rally_outcomes (list[dict]): Per-rally outcomes from parse_log(), each
+            {'result': 'won'|'lost'|None, 'cause': 're'|'se'|None}.
+
+    Returns:
+        dict: {'won', 'won_kill', 'won_rival_error', 'won_serve_error', 'lost'},
+            all non-negative ints.
+    """
+    points = {
+        'won': 0,
+        'won_kill': 0,
+        'won_rival_error': 0,
+        'won_serve_error': 0,
+        'lost': 0,
+    }
+    for outcome in rally_outcomes:
+        if not outcome:
+            continue
+        result = outcome.get('result')
+        cause = outcome.get('cause')
+        if result == 'won':
+            points['won'] += 1
+            if cause == 'se':
+                points['won_rival_error'] += 1
+                points['won_serve_error'] += 1
+            elif cause == 're':
+                points['won_rival_error'] += 1
+            else:
+                points['won_kill'] += 1
+        elif result == 'lost':
+            points['lost'] += 1
+    return points
+
+
+def _determine_win(r, rallies, rally_outcomes=None):
+    """Determine whether the team won the rally at index `r`.
+
+    When an explicit outcome exists for rally `r` (Phase 2 '@won'/'@lost'
+    tokens), it is authoritative. Otherwise the legacy context heuristic runs:
         1. If a subsequent rally exists (index r+1), inspect its first valid token.
            A Serve ('S') as the opening action means the team kept or gained the
            serve, so the current rally is treated as a win.
@@ -471,10 +614,18 @@ def _determine_win(r, rallies):
         r (int): Zero-based index of the rally to evaluate.
         rallies (list[list[str]]): Full ordered list of rally token lists,
             as returned by parse_log().
+        rally_outcomes (list[dict] | None): Optional per-rally explicit outcomes
+            aligned to `rallies`. When the entry for `r` has a non-None 'result',
+            it overrides the heuristic.
 
     Returns:
         bool: True if the team is inferred to have won rally `r`, False otherwise.
     """
+    if rally_outcomes is not None and r < len(rally_outcomes):
+        entry = rally_outcomes[r]
+        result = entry.get('result') if entry else None
+        if result is not None:
+            return result == 'won'
     if r + 1 < len(rallies):
         for token in rallies[r + 1]:
             m = _RE_ANY.match(token)

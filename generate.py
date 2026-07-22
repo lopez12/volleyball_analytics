@@ -27,7 +27,7 @@ from datetime import date
 from analytics import parse_log, load_team_config, calculate_efficiency
 from db import (
     init_db, upsert_match, get_all_matches_meta, get_match,
-    get_phase_stats_from_db, get_point_stats_from_db,
+    get_phase_stats_from_db, get_point_stats_from_db, get_earned_points_from_db,
     get_all_player_nums, get_player_season_stats, get_team_season_stats,
 )
 from renderer import (
@@ -127,6 +127,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
             continue
         parsed['_phase_stats'] = get_phase_stats_from_db(conn, stem)
         parsed['_point_stats'] = get_point_stats_from_db(conn, stem)
+        parsed['_earned_points'] = get_earned_points_from_db(conn, stem)
         html = render_match_page(meta['title'], parsed, today)
         (out_dir / meta['file']).write_text(html, encoding='utf-8')
         print(f'  Generated: docs/{team_slug}/{tournament_slug}/{meta["file"]}')

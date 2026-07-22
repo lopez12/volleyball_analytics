@@ -3,13 +3,13 @@
   "tournament": "Amistosos",
   "type": "friendly",
   "roster": {
-    "2":  { "name": "Sari", "position": "OH"   },
+    "2":  { "name": "Sari",        "position": "OH"   },
     "7":  { "name": "Gio",         "position": "OPP" },
-    "8":  { "name": "Gis",           "position": "OH"  },
-    "11":  { "name": "Chacon",       "position": "MB"  },
-    "12": { "name": "Salcedo",           "position": "S"   },
-    "13": { "name": "Sayu",           "position": "MB"  },
+    "8":  { "name": "Gis",         "position": "OH"  },
+    "11":  { "name": "Chacon",     "position": "MB"  },
+    "12": { "name": "Salcedo",     "position": "S"   },
+    "13": { "name": "Sayu",        "position": "MB"  },
     "17": { "name": "Sandy",       "position": "OH"  },
-    "22": { "name": "Valencia",       "position": "MB"  }
+    "22": { "name": "Valencia",    "position": "MB"  }
   }
 }

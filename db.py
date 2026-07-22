@@ -10,6 +10,7 @@ import sqlite3
 from analytics import (
     ACTIONS, GRADES,
     calculate_rating, calculate_phase_stats, calculate_point_stats,
+    calculate_earned_points, _determine_win,
 )
 
 # ---------------------------------------------------------------------------
@@ -59,7 +60,12 @@ CREATE TABLE IF NOT EXISTS team_match_stats (
     so_bad_attempts  INTEGER, so_bad_kills  INTEGER,
     trans_attempts   INTEGER, trans_kills   INTEGER,
     bp_total INTEGER, bp_won INTEGER,
-    so_total INTEGER, so_won INTEGER
+    so_total INTEGER, so_won INTEGER,
+    points_won              INTEGER,
+    points_won_kill         INTEGER,
+    points_won_rival_error  INTEGER,
+    points_won_serve_error  INTEGER,
+    points_lost             INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS player_match_stats (
@@ -92,6 +98,35 @@ CREATE TABLE IF NOT EXISTS player_match_stats (
 # Mapping from grade symbols to column name prefixes
 _GRADE_PREFIX = {'#': 'perfect', '+': 'positive', '!': 'regular', '-': 'error'}
 
+# Phase 2 earned/gifted-point columns added to team_match_stats after the
+# original schema shipped. All are nullable (NULL = "not graded for outcomes").
+_TEAM_OUTCOME_COLUMNS = (
+    'points_won',
+    'points_won_kill',
+    'points_won_rival_error',
+    'points_won_serve_error',
+    'points_lost',
+)
+
+
+def _ensure_team_outcome_columns(conn):
+    """Add the Phase 2 outcome columns to team_match_stats if they are missing.
+
+    Fresh databases already have these columns from _SCHEMA; this only matters
+    for pre-Phase-2 databases regenerated in place. ADD COLUMN with a nullable
+    type is a cheap, idempotent no-op once the columns exist.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+
+    Returns:
+        None
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(team_match_stats)")}
+    for col in _TEAM_OUTCOME_COLUMNS:
+        if col not in existing:
+            conn.execute(f"ALTER TABLE team_match_stats ADD COLUMN {col} INTEGER")
+
 
 def init_db(conn):
     """Create all database tables if they do not exist and enable foreign key enforcement.
@@ -114,6 +149,7 @@ def init_db(conn):
     """
     conn.executescript(_SCHEMA)
     conn.execute("PRAGMA foreign_keys = ON")
+    _ensure_team_outcome_columns(conn)
     conn.commit()
 
 # ---------------------------------------------------------------------------
@@ -214,8 +250,9 @@ def upsert_match(conn, stem, title, parsed):
     # Team stats
     team_row = _stats_to_row(parsed['team'])
     rallies = parsed['rallies']
-    phase = calculate_phase_stats(rallies)
-    points = calculate_point_stats(rallies)
+    rally_outcomes = parsed.get('rally_outcomes')
+    phase = calculate_phase_stats(rallies, rally_outcomes)
+    point_stats = calculate_point_stats(rallies, rally_outcomes)
     team_row.update({
         'so_good_attempts': phase['so_good']['attempts'],
         'so_good_kills': phase['so_good']['kills'],
@@ -223,11 +260,43 @@ def upsert_match(conn, stem, title, parsed):
         'so_bad_kills': phase['so_bad']['kills'],
         'trans_attempts': phase['trans']['attempts'],
         'trans_kills': phase['trans']['kills'],
-        'bp_total': points['bp']['total'],
-        'bp_won': points['bp']['won'],
-        'so_total': points['so']['total'],
-        'so_won': points['so']['won'],
+        'bp_total': point_stats['bp']['total'],
+        'bp_won': point_stats['bp']['won'],
+        'so_total': point_stats['so']['total'],
+        'so_won': point_stats['so']['won'],
     })
+
+    # Earned vs. gifted points (Phase 2). When the match carries explicit outcome
+    # tokens, store the full breakdown. Otherwise store fallback-derived won/lost
+    # totals and leave the kill/rival-error/serve-error columns NULL to signal
+    # "not graded for outcomes" to the renderer.
+    has_outcomes = bool(rally_outcomes) and any(
+        o.get('result') is not None for o in rally_outcomes
+    )
+    if has_outcomes:
+        earned = parsed.get('points') or calculate_earned_points(rally_outcomes)
+        team_row.update({
+            'points_won': earned['won'],
+            'points_won_kill': earned['won_kill'],
+            'points_won_rival_error': earned['won_rival_error'],
+            'points_won_serve_error': earned['won_serve_error'],
+            'points_lost': earned['lost'],
+        })
+    else:
+        won = lost = 0
+        for r in range(len(rallies)):
+            if _determine_win(r, rallies):
+                won += 1
+            else:
+                lost += 1
+        team_row.update({
+            'points_won': won,
+            'points_won_kill': None,
+            'points_won_rival_error': None,
+            'points_won_serve_error': None,
+            'points_lost': lost,
+        })
+
     team_row['match_id'] = match_id
 
     # Delete existing team/player/set rows for idempotency
@@ -458,6 +527,42 @@ def get_point_stats_from_db(conn, stem):
     return {
         'bp': {'total': row['bp_total'], 'won': row['bp_won']},
         'so': {'total': row['so_total'], 'won': row['so_won']},
+    }
+
+
+def get_earned_points_from_db(conn, stem):
+    """Return the earned-vs-gifted point breakdown for a match from the database.
+
+    Reads the Phase 2 outcome columns stored in 'team_match_stats' during
+    upsert_match(). For matches graded with explicit outcome tokens, every
+    counter is a non-negative int. For token-less matches, the rival-error /
+    serve-error / kill counters are NULL (rendered as "not graded for outcomes"),
+    while points_won / points_lost carry fallback-derived totals.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+        stem (str): Filename stem, e.g. '01_atlas'.
+
+    Returns:
+        dict | None: Keys 'points_won', 'points_won_kill',
+            'points_won_rival_error', 'points_won_serve_error', 'points_lost';
+            or None if the match is not found. Individual values may be None for
+            token-less matches.
+    """
+    conn.row_factory = sqlite3.Row
+    row = conn.execute(
+        """SELECT t.* FROM team_match_stats t
+           JOIN matches m ON m.id = t.match_id
+           WHERE m.stem = ?""", (stem,)
+    ).fetchone()
+    if not row:
+        return None
+    return {
+        'points_won': row['points_won'],
+        'points_won_kill': row['points_won_kill'],
+        'points_won_rival_error': row['points_won_rival_error'],
+        'points_won_serve_error': row['points_won_serve_error'],
+        'points_lost': row['points_lost'],
     }
 
 

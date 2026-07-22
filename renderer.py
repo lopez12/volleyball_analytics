@@ -460,6 +460,76 @@ def build_scoring_card_html(point_stats):
         '</div></div>'
     )
 
+
+def build_earned_points_card_html(earned):
+    """Build the 'earned vs. gifted points' summary card (Phase 2).
+
+    Separates points the team earned by its own play (a terminal kill) from
+    points the opponent gifted (rival errors), and isolates the "free" serve-error
+    gifts where the opponent faulted their own serve. This exposes how much of a
+    high Side-Out % is genuine attacking versus opponents missing serves.
+
+    For token-less matches (no '@won'/'@lost' markers), a neutral "sin marcadores
+    de resultado" note is shown instead of fabricated zeros.
+
+    Args:
+        earned (dict | None): Keys 'points_won', 'points_won_kill',
+            'points_won_rival_error', 'points_won_serve_error', 'points_lost'.
+            When None, or when 'points_won_rival_error' is None, the match is
+            treated as not graded for outcomes.
+
+    Returns:
+        str: A self-contained HTML string for the earned-points card element.
+    """
+    graded = earned is not None and earned.get('points_won_rival_error') is not None
+    header = (
+        '<div class="stat-card team-summary-card" style="margin-top:10px;">'
+        '<div class="card-header"><span class="player-number">Puntos: Ganados vs Regalados</span></div>'
+        '<div class="card-body">'
+    )
+    if not graded:
+        return (
+            header +
+            '<div style="padding:10px;text-align:center;color:#9ca3af;font-size:0.82rem;line-height:1.5;">'
+            'Sin marcadores de resultado.<br>'
+            'Agrega <code>@won</code> / <code>@lost</code> / <code>@won:re</code> a las jugadas '
+            'para separar puntos propios de regalados.'
+            '</div></div></div>'
+        )
+
+    won = earned.get('points_won') or 0
+    kill = earned.get('points_won_kill') or 0
+    rival = earned.get('points_won_rival_error') or 0
+    serve = earned.get('points_won_serve_error') or 0
+    lost = earned.get('points_lost') or 0
+    rally_gift = rival - serve  # rival errors during a rally (excludes free serve faults)
+
+    kill_pct = _pct(kill, won)
+    gift_pct = _pct(rival, won)
+
+    return (
+        header +
+        '<div style="margin-bottom:15px;font-size:0.85rem;color:#4b5563;background:#f8fafc;'
+        'padding:10px;border-radius:6px;border:1px solid #e2e8f0;line-height:1.4;">'
+        '<strong>Propios:</strong> puntos ganados por nuestro remate/saque/bloqueo.<br>'
+        '<strong>Regalados:</strong> puntos por error del rival (incluye saques fallados).'
+        '</div>'
+        f'<div class="metric-row" style="margin-top:12px;">'
+        f'<span>Propios (kill) <span style="font-weight:normal;color:#6b7280;font-size:0.8em;">({kill}/{won} pts)</span></span>'
+        f'<span style="color:var(--success);">{kill_pct}%</span></div>'
+        f'<div class="bar-container"><div class="bar-fill" style="width:{kill_pct}%;background-color:var(--success);"></div></div>'
+        f'<div class="metric-row" style="margin-top:12px;">'
+        f'<span>Regalados (error rival) <span style="font-weight:normal;color:#6b7280;font-size:0.8em;">({rival}/{won} pts)</span></span>'
+        f'<span style="color:var(--warning);">{gift_pct}%</span></div>'
+        f'<div class="bar-container"><div class="bar-fill" style="width:{gift_pct}%;background-color:var(--warning);"></div></div>'
+        '<div style="margin-top:12px;font-size:0.8rem;color:#6b7280;line-height:1.6;">'
+        f'De los regalados: <strong>{rally_gift}</strong> en juego, '
+        f'<strong>{serve}</strong> por saque fallado del rival (punto libre).<br>'
+        f'Puntos perdidos: <strong style="color:var(--danger);">{lost}</strong>.'
+        '</div>'
+        '</div></div>'
+    )
+
 # ---------------------------------------------------------------------------
 # Page rendering
 # ---------------------------------------------------------------------------
@@ -562,6 +632,7 @@ def render_match_page(match_title, parsed, generated_date):
 
     phase_card = build_phase_card_html(phase_stats)
     scoring_card = build_scoring_card_html(point_stats)
+    earned_card = build_earned_points_card_html(parsed.get('_earned_points'))
 
     players_sorted = sorted(
         [(num, data, calculate_rating(data))
@@ -600,6 +671,7 @@ def render_match_page(match_title, parsed, generated_date):
     {team_card}
     {phase_card}
     {scoring_card}
+    {earned_card}
   </div>''')}
 
   {_section('Detalle por Jugador', f'<div class="players-grid">{player_cards}</div>')}
@@ -983,6 +1055,23 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
     team_efficiency = calculate_efficiency(season_data)
     season_card = build_card_html(f'{team_name} - {comp_label}', season_data, season_rating, 'team-summary-card')
 
+    # Earned vs. gifted points across the season (Phase 2). Only matches graded
+    # with explicit outcome tokens carry a rival-error breakdown; sum those.
+    graded_matches = [m for m in team_stats if m.get('points_won_rival_error') is not None]
+    if graded_matches:
+        season_earned = {
+            'points_won': sum(m.get('points_won') or 0 for m in graded_matches),
+            'points_won_kill': sum(m.get('points_won_kill') or 0 for m in graded_matches),
+            'points_won_rival_error': sum(m.get('points_won_rival_error') or 0 for m in graded_matches),
+            'points_won_serve_error': sum(m.get('points_won_serve_error') or 0 for m in graded_matches),
+            'points_lost': sum(m.get('points_lost') or 0 for m in graded_matches),
+        }
+    else:
+        season_earned = None
+    earned_card = build_earned_points_card_html(season_earned)
+    # Drop the attack-efficiency caveat only when every match is outcome-graded.
+    all_graded = bool(team_stats) and len(graded_matches) == len(team_stats)
+
     # Match-by-match table
     match_rows = []
     for m in team_stats:
@@ -1083,7 +1172,9 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
 
   {_section('Estadísticas Acumuladas', f'<div class="players-grid">{season_card}</div>')}
 
-  {_section('Eficiencia por Fundamento', _efficiency_block_html(team_efficiency))}
+  {_section('Puntos: Ganados vs Regalados', f'<div class="players-grid">{earned_card}</div>')}
+
+  {_section('Eficiencia por Fundamento', _efficiency_block_html(team_efficiency, all_graded))}
 
   {_section('Detalle por Partido', f'''<div style="overflow-x:auto;">
     <table class="summary-table">
@@ -1142,8 +1233,15 @@ def _headline_efficiency(pos_code, eff):
     return ('Eficiencia ataque', _fmt_signed_pct(eff.get('attack_eff')), _ATTACK_EFF_NOTE)
 
 
-def _efficiency_block_html(eff):
-    """Build the per-skill efficiency grid HTML from a calculate_efficiency() dict."""
+def _efficiency_block_html(eff, outcomes_graded=False):
+    """Build the per-skill efficiency grid HTML from a calculate_efficiency() dict.
+
+    Args:
+        eff (dict): Output of calculate_efficiency().
+        outcomes_graded (bool): When True, every contributing match was graded
+            with explicit outcome tokens, so a kill (A#) is a true kill and the
+            attack-efficiency caveat (Phase 2 / D7) is dropped.
+    """
     cards = [
         ('Ataque (Efic.)', _fmt_signed_pct(eff['attack_eff'])),
         ('Recepción +', _fmt_pct(eff['reception_pos'])),
@@ -1178,6 +1276,7 @@ def _efficiency_block_html(eff):
         '</div>'
     )
     note = (
+        '' if outcomes_graded else
         f'<p style="color:#9ca3af;font-size:0.75rem;margin:12px 0 0;">* {_ATTACK_EFF_NOTE}</p>'
     )
     return f'<div class="general-stats">{items}</div>{glossary}{note}'
