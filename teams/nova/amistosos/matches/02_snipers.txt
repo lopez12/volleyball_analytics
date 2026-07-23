@@ -2,57 +2,57 @@
 @youtube: https://youtu.be/dnDUSQ8XyPs
 @set: 16-25
 @set: 25-20
-7S+ 13D# 12E+ 12A+ 17D! @won:re
+7S+ 13D# 12E+ 12A+ 21D! @won:re
 7S# @won
 7S+ 7D- @lost
-22R+ 12E+ 13A+ 7D# 12E+ 8A+ 17D! 22E+ 12A+ 22D# 12A! 7D- @lost
+22R+ 12E+ 13A+ 7D# 12E+ 8A+ 21D! 22E+ 12A+ 22D# 12A! 7D- @lost
 22R! 12E! 7A! 7D+ 12E+ 8A+ 13D+ 12E+ 8A# @won
 8S# @won
 8S# @won
 8S# @won
 8S# @won
 8S- @lost
-22R# 12E# 17A# @won
-13S+ 13D# 12E# 17A- @lost
-22R! 7E+ 17A+ 7D# 12E# 22A- @lost
-7R! 12E+ 17A+ 8D- @lost
-7R! 12E+ 17A! 7D! 7D+ 8E+ 22A- @lost
+22R# 12E# 21A# @won
+13S+ 13D# 12E# 21A- @lost
+22R! 7E+ 21A+ 7D# 12E# 22A- @lost
+7R! 12E+ 21A+ 8D- @lost
+7R! 12E+ 21A! 7D! 7D+ 8E+ 22A- @lost
 7R- @lost
 22R- @lost
-7R! 17E+ 22A+ 8D# 12E! 17A- @lost
-7R# 12A+ 7D+ 12E+ 13A! 13D# 12E! 7A! 13D+ 12E# 17A+ 22D+ 7E! 17A! 13D# 12E! 7A+ 12D! 22E- @lost
-17R! 13E- @lost
-17R+ 12E# 22A+ 13D- @lost
-13R# 12E# 17A# @won
-12S+ 13D# 12E# 22A+ 8D+ 12E+ 17A+ 7D# 12E# 17A# @won
+7R! 21E+ 22A+ 8D# 12E! 21A- @lost
+7R# 12A+ 7D+ 12E+ 13A! 13D# 12E! 7A! 13D+ 12E# 21A+ 22D+ 7E! 21A! 13D# 12E! 7A+ 12D! 22E- @lost
+21R! 13E- @lost
+21R+ 12E# 22A+ 13D- @lost
+13R# 12E# 21A# @won
+12S+ 13D# 12E# 22A+ 8D+ 12E+ 21A+ 7D# 12E# 21A# @won
 12S# @won
-12S+ 7D! 22E+ 17A+ 13D+ 8E- @lost
+12S+ 7D! 22E+ 21A+ 13D+ 8E- @lost
 22R# 12E# 7A# @won
-17S# @won
-17S- @lost
-17R+ 7E+ 8A! 17D- @lost
-17R- @lost
-17R- @lost
+21S# @won
+21S- @lost
+21R+ 7E+ 8A! 21D- @lost
+21R- @lost
+21R- @lost
 13R- @lost
-17R- @lost
+21R- @lost
 @won:se
-22S+ 13B+ 17D# 12E# 13A- @lost
+22S+ 13B+ 21D# 12E# 13A- @lost
 @won:se
 7S# @won
 7S+ 13D! 12E! 8A- @lost
 7R# 12E- @lost
-13R# 12E# 8A+ 8D+ 12E# 8A+ 17D! 12A+ 17D- @lost
-7R# 12E# 13A! 17D! 8D! 17E+ 13A! 22D- @lost
+13R# 12E# 8A+ 8D+ 12E# 8A+ 21D! 12A+ 21D- @lost
+7R# 12E# 13A! 21D! 8D! 21E+ 13A! 22D- @lost
 --- SEGUNDO SET ---
 22R+ 12E+ 8A- @lost
 @won:se
-12S+ 17D+ 12E! 17A# @won
-12S+ 17D! 12E+ 7A- @lost
+12S+ 21D+ 12E! 21A# @won
+12S+ 21D! 12E+ 7A- @lost
 13R+ 12E# 7A- @lost
 8R# 12E+ 13A- @lost
 8R! 7A+ @won:re
-17S+ 17D+ 12E# 8A+ 8A! 22D+ 12E! 7A! 22D- @lost
-17R# 12E# 8A- @lost
+21S+ 21D+ 12E# 8A+ 8A! 22D+ 12E! 7A! 22D- @lost
+21R# 12E# 8A- @lost
 @won:se
 13S# @won
 13S# @won
@@ -63,21 +63,21 @@
 13R! 12E! 22A- @lost
 7R# 12E# 22A! @won:re
 8S# @won
-8S+ 22D# 12E# 17A- @lost
-17R! 22E+ 8A! @won:re
-22S+ 8D! 22E+ 12A! 8D# 12E+ 17A# @won
+8S+ 22D# 12E# 21A- @lost
+21R! 22E+ 8A! @won:re
+22S+ 8D! 22E+ 12A! 8D# 12E+ 21A# @won
 22S# @won
 22S# @won
 22S# @won
 22S# @won
 22S+ 8D- @lost
-13R# 12E+ 17A- @lost
+13R# 12E+ 21A- @lost
 8R# 12E+ 13A- @lost
 @won:se
 12S+ 22D- @lost
 22R# 12E# 13A# @won
-17S# @won
-17S+ 22D+ 12E+ 8A- @lost
+21S# @won
+21S+ 22D+ 12E+ 8A- @lost
 22R+ 12E- @lost
 22R! 8A! 8D- @lost
 22R! 7D# 12E# 13A# @won
