@@ -61,18 +61,18 @@ docs/index.html                                    # root team/tournament select
   "tournament": "Atlas Chapalita Cup",
   "type": "tournament",
   "roster": {
-    "7":  { "name": "Gio", "position": "OH" },
-    "8":  { "name": "DaniRdz", "position": "MB" }
+    "7": { "name": "Gio", "position": "OH" },
+    "8": { "name": "DaniRdz", "position": "MB" }
   }
 }
 ```
 
-| Field | Meaning |
-|-------|---------|
-| `team` | Display team name (shown on every page). |
-| `tournament` | Display competition name (use `"Amistosos"` for friendlies). |
-| `type` | `"tournament"` or `"friendly"`. |
-| `roster` | Maps player number → `{ "name", "position" }`. Positions: `S`, `OH`, `OPP`, `MB`, `L`. |
+| Field        | Meaning                                                                                |
+| ------------ | -------------------------------------------------------------------------------------- |
+| `team`       | Display team name (shown on every page).                                               |
+| `tournament` | Display competition name (use `"Amistosos"` for friendlies).                           |
+| `type`       | `"tournament"` or `"friendly"`.                                                        |
+| `roster`     | Maps player number → `{ "name", "position" }`. Positions: `S`, `OH`, `OPP`, `MB`, `L`. |
 
 Players without a name fall back to `#<number>` in the reports.
 
@@ -128,25 +128,25 @@ Each line is one rally. Tokens within a line are space-separated.
 
 ### Actions
 
-| Code | Name | Leverage weight |
-|------|------|-----------------|
-| `A`  | Ataque (Attack) | 1.3 |
-| `B`  | Bloqueo (Block) | 1.2 |
-| `S`  | Saque (Serve) | 1.1 |
-| `R`  | Recepción de Saque (Reception) | 1.0 |
-| `D`  | Defensa (Defense) | 1.0 |
-| `E`  | Acomodo (Set) | 0.65 |
+| Code | Name                           | Leverage weight |
+| ---- | ------------------------------ | --------------- |
+| `A`  | Ataque (Attack)                | 1.3             |
+| `B`  | Bloqueo (Block)                | 1.2             |
+| `S`  | Saque (Serve)                  | 1.1             |
+| `R`  | Recepción de Saque (Reception) | 1.0             |
+| `D`  | Defensa (Defense)              | 1.0             |
+| `E`  | Acomodo (Set)                  | 0.65            |
 
 The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much each action contributes to the rating. Terminal, point-scoring actions (attack, block) count for more; setting is a low-risk continuation and is discounted so the rating no longer favours setters simply because they touch the ball most. `ACTION_WEIGHTS['E']` (0.65) is the primary tuning dial — lower it to discount setting further, raise it to reward playmaking.
 
 ### Grades
 
-| Code | Name | Rating weight |
-|------|------|--------------|
-| `#`  | Perfecto (Perfect)  | +1.0 |
-| `+`  | Positivo (Positive) | +0.4 |
-| `!`  | Regular (Regular)   | −0.3 |
-| `-`  | Error (Error)       | −1.0 |
+| Code | Name                | Rating weight |
+| ---- | ------------------- | ------------- |
+| `#`  | Perfecto (Perfect)  | +1.0          |
+| `+`  | Positivo (Positive) | +0.4          |
+| `!`  | Regular (Regular)   | −0.3          |
+| `-`  | Error (Error)       | −1.0          |
 
 ### Special lines
 
@@ -159,11 +159,11 @@ The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much eac
 
 A rally line may end with **one** inline outcome token that records who won the point, independent of how the touch was graded. Tokens are case-insensitive.
 
-| Token | Meaning |
-|-------|---------|
-| `@won` | We scored the rally by our own play (a kill / ace / stuff block). |
-| `@lost` | The opponent scored the rally. |
-| `@won:re` | We scored, but the cause was a **rival error** — a gifted point. |
+| Token     | Meaning                                                                                                         |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
+| `@won`    | We scored the rally by our own play (a kill / ace / stuff block).                                               |
+| `@lost`   | The opponent scored the rally.                                                                                  |
+| `@won:re` | We scored, but the cause was a **rival error** — a gifted point.                                                |
 | `@won:se` | We scored because the opponent **faulted their serve** — a free point we never touched (a subset of `@won:re`). |
 
 ```
@@ -174,15 +174,14 @@ A rally line may end with **one** inline outcome token that records who won the 
 20R+ 25E+ 7A+            # no token → engine falls back to the old win heuristic
 ```
 
-Outcome tokens are **optional**. When present they are ground truth; when absent the engine falls back to the legacy heuristic, so old logs keep working unchanged. A line consisting **only** of an outcome token is a valid *touchless* rally (used for the opponent serve-fault case). If several outcome tokens appear on one line, the first is used and the rest ignored.
+Outcome tokens are **optional**. When present they are ground truth; when absent the engine falls back to the legacy heuristic, so old logs keep working unchanged. A line consisting **only** of an outcome token is a valid _touchless_ rally (used for the opponent serve-fault case). If several outcome tokens appear on one line, the first is used and the rest ignored.
 
 ### Grading Philosophy: execution, not outcome
 
-Grade the **touch**, not the **scoreboard**. Ask *"how well was this ball played?"*,
-never *"did we win the point?"*.
+Grade the **touch**, not the **scoreboard**. Ask _"how well was this ball played?"_, never _"did we win the point?"_.
 
-- A great attack that wins → `A#`. A scared lob the opponent then shanks → `A!`   (honest) plus `@won:re`. Same scoreboard, different truth.
-- On a **terminal** action (`A`, `S`, `B`): `#` = the action *won the point by its own quality* (kill / ace / stuff block); `-` = the action *lost the point* (attack error / service fault / blocked back).
+- A great attack that wins → `A#`. A scared lob the opponent then shanks → `A!` (honest) plus `@won:re`. Same scoreboard, different truth.
+- On a **terminal** action (`A`, `S`, `B`): `#` = the action _won the point by its own quality_ (kill / ace / stuff block); `-` = the action _lost the point_ (attack error / service fault / blocked back).
 - On a **continuation** action (`R`, `E`, `D`): grades are pure execution quality (`#` flawless … `-` shanked); they are never terminal.
 - A point won because the **opponent erred** is nobody's `#`. Grade your last touch honestly (`!` / `+`) and mark the rally `@won:re` (or `@won:se` for a free serve fault). Such points are credited to no player.
 
@@ -196,7 +195,7 @@ Backfilling is **incremental** — old matches keep working via the heuristic fa
 2. Add the matching outcome token at the end of that rally line (`@won:re`).
 3. Add `@won` / `@lost` to the remaining rallies as needed, and a standalone `@won:se` line for each opponent serve fault.
 
-The **earned vs. gifted points** report only appears for matches that carry outcome tokens; un-graded matches show a *"sin marcadores de resultado"* note.
+The **earned vs. gifted points** report only appears for matches that carry outcome tokens; un-graded matches show a _"sin marcadores de resultado"_ note.
 
 ### Example log
 
@@ -225,7 +224,7 @@ It reports two severities:
 - **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`, a player number missing from the roster, or a malformed `@set: V-R` line. These are genuinely broken data the engine would drop.
 - **WARN** (does not fail) — an outcome token that isn't last / is duplicated, a rally with no `@won`/`@lost` in a file that otherwise uses outcome tokens, an invalid `@youtube:` URL, or a line/token the parser ignores such as `(Sin registro)` or `--- SEGUNDO SET ---`.
 
-The *outcome-completeness* check is intentionally advisory: legacy logs without outcome tokens still work via the heuristic fallback, so they are exempt. Use `--strict` if you want warnings to fail too.
+The _outcome-completeness_ check is intentionally advisory: legacy logs without outcome tokens still work via the heuristic fallback, so they are exempt. Use `--strict` if you want warnings to fail too.
 
 On every pull request to `main`, `.github/workflows/qa.yml` validates only the match logs **changed in that PR** (so pre-existing legacy files are left alone), then runs a **smoke build** (`python generate.py`) to confirm the reports still generate without crashing. The exit code fails the check when any error is present.
 
@@ -239,11 +238,11 @@ python export_csv.py
 
 For each dataset, three files are written next to its database in `data/<team_slug>/<tournament_slug>/`:
 
-| File | Contents |
-|------|----------|
-| `matches.csv` | One row per match — title, date, YouTube URLs |
-| `team_match_stats.csv` | Aggregated team stats for every match |
-| `player_match_stats.csv` | Per-player stats for every match |
+| File                     | Contents                                      |
+| ------------------------ | --------------------------------------------- |
+| `matches.csv`            | One row per match — title, date, YouTube URLs |
+| `team_match_stats.csv`   | Aggregated team stats for every match         |
+| `player_match_stats.csv` | Per-player stats for every match              |
 
 > **Note:** Run `python generate.py` first to make sure the databases are up to date before exporting.
 
