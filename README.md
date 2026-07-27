@@ -231,6 +231,39 @@ outcome tokens; un-graded matches show a *"sin marcadores de resultado"* note.
 2R# 25E+ 20A+  @won:re
 ```
 
+### Validating logs (QA gate)
+
+A validator statically checks every `teams/**/matches/*.txt` file against the
+grammar above and each dataset's `team.json` roster, so malformed rallies are
+caught **before merge** instead of being silently dropped by the parser. Run it
+locally at any time:
+
+```bash
+python validate_logs.py            # validate the whole repo
+python validate_logs.py --strict   # promote every warning to an error
+python validate_logs.py teams/nova # validate a subset (file or folder)
+```
+
+It reports two severities:
+
+- **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`
+  (R1), a player number missing from the roster (R2), or a malformed `@set: V-R`
+  line (R3). These are genuinely broken data the engine would drop.
+- **WARN** (does not fail) — an outcome token that isn't last / is duplicated
+  (R4), a rally with no `@won`/`@lost` in a file that otherwise uses outcome
+  tokens (R5), an invalid `@youtube:` URL (R6), or a line/token the parser
+  ignores such as `(Sin registro)` or `--- SEGUNDO SET ---` (R7).
+
+The *outcome-completeness* check (R5) is intentionally advisory: legacy logs
+without outcome tokens still work via the heuristic fallback, so they are exempt.
+Use `--strict` if you want warnings to fail too.
+
+On every pull request to `main`, `.github/workflows/qa.yml` validates only the
+match logs **changed in that PR** (so pre-existing legacy files are left alone),
+then runs a **smoke build** (`python generate.py`) to confirm the reports still
+generate without crashing. The exit code fails the check when any error is
+present.
+
 ## Exporting Data to CSV
 
 To export every dataset's match data to CSV files (readable in Excel or Google Sheets):
@@ -259,11 +292,13 @@ volleyball_analytics/
 ├── generate.py                  # Orchestrator: discover datasets → DB → HTML
 ├── export_csv.py                # Export each dataset's tables to CSV files
 ├── styles.css                   # Shared CSS for all generated pages
+├── validate_logs.py             # Match-log format validator (PR QA gate)
 ├── teams/                       # COMMITTED source data
 │   └── <team>/<tournament>/
 │       ├── team.json            # roster + metadata
 │       └── matches/NN_*.txt     # match logs (prefix controls order)
 ├── .github/workflows/build.yml  # GitHub Actions: build + deploy on push
+├── .github/workflows/qa.yml     # GitHub Actions: validate logs + smoke build on PRs
 ├── data/                        # GENERATED databases + CSVs (not committed)
 │   └── <team>/<tournament>/volleyball.db
 ├── docs/                        # GENERATED static site (not committed)
