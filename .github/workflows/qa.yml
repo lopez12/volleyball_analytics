@@ -1,0 +1,45 @@
+name: QA — Validate Match Logs
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:   # allows manual trigger from GitHub UI
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so we can diff against the PR base
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate changed match logs
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin \
+              "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
+            CHANGED=$(git diff --name-only --diff-filter=d \
+              "origin/${{ github.base_ref }}...HEAD" \
+              | grep -E '^teams/.*\.txt$' || true)
+            if [ -z "$CHANGED" ]; then
+              echo "No match logs changed in this PR - nothing to validate."
+              exit 0
+            fi
+            echo "Validating changed match logs:"
+            echo "$CHANGED"
+            echo "$CHANGED" | xargs python validate_logs.py
+          else
+            echo "Manual run - validating the whole repository."
+            python validate_logs.py
+          fi
+
+      - name: Smoke build (generate static reports)
+        run: python generate.py
