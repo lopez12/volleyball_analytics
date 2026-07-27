@@ -137,12 +137,7 @@ Each line is one rally. Tokens within a line are space-separated.
 | `D`  | Defensa (Defense) | 1.0 |
 | `E`  | Acomodo (Set) | 0.65 |
 
-The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much each
-action contributes to the rating. Terminal, point-scoring actions (attack,
-block) count for more; setting is a low-risk continuation and is discounted so
-the rating no longer favours setters simply because they touch the ball most.
-`ACTION_WEIGHTS['E']` (0.65) is the primary tuning dial — lower it to discount
-setting further, raise it to reward playmaking.
+The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much each action contributes to the rating. Terminal, point-scoring actions (attack, block) count for more; setting is a low-risk continuation and is discounted so the rating no longer favours setters simply because they touch the ball most. `ACTION_WEIGHTS['E']` (0.65) is the primary tuning dial — lower it to discount setting further, raise it to reward playmaking.
 
 ### Grades
 
@@ -162,8 +157,7 @@ setting further, raise it to reward playmaking.
 
 ### Rally outcome tokens (grade integrity)
 
-A rally line may end with **one** inline outcome token that records who won the
-point, independent of how the touch was graded. Tokens are case-insensitive.
+A rally line may end with **one** inline outcome token that records who won the point, independent of how the touch was graded. Tokens are case-insensitive.
 
 | Token | Meaning |
 |-------|---------|
@@ -180,44 +174,29 @@ point, independent of how the touch was graded. Tokens are case-insensitive.
 20R+ 25E+ 7A+            # no token → engine falls back to the old win heuristic
 ```
 
-Outcome tokens are **optional**. When present they are ground truth; when absent
-the engine falls back to the legacy heuristic, so old logs keep working
-unchanged. A line consisting **only** of an outcome token is a valid *touchless*
-rally (used for the opponent serve-fault case). If several outcome tokens appear
-on one line, the first is used and the rest ignored.
+Outcome tokens are **optional**. When present they are ground truth; when absent the engine falls back to the legacy heuristic, so old logs keep working unchanged. A line consisting **only** of an outcome token is a valid *touchless* rally (used for the opponent serve-fault case). If several outcome tokens appear on one line, the first is used and the rest ignored.
 
 ### Grading Philosophy: execution, not outcome
 
 Grade the **touch**, not the **scoreboard**. Ask *"how well was this ball played?"*,
 never *"did we win the point?"*.
 
-- A great attack that wins → `A#`. A scared lob the opponent then shanks → `A!`
-  (honest) plus `@won:re`. Same scoreboard, different truth.
-- On a **terminal** action (`A`, `S`, `B`): `#` = the action *won the point by
-  its own quality* (kill / ace / stuff block); `-` = the action *lost the point*
-  (attack error / service fault / blocked back).
-- On a **continuation** action (`R`, `E`, `D`): grades are pure execution quality
-  (`#` flawless … `-` shanked); they are never terminal.
-- A point won because the **opponent erred** is nobody's `#`. Grade your last
-  touch honestly (`!` / `+`) and mark the rally `@won:re` (or `@won:se` for a
-  free serve fault). Such points are credited to no player.
+- A great attack that wins → `A#`. A scared lob the opponent then shanks → `A!`   (honest) plus `@won:re`. Same scoreboard, different truth.
+- On a **terminal** action (`A`, `S`, `B`): `#` = the action *won the point by its own quality* (kill / ace / stuff block); `-` = the action *lost the point* (attack error / service fault / blocked back).
+- On a **continuation** action (`R`, `E`, `D`): grades are pure execution quality (`#` flawless … `-` shanked); they are never terminal.
+- A point won because the **opponent erred** is nobody's `#`. Grade your last touch honestly (`!` / `+`) and mark the rally `@won:re` (or `@won:se` for a free serve fault). Such points are credited to no player.
 
-This keeps a `#` meaning "perfect execution" and never "we happened to win", so
-attack efficiency and the rating stay honest.
+This keeps a `#` meaning "perfect execution" and never "we happened to win", so attack efficiency and the rating stay honest.
 
 #### Re-grading a legacy match (incremental)
 
-Backfilling is **incremental** — old matches keep working via the heuristic
-fallback and only gain outcome data as you re-grade them. To re-grade a match:
+Backfilling is **incremental** — old matches keep working via the heuristic fallback and only gain outcome data as you re-grade them. To re-grade a match:
 
-1. Find `#` grades on terminal actions (`A#`, `S#`, `B#`) that were really won on
-   a **rival error**, and restore the honest grade (`A!` / `A+`).
+1. Find `#` grades on terminal actions (`A#`, `S#`, `B#`) that were really won on a **rival error**, and restore the honest grade (`A!` / `A+`).
 2. Add the matching outcome token at the end of that rally line (`@won:re`).
-3. Add `@won` / `@lost` to the remaining rallies as needed, and a standalone
-   `@won:se` line for each opponent serve fault.
+3. Add `@won` / `@lost` to the remaining rallies as needed, and a standalone `@won:se` line for each opponent serve fault.
 
-The **earned vs. gifted points** report only appears for matches that carry
-outcome tokens; un-graded matches show a *"sin marcadores de resultado"* note.
+The **earned vs. gifted points** report only appears for matches that carry outcome tokens; un-graded matches show a *"sin marcadores de resultado"* note.
 
 ### Example log
 
@@ -233,10 +212,7 @@ outcome tokens; un-graded matches show a *"sin marcadores de resultado"* note.
 
 ### Validating logs (QA gate)
 
-A validator statically checks every `teams/**/matches/*.txt` file against the
-grammar above and each dataset's `team.json` roster, so malformed rallies are
-caught **before merge** instead of being silently dropped by the parser. Run it
-locally at any time:
+A validator statically checks every `teams/**/matches/*.txt` file against the grammar above and each dataset's `team.json` roster, so malformed rallies are caught **before merge** instead of being silently dropped by the parser. Run it locally at any time:
 
 ```bash
 python validate_logs.py            # validate the whole repo
@@ -246,23 +222,12 @@ python validate_logs.py teams/nova # validate a subset (file or folder)
 
 It reports two severities:
 
-- **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`
-  (R1), a player number missing from the roster (R2), or a malformed `@set: V-R`
-  line (R3). These are genuinely broken data the engine would drop.
-- **WARN** (does not fail) — an outcome token that isn't last / is duplicated
-  (R4), a rally with no `@won`/`@lost` in a file that otherwise uses outcome
-  tokens (R5), an invalid `@youtube:` URL (R6), or a line/token the parser
-  ignores such as `(Sin registro)` or `--- SEGUNDO SET ---` (R7).
+- **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`, a player number missing from the roster, or a malformed `@set: V-R` line. These are genuinely broken data the engine would drop.
+- **WARN** (does not fail) — an outcome token that isn't last / is duplicated, a rally with no `@won`/`@lost` in a file that otherwise uses outcome tokens, an invalid `@youtube:` URL, or a line/token the parser ignores such as `(Sin registro)` or `--- SEGUNDO SET ---`.
 
-The *outcome-completeness* check (R5) is intentionally advisory: legacy logs
-without outcome tokens still work via the heuristic fallback, so they are exempt.
-Use `--strict` if you want warnings to fail too.
+The *outcome-completeness* check is intentionally advisory: legacy logs without outcome tokens still work via the heuristic fallback, so they are exempt. Use `--strict` if you want warnings to fail too.
 
-On every pull request to `main`, `.github/workflows/qa.yml` validates only the
-match logs **changed in that PR** (so pre-existing legacy files are left alone),
-then runs a **smoke build** (`python generate.py`) to confirm the reports still
-generate without crashing. The exit code fails the check when any error is
-present.
+On every pull request to `main`, `.github/workflows/qa.yml` validates only the match logs **changed in that PR** (so pre-existing legacy files are left alone), then runs a **smoke build** (`python generate.py`) to confirm the reports still generate without crashing. The exit code fails the check when any error is present.
 
 ## Exporting Data to CSV
 
@@ -325,14 +290,8 @@ After that, every `git push` to `main` triggers an automatic rebuild.
 1. `generate.py` discovers every dataset folder under `teams/` that contains a `team.json`
 2. For each dataset it parses the `matches/*.txt` logs into a dedicated `data/<team>/<tournament>/volleyball.db`
 3. `parse_log()` tokenizes lines into rallies and records per-player and team stats
-4. `calculate_rating()` computes an action-weighted 1–10 rating:
-   `6.0 + 4.0 × (Σ grade_count × grade_weight × action_weight) / total`, then
-   clamped to `[1.0, 10.0]`. Dividing by the raw touch count (not by the weighted
-   count) is what makes low-leverage actions such as setting contribute less.
-   `calculate_efficiency()` derives per-skill metrics: attack efficiency
-   `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity,
-   and block kills. (Attack efficiency still counts rival-error points as kills
-   until the Phase 2 grade-integrity work lands.)
+4. `calculate_rating()` computes an action-weighted 1–10 rating: `6.0 + 4.0 × (Σ grade_count × grade_weight × action_weight) / total`, then clamped to `[1.0, 10.0]`. Dividing by the raw touch count (not by the weighted
+   count) is what makes low-leverage actions such as setting contribute less. `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
 5. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
 6. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
 7. Static HTML is written to `docs/<team>/<tournament>/`, and a root `docs/index.html` selector links to every dataset
