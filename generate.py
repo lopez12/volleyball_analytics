@@ -98,11 +98,17 @@ def write_datasets_manifest(datasets):
     # Also emit the manifest as a script-injected global. The logger loads this
     # via a <script> tag so team selection works over file:// too (fetch is
     # blocked there), not only when served/deployed.
+    js = 'window.LOGGER_DATASETS = ' + payload + ';\n'
     logger_docs = DOCS_ROOT / 'logger'
     if logger_docs.is_dir():
-        (logger_docs / 'datasets.js').write_text(
-            'window.LOGGER_DATASETS = ' + payload + ';\n', encoding='utf-8')
+        (logger_docs / 'datasets.js').write_text(js, encoding='utf-8')
         print('  Generated: docs/logger/datasets.js')
+    # Keep the source placeholder current so opening logger/ directly also
+    # reflects newly added datasets (otherwise it goes stale).
+    logger_src = Path('logger')
+    if logger_src.is_dir():
+        (logger_src / 'datasets.js').write_text(js, encoding='utf-8')
+        print('  Generated: logger/datasets.js')
 
 
 def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
