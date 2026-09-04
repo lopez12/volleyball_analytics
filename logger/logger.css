@@ -1,0 +1,999 @@
+/* ===================================================================
+   Registro de Partido — logger-specific layout.
+   Shared design tokens (colors, fonts, .btn-primary, .stat-card, etc.)
+   come from ../styles.css. This file only adds logger layout.
+   =================================================================== */
+
+.lg-body {
+  padding: 0;
+}
+
+.lg-container {
+  max-width: 1100px;
+  padding: 0 16px 40px;
+}
+
+/* ----- App bar ----- */
+.lg-appbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 0;
+  margin-bottom: 12px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.lg-appbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.lg-appbar__logo {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.lg-appbar__title {
+  font-weight: 800;
+  font-size: 1.15rem;
+  letter-spacing: -0.3px;
+  background: linear-gradient(135deg, #1e293b 0%, #2563eb 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.lg-appbar__nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.lg-navlink {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.lg-navlink:hover {
+  background: #eef2ff;
+  color: var(--primary);
+}
+
+.lg-navlink.is-active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* ----- Screens (hash-routed, toggled by app.js) ----- */
+.lg-screen {
+  display: none;
+}
+
+.lg-screen.is-active {
+  display: block;
+}
+
+.lg-hero {
+  margin-bottom: 20px;
+}
+
+/* ----- Panels ----- */
+.lg-panel {
+  background: var(--card-bg);
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 18px 18px 20px;
+  margin: 0 0 18px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.lg-panel__title {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+.lg-panel__title--sub {
+  margin-top: 18px;
+}
+
+/* ----- Home actions ----- */
+.lg-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 22px;
+}
+
+.lg-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 22px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-decoration: none;
+  text-align: center;
+}
+
+.lg-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ----- Drafts list ----- */
+.lg-draft-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lg-draft {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.lg-draft__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lg-draft__name {
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.lg-draft__meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.lg-draft--empty {
+  background: transparent;
+  border-style: dashed;
+}
+
+.lg-badge {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.lg-badge--progress {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+/* ----- Setup wizard ----- */
+.lg-page-header {
+  flex-wrap: wrap;
+}
+
+.lg-steps {
+  list-style: none;
+  counter-reset: step;
+  display: flex;
+  gap: 8px;
+  padding: 0;
+  margin: 0 0 20px;
+}
+
+.lg-step {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.lg-step--active {
+  border-color: var(--primary);
+  background: #eef2ff;
+  color: var(--primary);
+}
+
+.lg-step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #e5e7eb;
+  color: var(--text-main);
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.lg-step--active .lg-step__num {
+  background: var(--primary);
+  color: #fff;
+}
+
+.lg-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.lg-field:last-child {
+  margin-bottom: 0;
+}
+
+.lg-field label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.lg-field input,
+.lg-field select {
+  padding: 11px 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  background: #fafbff;
+  color: var(--text-main);
+}
+
+.lg-field input:disabled,
+.lg-field select:disabled {
+  background: #f3f4f6;
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
+
+.lg-field-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.lg-field-row .lg-field {
+  flex: 1 1 160px;
+}
+
+.lg-wizard-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.lg-btn-ghost {
+  background: #fff;
+  color: var(--text-main);
+  border: 1.5px solid #d1d5db;
+}
+
+.lg-btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ----- Setup: manual entry, roster chips, derived preview, sets ----- */
+.lg-step--done {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.lg-step--done .lg-step__num {
+  background: #16a34a;
+  color: #fff;
+}
+
+.lg-notice {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px dashed #fcd34d;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.85rem;
+}
+
+.lg-notice p {
+  margin: 0;
+}
+
+.lg-field__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.lg-field--grow {
+  flex: 1 1 220px;
+}
+
+.lg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+}
+
+.lg-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px solid #c7d2fe;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+
+.lg-chips__empty {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-muted);
+}
+
+.lg-derived {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f1f5f9;
+  font-size: 0.85rem;
+}
+
+.lg-derived__label {
+  display: inline-block;
+  min-width: 56px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.lg-derived code {
+  font-family: monospace;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.lg-error {
+  display: none;
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #b91c1c;
+}
+
+/* Sets */
+.lg-sets {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.lg-set {
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fafbff;
+}
+
+.lg-set__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.lg-set__title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.lg-set__remove {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lg-set__remove:hover {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.lg-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lg-score input {
+  width: 74px;
+}
+
+.lg-score__sep {
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.lg-set__video-error {
+  display: none;
+}
+
+/* Drafts list actions */
+.lg-draft__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lg-draft__open {
+  padding: 6px 12px;
+  border: 1.5px solid var(--primary);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--primary);
+  font-weight: 700;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.lg-draft__open:hover {
+  background: var(--primary);
+  color: #fff;
+}
+
+.lg-draft__del {
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.lg-draft__del:hover {
+  background: #fee2e2;
+}
+
+/* ----- Analysis layout ----- */
+.lg-analysis {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+
+.lg-video {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%);
+  color: #cbd5e1;
+  margin-bottom: 18px;
+}
+
+.lg-video__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  font-size: 1.4rem;
+}
+
+.lg-video__hint {
+  font-size: 0.82rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Rally list */
+.lg-rally-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lg-rally {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.lg-rally__idx {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: #e5e7eb;
+  color: var(--text-main);
+  font-weight: 800;
+  font-size: 0.8rem;
+  flex-shrink: 0;
+}
+
+.lg-rally__chain {
+  flex: 1;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--text-main);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.lg-rally__outcome {
+  margin: 0;
+  flex-shrink: 0;
+}
+
+.lg-rally--empty .lg-rally__chain {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Roster grid */
+.lg-roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(56px, 1fr));
+  gap: 8px;
+}
+
+/* Token buttons (roster / actions / grades) */
+.lg-token-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: 8px 6px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 12px;
+  background: #fff;
+  color: var(--text-main);
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.lg-token-btn b {
+  font-size: 1.15rem;
+}
+
+.lg-token-btn small {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.lg-token-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.lg-token-btn--team {
+  grid-column: 1 / -1;
+}
+
+.lg-roster-btn {
+  font-size: 1.1rem;
+}
+
+.lg-token-row {
+  display: grid;
+  gap: 8px;
+}
+
+.lg-token-row--action {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.lg-token-row--grade {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Grade colors mirror the report semantics */
+.lg-grade--perfect { border-color: #86efac; background: #f0fdf4; color: #15803d; }
+.lg-grade--positive { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; }
+.lg-grade--regular { border-color: #fcd34d; background: #fffbeb; color: #b45309; }
+.lg-grade--error   { border-color: #fca5a5; background: #fef2f2; color: #b91c1c; }
+.lg-grade small { color: inherit; opacity: 0.8; }
+
+/* Chain preview */
+.lg-chain {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1.5px dashed var(--primary);
+  border-radius: 10px;
+  background: #f8fafc;
+  overflow-x: auto;
+}
+
+.lg-chain__text {
+  font-family: monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--primary);
+  white-space: nowrap;
+}
+
+.lg-chain__caret {
+  width: 2px;
+  height: 20px;
+  background: var(--primary);
+  animation: lg-blink 1s step-end infinite;
+}
+
+@keyframes lg-blink {
+  50% { opacity: 0; }
+}
+
+.lg-chain-actions {
+  margin-top: 12px;
+}
+
+.lg-chain-actions .lg-btn-ghost {
+  width: 100%;
+}
+
+/* Outcome buttons */
+.lg-outcomes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.lg-outcome {
+  padding: 12px 10px;
+  border-radius: 10px;
+  border: 1.5px solid #d1d5db;
+  background: #fff;
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+.lg-outcome:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.lg-outcome--won,
+.lg-outcome--re,
+.lg-outcome--se { border-color: #86efac; color: #15803d; }
+.lg-outcome--lost { border-color: #fca5a5; color: #b91c1c; }
+
+.lg-send {
+  width: 100%;
+}
+
+.lg-analysis-next {
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* ----- Set tabs (Brief 3) ----- */
+.lg-set-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.lg-set-tab {
+  padding: 8px 16px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.lg-set-tab:hover {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.lg-set-tab.is-active {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+.lg-set-tab--add {
+  border-style: dashed;
+  color: var(--primary);
+}
+
+/* ----- Interactive token / outcome buttons ----- */
+.lg-token-btn,
+.lg-outcome {
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.lg-token-btn.is-selected {
+  border-color: var(--primary);
+  background: #eef2ff;
+  color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18);
+}
+
+.lg-token-btn.is-selected small {
+  color: inherit;
+}
+
+.lg-outcome.is-selected {
+  color: #fff;
+}
+
+.lg-outcome--won.is-selected,
+.lg-outcome--re.is-selected,
+.lg-outcome--se.is-selected {
+  background: #16a34a;
+  border-color: #16a34a;
+}
+
+.lg-outcome--lost.is-selected {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+/* ----- Embedded set video ----- */
+.lg-video--embed {
+  padding: 0;
+  background: #000;
+  overflow: hidden;
+}
+
+.lg-video__frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 14px;
+  display: block;
+}
+
+/* ----- Rally row actions ----- */
+.lg-rally__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.lg-rally__edit,
+.lg-rally__del {
+  padding: 4px 6px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lg-rally__edit:hover {
+  background: #e0e7ff;
+}
+
+.lg-rally__del:hover {
+  background: #fee2e2;
+}
+
+/* ----- Review / export ----- */
+.lg-log-preview {
+  margin: 0;
+  padding: 16px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-family: monospace;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.lg-review-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ----- Footer ----- */
+.lg-footer {
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.lg-footer p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* ----- Accessibility: visible focus for keyboard users ----- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* ===================================================================
+   Responsive: Mobile / tablet (<=1023px) — keep the video in view while
+   tagging. Flatten the two column wrappers into the analysis grid so the
+   panels can be reordered: video on top, Jugadora + Acción side by side,
+   then Cadena and Resultado, with the rally log dropped to the bottom.
+   =================================================================== */
+@media (max-width: 1023px) {
+  .lg-analysis {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "video   video"
+      "roster  action"
+      "chain   chain"
+      "outcome outcome"
+      "rallies rallies"
+      "next    next";
+    align-items: start;
+  }
+
+  .lg-analysis__main,
+  .lg-analysis__side {
+    display: contents;
+  }
+
+  .lg-a-video   { grid-area: video; }
+  .lg-a-roster  { grid-area: roster; }
+  .lg-a-action  { grid-area: action; }
+  .lg-a-chain   { grid-area: chain; }
+  .lg-a-outcome { grid-area: outcome; }
+  .lg-a-rallies { grid-area: rallies; }
+  .lg-a-next    { grid-area: next; justify-self: start; }
+
+  .lg-a-video,
+  .lg-a-roster,
+  .lg-a-action,
+  .lg-a-chain,
+  .lg-a-outcome,
+  .lg-a-rallies {
+    margin: 0;
+  }
+
+  /* Keep buttons tappable in the narrower side-by-side columns. */
+  .lg-a-action .lg-token-row--action,
+  .lg-a-action .lg-token-row--grade {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ===================================================================
+   Responsive: PC (>=1024px) — video and controls side by side.
+   Mobile-first defaults above already give a single-column layout
+   with large, thumb-reachable action / grade rows.
+   =================================================================== */
+@media (min-width: 1024px) {
+  .lg-analysis {
+    grid-template-columns: 1.4fr 1fr;
+    align-items: start;
+  }
+
+  .lg-analysis__side {
+    position: sticky;
+    top: 16px;
+  }
+}
+
+/* Very small screens (<=400px): keep tap targets big, stack rows */
+@media (max-width: 400px) {
+  .lg-container {
+    padding: 0 10px 32px;
+  }
+
+  .lg-actions,
+  .lg-review-actions {
+    flex-direction: column;
+  }
+
+  .lg-action-btn {
+    width: 100%;
+  }
+
+  .lg-token-row--action {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .lg-outcomes {
+    grid-template-columns: 1fr;
+  }
+
+  .lg-steps {
+    flex-direction: column;
+  }
+
+  .lg-token-btn {
+    min-height: 60px;
+  }
+}

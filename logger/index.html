@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registro de Partido</title>
+  <!-- Shared design tokens from the generated reports (read-only) -->
+  <link rel="stylesheet" href="../styles.css">
+  <!-- Logger-specific layout -->
+  <link rel="stylesheet" href="logger.css">
+</head>
+<body class="lg-body">
+<div class="container lg-container">
+
+  <!-- ===== App bar ===== -->
+  <header class="lg-appbar">
+    <a href="#home" class="lg-appbar__brand">
+      <span class="lg-appbar__logo" aria-hidden="true">🏐</span>
+      <span class="lg-appbar__title">Registro de Partido</span>
+    </a>
+    <nav class="lg-appbar__nav" aria-label="Navegación principal">
+      <a href="#home" class="lg-navlink" data-screen="home">Inicio</a>
+      <a href="#setup" class="lg-navlink" data-screen="setup">Configuración</a>
+      <a href="#analysis" class="lg-navlink" data-screen="analysis">Análisis</a>
+      <a href="#review" class="lg-navlink" data-screen="review">Revisión</a>
+    </nav>
+  </header>
+
+  <main class="lg-main">
+
+    <!-- ================= HOME ================= -->
+    <section id="screen-home" class="lg-screen" data-screen="home" aria-labelledby="home-title">
+      <div class="hub-hero lg-hero">
+        <h1 id="home-title"><span style="-webkit-text-fill-color:initial;">🏐</span> Registro de Partido</h1>
+        <p class="hub-subtitle">Captura las acciones de tu equipo y genera un archivo listo para analizar.</p>
+      </div>
+
+      <div class="lg-actions">
+        <a href="#setup" id="home-new" class="btn-primary lg-action-btn">➕ Nuevo registro</a>
+        <button type="button" id="home-import" class="btn-primary lg-action-btn">📄 Importar .txt</button>
+        <input type="file" id="lg-import-file" accept=".txt,text/plain" hidden>
+      </div>
+
+      <section class="lg-panel" aria-labelledby="drafts-title">
+        <h2 id="drafts-title" class="lg-panel__title">Borradores</h2>
+        <ul id="lg-drafts" class="lg-draft-list">
+          <li class="lg-draft lg-draft--empty">
+            <div class="lg-draft__info">
+              <span class="lg-draft__name">Sin borradores</span>
+              <span class="lg-draft__meta">Los registros guardados aparecerán aquí.</span>
+            </div>
+          </li>
+        </ul>
+      </section>
+    </section>
+
+    <!-- ================= SETUP WIZARD ================= -->
+    <section id="screen-setup" class="lg-screen" data-screen="setup" aria-labelledby="setup-title">
+      <div class="page-header lg-page-header">
+        <a href="#home" class="back-link">← Inicio</a>
+        <h1 id="setup-title">Configuración del partido</h1>
+      </div>
+
+      <ol class="lg-steps" aria-label="Pasos de configuración">
+        <li class="lg-step lg-step--active">
+          <span class="lg-step__num">1</span>
+          <span class="lg-step__label">Equipo</span>
+        </li>
+        <li class="lg-step">
+          <span class="lg-step__num">2</span>
+          <span class="lg-step__label">Partido</span>
+        </li>
+        <li class="lg-step">
+          <span class="lg-step__num">3</span>
+          <span class="lg-step__label">Videos</span>
+        </li>
+      </ol>
+
+      <!-- Step 1: Equipo -->
+      <section class="lg-panel" aria-labelledby="setup-step1-title">
+        <h2 id="setup-step1-title" class="lg-panel__title">1 · Equipo</h2>
+        <div class="lg-field">
+          <label for="setup-dataset">Equipo y torneo</label>
+          <select id="setup-dataset">
+            <option value="">— Selecciona un equipo —</option>
+            <option value="__manual__">➕ Nuevo equipo (próximamente)</option>
+          </select>
+        </div>
+
+        <div id="setup-manual" class="lg-notice" hidden>
+          <p>🚧 La creación de equipos nuevos estará disponible en una próxima versión. Por ahora, selecciona un equipo existente de la lista.</p>
+        </div>
+
+        <div class="lg-field">
+          <span class="lg-field__label">Roster</span>
+          <div id="setup-roster-preview" class="lg-chips" aria-live="polite">
+            <span class="lg-chips__empty">Selecciona un equipo para cargar el roster.</span>
+          </div>
+        </div>
+        <p id="setup-step1-error" class="lg-error" role="alert"></p>
+      </section>
+
+      <!-- Step 2: Partido -->
+      <section class="lg-panel" aria-labelledby="setup-step2-title">
+        <h2 id="setup-step2-title" class="lg-panel__title">2 · Partido</h2>
+        <div class="lg-field">
+          <label for="setup-opponent">Rival</label>
+          <input id="setup-opponent" type="text" placeholder="Atlas">
+        </div>
+        <div class="lg-field-row">
+          <div class="lg-field">
+            <label for="setup-order">Número de partido (NN)</label>
+            <input id="setup-order" type="number" min="1" max="99" step="1" inputmode="numeric" placeholder="03">
+          </div>
+        </div>
+        <div class="lg-derived" aria-live="polite">
+          <div><span class="lg-derived__label">Archivo</span> <code id="setup-filename">—</code></div>
+          <div><span class="lg-derived__label">Título</span> <span id="setup-preview-title">—</span></div>
+        </div>
+        <p id="setup-step2-error" class="lg-error" role="alert"></p>
+      </section>
+
+      <!-- Step 3: Videos y sets -->
+      <section class="lg-panel" aria-labelledby="setup-step3-title">
+        <h2 id="setup-step3-title" class="lg-panel__title">3 · Videos y sets</h2>
+        <div id="setup-sets" class="lg-sets"></div>
+        <button type="button" id="setup-add-set" class="lg-btn-ghost">➕ Agregar set</button>
+        <p id="setup-step3-error" class="lg-error" role="alert"></p>
+      </section>
+
+      <div class="lg-wizard-nav">
+        <button type="button" id="setup-reset" class="lg-btn-ghost">Reiniciar</button>
+        <button type="button" id="setup-start" class="btn-primary lg-action-btn" disabled>Comenzar análisis →</button>
+      </div>
+    </section>
+
+    <!-- ================= ANALYSIS ================= -->
+    <section id="screen-analysis" class="lg-screen" data-screen="analysis" aria-labelledby="analysis-title">
+      <div class="page-header lg-page-header">
+        <a href="#setup" class="back-link">← Configuración</a>
+        <h1 id="analysis-title">Análisis del partido</h1>
+      </div>
+
+      <div id="analysis-set-tabs" class="lg-set-tabs" role="tablist" aria-label="Sets"></div>
+
+      <div class="lg-analysis">
+        <!-- Left: video + rallies -->
+        <div class="lg-analysis__main">
+          <div id="analysis-video" class="lg-video lg-a-video" role="img" aria-label="Área de video del partido">
+            <span class="lg-video__icon" aria-hidden="true">▶</span>
+            <span class="lg-video__hint">Video del partido</span>
+          </div>
+
+          <section class="lg-panel lg-a-rallies" aria-labelledby="rallies-title">
+            <h2 id="rallies-title" class="lg-panel__title">Rallies registrados</h2>
+            <ol id="analysis-rallies" class="lg-rally-list"></ol>
+          </section>
+        </div>
+
+        <!-- Right: tagging controls -->
+        <div class="lg-analysis__side">
+          <section class="lg-panel lg-a-roster" aria-labelledby="roster-title">
+            <h2 id="roster-title" class="lg-panel__title">Jugadora</h2>
+            <div class="lg-roster" id="analysis-roster" role="group" aria-label="Jugadoras">
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>1</button>
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>2</button>
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>7</button>
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>8</button>
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>10</button>
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>12</button>
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>17</button>
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>20</button>
+              <button type="button" class="lg-token-btn lg-roster-btn" disabled>23</button>
+              <button type="button" class="lg-token-btn lg-roster-btn lg-token-btn--team" disabled>Equipo</button>
+            </div>
+          </section>
+
+          <section class="lg-panel lg-a-action" aria-labelledby="action-title">
+            <h2 id="action-title" class="lg-panel__title">Acción</h2>
+            <div class="lg-token-row lg-token-row--action" role="group" aria-label="Acciones">
+              <button type="button" class="lg-token-btn" data-action="S"><b>S</b><small>Saque</small></button>
+              <button type="button" class="lg-token-btn" data-action="R"><b>R</b><small>Recepción</small></button>
+              <button type="button" class="lg-token-btn" data-action="E"><b>E</b><small>Acomodo</small></button>
+              <button type="button" class="lg-token-btn" data-action="A"><b>A</b><small>Ataque</small></button>
+              <button type="button" class="lg-token-btn" data-action="D"><b>D</b><small>Defensa</small></button>
+              <button type="button" class="lg-token-btn" data-action="B"><b>B</b><small>Bloqueo</small></button>
+            </div>
+
+            <h2 class="lg-panel__title lg-panel__title--sub">Calificación</h2>
+            <div class="lg-token-row lg-token-row--grade" role="group" aria-label="Calificaciones">
+              <button type="button" class="lg-token-btn lg-grade lg-grade--perfect" data-grade="#"><b>#</b><small>Perfecta</small></button>
+              <button type="button" class="lg-token-btn lg-grade lg-grade--positive" data-grade="+"><b>+</b><small>Positiva</small></button>
+              <button type="button" class="lg-token-btn lg-grade lg-grade--regular" data-grade="!"><b>!</b><small>Regular</small></button>
+              <button type="button" class="lg-token-btn lg-grade lg-grade--error" data-grade="-"><b>−</b><small>Error</small></button>
+            </div>
+          </section>
+
+          <section class="lg-panel lg-a-chain" aria-labelledby="chain-title">
+            <h2 id="chain-title" class="lg-panel__title">Cadena del rally</h2>
+            <div class="lg-chain" aria-live="polite">
+              <code id="analysis-chain" class="lg-chain__text"></code>
+              <span class="lg-chain__caret" aria-hidden="true"></span>
+            </div>
+            <div class="lg-chain-actions">
+              <button type="button" id="analysis-undo" class="lg-btn-ghost">⌫ Quitar última acción</button>
+            </div>
+          </section>
+
+          <section class="lg-panel lg-a-outcome" aria-labelledby="outcome-title">
+            <h2 id="outcome-title" class="lg-panel__title">Resultado del rally</h2>
+            <div class="lg-outcomes" role="group" aria-label="Resultado del rally">
+              <button type="button" class="lg-outcome lg-outcome--won" data-outcome="won">Ganado</button>
+              <button type="button" class="lg-outcome lg-outcome--lost" data-outcome="lost">Perdido</button>
+              <button type="button" class="lg-outcome lg-outcome--re" data-outcome="won:re">Ganado · error rival</button>
+              <button type="button" class="lg-outcome lg-outcome--se" data-outcome="won:se">Ganado · saque rival</button>
+            </div>
+            <button type="button" id="analysis-send" class="btn-success lg-action-btn lg-send" disabled>✓ Enviar rally</button>
+          </section>
+
+          <a href="#review" class="lg-navlink lg-analysis-next lg-a-next">Ir a revisión →</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= REVIEW / EXPORT ================= -->
+    <section id="screen-review" class="lg-screen" data-screen="review" aria-labelledby="review-title">
+      <div class="page-header lg-page-header">
+        <a href="#analysis" class="back-link">← Análisis</a>
+        <h1 id="review-title">Revisión y exportación</h1>
+      </div>
+
+      <section class="lg-panel" aria-labelledby="log-title">
+        <h2 id="log-title" class="lg-panel__title">Vista previa del registro</h2>
+        <pre id="review-log" class="lg-log-preview" aria-label="Vista previa del archivo de registro">El registro aparecerá aquí cuando etiquetes rallies.</pre>
+      </section>
+
+      <div class="lg-review-actions">
+        <button type="button" id="review-export" class="btn-primary lg-action-btn">⬇ Exportar .txt</button>
+        <button type="button" id="review-import" class="btn-primary lg-action-btn">📄 Importar .txt</button>
+        <button type="button" class="btn-success lg-action-btn" disabled title="Disponible próximamente">📤 Enviar para revisión</button>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="lg-footer">
+    <p>Registro de Partido · Prototipo de interfaz (sin lógica).</p>
+  </footer>
+
+</div>
+
+<script src="datasets.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

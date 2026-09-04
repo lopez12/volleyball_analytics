@@ -1,0 +1,16 @@
+{
+  "team": "Nova",
+  "tournament": "Atlas Chapalita Cup",
+  "type": "tournament",
+  "roster": {
+    "2":  { "name": "Sari",        "position": "OH"   },
+    "5":  { "name": "Eva",        "position": "OH"   },
+    "7":  { "name": "Gio",         "position": "OPP" },
+    "8":  { "name": "Gis",         "position": "OH"  },
+    "11":  { "name": "Chacon",     "position": "MB"  },
+    "12": { "name": "Salcedo",     "position": "S"   },
+    "13": { "name": "Sayu",        "position": "MB"  },
+    "21": { "name": "Sandy",       "position": "OH"  },
+    "22": { "name": "Valencia",    "position": "MB"  }
+  }
+}
