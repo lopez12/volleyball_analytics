@@ -438,22 +438,45 @@
     return m ? m[1] : null;
   }
 
+  function videoOpenLink(url) {
+    return '<a class="lg-video__open" href="' + esc(url) +
+      '" target="_blank" rel="noopener noreferrer">Abrir en YouTube ↗</a>';
+  }
+
   function renderVideo() {
     var host = byId('analysis-video');
     if (!host) return;
     var set = currentSet();
-    var id = set && set.video_url ? extractYouTubeId(set.video_url) : null;
-    if (id) {
+    var url = set && set.video_url ? set.video_url : '';
+    var id = url ? extractYouTubeId(url) : null;
+    // YouTube rejects embeds with a null origin (error 153), which is what a
+    // file:// page sends. Only embed when served over http(s); otherwise link out.
+    var served = /^https?:$/.test(window.location.protocol);
+
+    if (id && served) {
       host.className = 'lg-video lg-a-video lg-video--embed';
+      var origin = encodeURIComponent(window.location.origin);
       host.innerHTML = '<iframe class="lg-video__frame" ' +
-        'src="https://www.youtube.com/embed/' + esc(id) + '?rel=0" ' +
+        'src="https://www.youtube.com/embed/' + esc(id) +
+        '?rel=0&modestbranding=1&playsinline=1&origin=' + origin + '" ' +
         'title="Video del set" allowfullscreen ' +
+        'referrerpolicy="strict-origin-when-cross-origin" ' +
         'allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>';
-    } else {
-      host.className = 'lg-video lg-a-video';
-      var hint = set && set.video_url ? 'Video no disponible' : 'Sin video para este set';
+      return;
+    }
+
+    host.className = 'lg-video lg-a-video';
+    if (id && !served) {
       host.innerHTML = '<span class="lg-video__icon" aria-hidden="true">▶</span>' +
-        '<span class="lg-video__hint">' + esc(hint) + '</span>';
+        '<span class="lg-video__hint">Abre el registro desde un servidor web (o GitHub Pages) para ver el video aquí.</span>' +
+        videoOpenLink(url);
+    } else if (url) {
+      host.innerHTML = '<span class="lg-video__icon" aria-hidden="true">▶</span>' +
+        '<span class="lg-video__hint">URL de video no reconocida.</span>' +
+        videoOpenLink(url);
+    } else {
+      host.innerHTML = '<span class="lg-video__icon" aria-hidden="true">▶</span>' +
+        '<span class="lg-video__hint">Sin video para este set</span>';
     }
   }
 
@@ -468,9 +491,6 @@
       return '<button type="button" class="lg-token-btn lg-roster-btn' + scls + '" data-player="' + esc(n) + '">' +
         '<b>' + esc(n) + '</b>' + hint + '</button>';
     }).join('');
-    var tscls = sel.player === 'team' ? ' is-selected' : '';
-    html += '<button type="button" class="lg-token-btn lg-roster-btn lg-token-btn--team' + tscls +
-      '" data-player="team">Sin número</button>';
     host.innerHTML = html;
   }
 
@@ -486,7 +506,7 @@
     if (!el || !analysis) return;
     var text = analysis.entry.tokens.join(' ');
     var pending = '';
-    if (sel.player) pending += (sel.player === 'team' ? '·' : sel.player);
+    if (sel.player) pending += sel.player;
     if (sel.action) pending += sel.action;
     if (pending) text += (text ? ' ' : '') + pending + '…';
     el.textContent = text;
@@ -554,7 +574,7 @@
   function selectPlayer(p) {
     resetSelection();
     sel.player = p;
-    if (p !== 'team') numBuf = p;
+    numBuf = p;
     renderRoster(); renderChain();
   }
 
@@ -568,15 +588,15 @@
   }
 
   function selectAction(a) {
-    if (sel.player !== 'team' && !isRosterNumber(sel.player)) return;   // need a valid player first
+    if (!isRosterNumber(sel.player)) return;   // need a valid player first
     sel.action = a;
     renderActions(); renderChain();
   }
 
   function selectGrade(g) {
     if (!sel.action) return;
-    if (sel.player !== 'team' && !isRosterNumber(sel.player)) return;
-    var token = (sel.player === 'team' ? '' : sel.player) + sel.action + g;
+    if (!isRosterNumber(sel.player)) return;
+    var token = sel.player + sel.action + g;
     analysis.entry.tokens.push(token);
     resetSelection();
     renderRoster(); renderActions(); renderChain(); updateSendState();
@@ -768,7 +788,6 @@
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     var k = e.key;
     if (k.length === 1 && k >= '0' && k <= '9') { playerDigit(k); e.preventDefault(); return; }
-    if (k === 't' || k === 'T') { selectPlayer('team'); e.preventDefault(); return; }
     if (k.length === 1 && 'SREADB'.indexOf(k.toUpperCase()) !== -1) { selectAction(k.toUpperCase()); e.preventDefault(); return; }
     if (k === '#' || k === '+' || k === '!' || k === '-') { selectGrade(k); e.preventDefault(); return; }
     if (k === 'Enter') { sendRally(); e.preventDefault(); return; }

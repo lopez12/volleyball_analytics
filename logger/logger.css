@@ -541,9 +541,26 @@
 
 .lg-video__hint {
   font-size: 0.82rem;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  letter-spacing: 0.3px;
   font-weight: 600;
+  text-align: center;
+  max-width: 32ch;
+}
+
+.lg-video__open {
+  margin-top: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.lg-video__open:hover {
+  background: rgba(255, 255, 255, 0.24);
 }
 
 /* Rally list */
