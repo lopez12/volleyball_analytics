@@ -232,6 +232,12 @@ def main():
     DATA_ROOT.mkdir(exist_ok=True)
     shutil.copy('styles.css', DOCS_ROOT / 'styles.css')
 
+    # Deploy the static Match Logger app to docs/logger/ (survives the rmtree
+    # above). Guarded so the build never fails when logger/ is absent.
+    if Path('logger').is_dir():
+        shutil.copytree('logger', DOCS_ROOT / 'logger', dirs_exist_ok=True)
+        print('  Copied: logger/ -> docs/logger/')
+
     today = date.today().strftime('%d/%m/%Y')
 
     datasets = discover_datasets()
