@@ -424,9 +424,16 @@
   function renderSetTabs() {
     var host = byId('analysis-set-tabs');
     if (!host || !analysis) return;
+    var many = analysis.sets.length > 1;
     var html = analysis.sets.map(function (st, i) {
-      var cls = 'lg-set-tab' + (i === analysis.currentSet ? ' is-active' : '');
-      return '<button type="button" class="' + cls + '" data-set="' + i + '">Set ' + (i + 1) + '</button>';
+      var active = i === analysis.currentSet ? ' is-active' : '';
+      var remove = many
+        ? '<button type="button" class="lg-set-tab__remove" data-del-set="' + i +
+          '" aria-label="Eliminar set ' + (i + 1) + '">✕</button>'
+        : '';
+      return '<span class="lg-set-tab-wrap' + active + '">' +
+        '<button type="button" class="lg-set-tab' + active + '" data-set="' + i + '">Set ' + (i + 1) + '</button>' +
+        remove + '</span>';
     }).join('');
     html += '<button type="button" id="analysis-add-set" class="lg-set-tab lg-set-tab--add">➕ Nuevo set</button>';
     host.innerHTML = html;
@@ -668,6 +675,20 @@
     saveDraftNow();
   }
 
+  function removeSet(idx) {
+    if (!analysis || analysis.sets.length <= 1) return;   // always keep one set
+    if (idx < 0 || idx >= analysis.sets.length) return;
+    var set = analysis.sets[idx];
+    if (set.rallies.length &&
+        !window.confirm('El Set ' + (idx + 1) + ' tiene ' + set.rallies.length +
+          ' rally(s). ¿Eliminarlo?')) return;
+    analysis.sets.splice(idx, 1);
+    if (analysis.currentSet > idx) analysis.currentSet -= 1;
+    if (analysis.currentSet >= analysis.sets.length) analysis.currentSet = analysis.sets.length - 1;
+    renderAnalysis();
+    saveDraftNow();
+  }
+
   // ---------------------------------------------------------------
   // Export / import / review — canonical .txt is the source of truth
   // ---------------------------------------------------------------
@@ -773,6 +794,7 @@
     if ((el = t.closest('[data-action]'))) { selectAction(el.getAttribute('data-action')); return; }
     if ((el = t.closest('[data-grade]'))) { selectGrade(el.getAttribute('data-grade')); return; }
     if ((el = t.closest('[data-outcome]'))) { selectOutcome(el.getAttribute('data-outcome')); return; }
+    if ((el = t.closest('[data-del-set]'))) { removeSet(parseInt(el.getAttribute('data-del-set'), 10)); return; }
     if ((el = t.closest('[data-set]'))) { switchSet(parseInt(el.getAttribute('data-set'), 10)); return; }
     if (t.closest('#analysis-add-set')) { addSet(); return; }
     if (t.closest('#analysis-undo')) { undoToken(); return; }

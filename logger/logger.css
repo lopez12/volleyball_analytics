@@ -799,6 +799,51 @@
   color: var(--primary);
 }
 
+/* Set tab with an inline remove (✕) control */
+.lg-set-tab-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.lg-set-tab-wrap.is-active {
+  color: #fff;
+}
+
+.lg-set-tab-wrap .lg-set-tab {
+  padding-right: 30px;
+}
+
+.lg-set-tab__remove {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 70%;
+  background: transparent;
+  color: inherit;
+  font-size: 0.62rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+/* Re-assert centering on hover/active so the global button:hover translate
+   (styles.css) can't shift the ✕ out of place. */
+.lg-set-tab__remove:hover,
+.lg-set-tab__remove:active {
+  transform: translateY(-50%);
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 /* ----- Interactive token / outcome buttons ----- */
 .lg-token-btn,
 .lg-outcome {
