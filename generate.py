@@ -18,6 +18,7 @@ Generated trees (git-ignored):
 Usage: python generate.py
 """
 
+import json
 import shutil
 import sqlite3
 import webbrowser
@@ -57,6 +58,57 @@ def discover_datasets():
             if (ds_dir / 'team.json').exists():
                 datasets.append((team_dir.name, ds_dir.name, ds_dir))
     return datasets
+
+
+def write_datasets_manifest(datasets):
+    """Write docs/datasets.json: a roster manifest for the Match Logger setup flow.
+
+    Emits one entry per discovered dataset with its committed team.json roster
+    (numbers, names, positions) so the logger can offer team/roster selection
+    without hitting the GitHub API. Contains no secrets - only data already
+    committed under teams/**/team.json. Refreshed on every build.
+
+    Args:
+        datasets (list[tuple[str, str, Path]]): (team_slug, tournament_slug,
+            dataset_dir) triples from discover_datasets().
+
+    Returns:
+        None
+    """
+    manifest = []
+    for team_slug, tournament_slug, ds_dir in datasets:
+        try:
+            cfg = json.loads((ds_dir / 'team.json').read_text(encoding='utf-8'))
+        except (OSError, ValueError) as exc:
+            print(f'  Skipped manifest entry ({team_slug}/{tournament_slug}): {exc}')
+            continue
+        manifest.append({
+            'team_slug': team_slug,
+            'tournament_slug': tournament_slug,
+            'team': cfg.get('team', ''),
+            'tournament': cfg.get('tournament', ''),
+            'type': cfg.get('type', 'tournament'),
+            'roster': cfg.get('roster', {}),
+        })
+    DOCS_ROOT.mkdir(exist_ok=True)
+    payload = json.dumps(manifest, ensure_ascii=False, indent=2)
+    (DOCS_ROOT / 'datasets.json').write_text(payload, encoding='utf-8')
+    print(f'  Generated: docs/datasets.json ({len(manifest)} dataset(s))')
+
+    # Also emit the manifest as a script-injected global. The logger loads this
+    # via a <script> tag so team selection works over file:// too (fetch is
+    # blocked there), not only when served/deployed.
+    js = 'window.LOGGER_DATASETS = ' + payload + ';\n'
+    logger_docs = DOCS_ROOT / 'logger'
+    if logger_docs.is_dir():
+        (logger_docs / 'datasets.js').write_text(js, encoding='utf-8')
+        print('  Generated: docs/logger/datasets.js')
+    # Keep the source placeholder current so opening logger/ directly also
+    # reflects newly added datasets (otherwise it goes stale).
+    logger_src = Path('logger')
+    if logger_src.is_dir():
+        (logger_src / 'datasets.js').write_text(js, encoding='utf-8')
+        print('  Generated: logger/datasets.js')
 
 
 def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
@@ -232,11 +284,20 @@ def main():
     DATA_ROOT.mkdir(exist_ok=True)
     shutil.copy('styles.css', DOCS_ROOT / 'styles.css')
 
+    # Deploy the static Match Logger app to docs/logger/ (survives the rmtree
+    # above). Guarded so the build never fails when logger/ is absent.
+    if Path('logger').is_dir():
+        shutil.copytree('logger', DOCS_ROOT / 'logger', dirs_exist_ok=True)
+        print('  Copied: logger/ -> docs/logger/')
+
     today = date.today().strftime('%d/%m/%Y')
 
     datasets = discover_datasets()
     if not datasets:
         print('No datasets found under teams/. Nothing to generate.')
+
+    # Publish the roster manifest consumed by the Match Logger setup flow.
+    write_datasets_manifest(datasets)
 
     summaries = []
     for team_slug, tournament_slug, ds_dir in datasets:
