@@ -1526,6 +1526,9 @@ def render_root_index_page(datasets, generated_date):
     <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Volleyball Analytics</h1>
     <p class="hub-subtitle">Selecciona un equipo y torneo · Generado: {generated_date}</p>
   </div>
+  <div style="text-align:center;margin-bottom:24px;">
+    <a href="logger/index.html" class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-weight:700;text-decoration:none;">🎬 Registro de Partido</a>
+  </div>
   {sections_html}
 </div>
 </body>
