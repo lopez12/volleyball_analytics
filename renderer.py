@@ -31,6 +31,30 @@ function toggleSection(el) {
 # ---------------------------------------------------------------------------
 
 
+def _format_iso_date(iso):
+    """Return 'DD/MM/YYYY' for an ISO 'YYYY-MM-DD' string, or '' when falsy/invalid."""
+    if not iso:
+        return ''
+    parts = str(iso).split('-')
+    if len(parts) != 3:
+        return ''
+    y, m, d = parts
+    return f'{d}/{m}/{y}'
+
+
+def _date_span(isos):
+    """Return a display span from ISO dates, or '' when none are present.
+
+    A single distinct date renders as 'DD/MM/YYYY'; a range renders as
+    'DD/MM/YYYY – DD/MM/YYYY' (earliest to latest).
+    """
+    valid = sorted(x for x in isos if x)
+    if not valid:
+        return ''
+    lo, hi = _format_iso_date(valid[0]), _format_iso_date(valid[-1])
+    return lo if lo == hi else f'{lo} – {hi}'
+
+
 def _back_link(href='index.html', label='← Inicio'):
     """Return a top-of-page back-link div."""
     return (
@@ -583,6 +607,8 @@ def render_match_page(match_title, parsed, generated_date):
             'youtube_urls' (list[str]): YouTube URLs for the match.
             '_phase_stats' (dict, optional): Pre-computed phase stats from DB.
             '_point_stats' (dict, optional): Pre-computed point stats from DB.
+            'match_date' (str, optional): ISO 'YYYY-MM-DD' play date; when
+                present a 'Fecha' line is shown above the build date.
         generated_date (str): Date string displayed in the header, 'DD/MM/YYYY'.
 
     Returns:
@@ -643,6 +669,9 @@ def render_match_page(match_title, parsed, generated_date):
     player_cards = ''.join(build_card_html(
         f'#{num}', data, rating) for num, data, rating in players_sorted)
 
+    match_date = _format_iso_date(parsed.get('match_date'))
+    date_line = f'<p>Fecha: {match_date}</p>\n    ' if match_date else ''
+
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -657,7 +686,7 @@ def render_match_page(match_title, parsed, generated_date):
   {_back_link('matches.html', '← Todos los partidos')}
   <div class="report-header">
     <h1>Reporte: {match_title}</h1>
-    <p>Generado: {generated_date}</p>
+    {date_line}<p>Generado: {generated_date}</p>
     {yt_html}
   </div>
 
@@ -931,6 +960,9 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 
     r_color = _rating_color(season_rating)
 
+    date_span = _date_span([m.get('match_date') for m in match_stats])
+    span_line = f'<p>Fechas: {date_span}</p>\n    ' if date_span else ''
+
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -946,7 +978,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
   {_back_link('players.html', '← Todos los jugadores')}
   <div class="report-header">
     <h1>{display_name} <span class="position-badge">{pos_label}</span></h1>
-    <p>{tournament_name} - Generado: {generated_date}</p>
+    {span_line}<p>{tournament_name} - Generado: {generated_date}</p>
   </div>
 
   {_section('Resumen de ' + comp_label, f'''<div class="general-stats">
@@ -1096,6 +1128,9 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
 
     r_color = _rating_color(season_rating)
 
+    date_span = _date_span([m.get('match_date') for m in team_stats])
+    span_line = f'<p>Fechas: {date_span}</p>\n    ' if date_span else ''
+
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -1111,7 +1146,7 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
   {_back_link()}
   <div class="report-header">
     <h1><span style="-webkit-text-fill-color:initial;">🏐</span> {team_name} - {tournament_name}</h1>
-    <p>Generado: {generated_date}</p>
+    {span_line}<p>Generado: {generated_date}</p>
   </div>
 
   {_section('Resumen de ' + comp_label, f'''<div class="general-stats">
@@ -1394,6 +1429,12 @@ def render_matches_page(matches, generated_date):
         else:
             sets_html = ''
 
+        match_date = _format_iso_date(m.get('match_date'))
+        date_html = (
+            f'<div class="metric-row"><span>Fecha</span><span>{match_date}</span></div>'
+            if match_date else ''
+        )
+
         cards.append(
             f'<div class="match-card">'
             f'<div class="card-header">'
@@ -1402,6 +1443,7 @@ def render_matches_page(matches, generated_date):
             f'</div>'
             f'<div class="card-body">'
             f'{badge_html}'
+            f'{date_html}'
             f'{sets_html}'
             f'<div class="metric-row"><span>Acciones totales</span><span>{tot}</span></div>'
             f'<div class="metric-row"><span>Eficacia Perfecta</span><span style="color:var(--success);">{pct}%</span></div>'

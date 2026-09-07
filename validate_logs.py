@@ -20,6 +20,8 @@ Rules:
                                            file that otherwise uses them.
     R6 (WARN)  ``@youtube:`` URL         - an invalid YouTube URL (link dropped).
     R7 (WARN)  unrecognized line/token   - text the parser silently ignores.
+    R8 (WARN)  ``@date:`` format         - a malformed/impossible match date
+                                           (dropped; expected ``YYYY-MM-DD``).
 
 Grammar is imported from ``analytics.py`` (single source of truth); it is never
 re-hard-coded here.
@@ -37,7 +39,9 @@ import re
 import sys
 from pathlib import Path
 
-from analytics import ACTIONS, GRADES, _RE_SET, _RE_YT, _parse_outcome_token
+from analytics import (
+    ACTIONS, GRADES, _RE_SET, _RE_YT, _parse_outcome_token, _parse_date_token,
+)
 
 TEAMS_ROOT = Path('teams')
 
@@ -131,6 +135,12 @@ def validate_file(txt_path, roster):
             if not _RE_SET.match(trimmed):
                 issues.append((line_no, ERROR, 'R3',
                                'malformed @set: line (expected "@set: V-R")', trimmed))
+            continue
+        if low.startswith('@date:'):
+            if _parse_date_token(trimmed) is None:
+                issues.append((line_no, WARN, 'R8',
+                               'malformed @date: line (expected "@date: YYYY-MM-DD")',
+                               trimmed))
             continue
 
         tokens = trimmed.split()

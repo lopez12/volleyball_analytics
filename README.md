@@ -153,6 +153,7 @@ The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much eac
 - `---` — set separator (resets rally context)
 - `@youtube: https://youtu.be/...` — links a YouTube video to this set
 - `@set: V-R` — final set score (team score first, rival second), e.g. `@set: 25-18`
+- `@date: YYYY-MM-DD` — optional match play date, e.g. `@date: 2026-05-17`; shown on match and season pages (distinct from the report build date)
 - `@won` / `@lost` / `@won:re` / `@won:se` — **rally outcome** (see below)
 
 ### Rally outcome tokens (grade integrity)

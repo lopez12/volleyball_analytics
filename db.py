@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS matches (
     stem           TEXT    UNIQUE NOT NULL,
     title          TEXT    NOT NULL,
     generated_date TEXT    NOT NULL,
+    match_date     TEXT,
     youtube_urls   TEXT    NOT NULL DEFAULT '[]'
 );
 
@@ -128,6 +129,23 @@ def _ensure_team_outcome_columns(conn):
             conn.execute(f"ALTER TABLE team_match_stats ADD COLUMN {col} INTEGER")
 
 
+def _ensure_match_date_column(conn):
+    """Add the nullable match_date column to matches if it is missing.
+
+    Fresh databases already have it from _SCHEMA; this only matters for
+    pre-existing databases regenerated in place. Idempotent no-op once present.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+
+    Returns:
+        None
+    """
+    existing = {row[1] for row in conn.execute("PRAGMA table_info(matches)")}
+    if 'match_date' not in existing:
+        conn.execute("ALTER TABLE matches ADD COLUMN match_date TEXT")
+
+
 def init_db(conn):
     """Create all database tables if they do not exist and enable foreign key enforcement.
 
@@ -150,6 +168,7 @@ def init_db(conn):
     conn.executescript(_SCHEMA)
     conn.execute("PRAGMA foreign_keys = ON")
     _ensure_team_outcome_columns(conn)
+    _ensure_match_date_column(conn)
     conn.commit()
 
 # ---------------------------------------------------------------------------
@@ -232,16 +251,18 @@ def upsert_match(conn, stem, title, parsed):
     from datetime import date
     generated_date = date.today().strftime('%d/%m/%Y')
     youtube_json = json.dumps(parsed['youtube_urls'])
+    match_date = parsed.get('match_date')
 
     # Upsert match row
     conn.execute(
-        """INSERT INTO matches (stem, title, generated_date, youtube_urls)
-           VALUES (?, ?, ?, ?)
+        """INSERT INTO matches (stem, title, generated_date, match_date, youtube_urls)
+           VALUES (?, ?, ?, ?, ?)
            ON CONFLICT(stem) DO UPDATE SET
                title = excluded.title,
                generated_date = excluded.generated_date,
+               match_date = excluded.match_date,
                youtube_urls = excluded.youtube_urls""",
-        (stem, title, generated_date, youtube_json),
+        (stem, title, generated_date, match_date, youtube_json),
     )
     match_id = conn.execute(
         "SELECT id FROM matches WHERE stem = ?", (stem,)
@@ -424,8 +445,9 @@ def get_match(conn, stem):
         stem (str): Filename stem, e.g. '01_alaba'.
 
     Returns:
-        dict with keys 'players', 'team', 'rallies' (empty list), 'youtube_urls';
-            or None if no match with the given stem exists in the database.
+        dict with keys 'players', 'team', 'rallies' (empty list), 'youtube_urls',
+            'match_date' (ISO 'YYYY-MM-DD' string or None); or None if no match
+            with the given stem exists in the database.
     """
     conn.row_factory = sqlite3.Row
     match_row = conn.execute(
@@ -436,6 +458,7 @@ def get_match(conn, stem):
 
     match_id = match_row['id']
     youtube_urls = json.loads(match_row['youtube_urls'])
+    match_date = match_row['match_date']
 
     team_row = conn.execute(
         "SELECT * FROM team_match_stats WHERE match_id = ?", (match_id,)
@@ -457,6 +480,7 @@ def get_match(conn, stem):
         'team': team,
         'rallies': [],
         'youtube_urls': youtube_urls,
+        'match_date': match_date,
     }
 
 
@@ -593,7 +617,7 @@ def get_all_matches_meta(conn):
     """
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        """SELECT m.id AS mid, m.stem, m.title, t.*
+        """SELECT m.id AS mid, m.stem, m.title, m.match_date, t.*
            FROM matches m
            JOIN team_match_stats t ON t.match_id = m.id
            ORDER BY m.stem"""
@@ -620,6 +644,7 @@ def get_all_matches_meta(conn):
             'perfect_pct': pct,
             'set_scores': set_scores,
             'result': result,
+            'match_date': row['match_date'],
         })
     return matches
 
@@ -647,7 +672,8 @@ def get_player_season_stats(conn, player_num):
     """
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        """SELECT p.*, m.title AS match_title, m.stem AS match_stem
+        """SELECT p.*, m.title AS match_title, m.stem AS match_stem,
+                  m.match_date AS match_date
            FROM player_match_stats p
            JOIN matches m ON m.id = p.match_id
            WHERE p.player_num = ?
@@ -671,7 +697,8 @@ def get_team_season_stats(conn):
     """
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        """SELECT t.*, m.title AS match_title, m.stem AS match_stem, m.id AS mid
+        """SELECT t.*, m.title AS match_title, m.stem AS match_stem, m.id AS mid,
+                  m.match_date AS match_date
            FROM team_match_stats t
            JOIN matches m ON m.id = t.match_id
            ORDER BY m.id ASC"""
