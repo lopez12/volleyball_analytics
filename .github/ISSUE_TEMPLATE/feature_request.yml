@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose a new report, page, CLI capability, or enhancement.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Describe the problem first, then the proposed change.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What need or gap does this address?
+      placeholder: There is no way to see...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: The report, page, or CLI behavior you would like.
+      placeholder: Add a per-set breakdown to the match page that...
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which layer does this touch?
+      description: Best guess is fine.
+      multiple: true
+      options:
+        - Log grammar (new/changed token)
+        - Engine (analytics.py)
+        - Persistence (db.py)
+        - Rendering / HTML (renderer.py)
+        - Author UI (logger/)
+        - Tooling / CI
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: compat
+    attributes:
+      label: Backward-compatibility impact
+      description: Would existing logs, datasets, or generated pages change? Ideally additive changes keep old data rendering unchanged.
+      placeholder: Existing logs without the new token render exactly as today because...
+    validations:
+      required: false

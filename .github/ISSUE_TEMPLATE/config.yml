@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: How do I write a match log? (grammar reference)
+    url: https://github.com/lopez12/volleyball_analytics/blob/main/README.md#match-log-format
+    about: Read the match-log grammar (play tokens, @set:, outcome tokens) before opening a data issue.
+  - name: Validating logs locally (QA gate)
+    url: https://github.com/lopez12/volleyball_analytics/blob/main/README.md#validating-logs-qa-gate
+    about: How to run python validate_logs.py before you push a match-data change.
