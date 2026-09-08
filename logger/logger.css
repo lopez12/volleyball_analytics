@@ -137,6 +137,25 @@
   transform: none;
 }
 
+/* Cross-page link back to the reports hub (distinct from the SPA hash nav). */
+.lg-reports-link {
+  margin: 0 0 18px;
+}
+
+.lg-reports-link a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.lg-reports-link a:hover {
+  text-decoration: underline;
+}
+
 /* ----- Drafts list ----- */
 .lg-draft-list {
   list-style: none;
