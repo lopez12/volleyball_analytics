@@ -23,8 +23,8 @@ body:
     id: dataset
     attributes:
       label: Dataset
-      description: The `team/dataset` slug, e.g. `vodkas/atlas-chapalita-cup-2026`.
-      placeholder: vodkas/atlas-chapalita-cup-2026
+      description: The `team/dataset` slug, e.g. `nova/atlas-chapalita-cup-2026`.
+      placeholder: nova/atlas-chapalita-cup-2026
     validations:
       required: true
   - type: input

@@ -12,15 +12,15 @@ body:
     attributes:
       label: Problem / motivation
       description: What need or gap does this address?
-      placeholder: There is no way to see...
+      placeholder: Add the problem or motivation here...
     validations:
       required: true
   - type: textarea
     id: proposal
     attributes:
       label: Proposed change
-      description: The report, page, or CLI behavior you would like.
-      placeholder: Add a per-set breakdown to the match page that...
+      description: Describe the proposed change in detail.
+      placeholder: Add the details of the proposed change here...
     validations:
       required: true
   - type: dropdown
@@ -33,7 +33,7 @@ body:
         - Log grammar (new/changed token)
         - Engine (analytics.py)
         - Persistence (db.py)
-        - Rendering / HTML (renderer.py)
+        - Rendering / HTML
         - Author UI (logger/)
         - Tooling / CI
         - Not sure
@@ -43,7 +43,7 @@ body:
     id: compat
     attributes:
       label: Backward-compatibility impact
-      description: Would existing logs, datasets, or generated pages change? Ideally additive changes keep old data rendering unchanged.
-      placeholder: Existing logs without the new token render exactly as today because...
+      description: Is there something needed to be considered for backward compatibility?
+      placeholder: Add any notes about backward compatibility here...
     validations:
       required: false

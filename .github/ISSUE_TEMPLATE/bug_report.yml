@@ -12,31 +12,32 @@ body:
     attributes:
       label: Summary
       description: A short, clear description of the problem.
-      placeholder: The player-season page shows the wrong kill count for...
+      placeholder: Add the summary of the bug here...
     validations:
       required: true
   - type: input
     id: dataset
     attributes:
       label: Affected dataset
-      description: The `team/dataset` slug, e.g. `nova/amistosos` or `vodkas/atlas-chapalita-cup-2026`. Leave blank if not dataset-specific.
-      placeholder: nova/amistosos
+      description: If there is an affected dataset, specify it here. (optional)
+      placeholder: Reference the affected dataset here...
     validations:
       required: false
   - type: input
     id: page
     attributes:
       label: Affected match / page
-      description: The match file or page, e.g. `01_venus.txt` or the team-season page. Leave blank if not applicable.
-      placeholder: 01_venus.txt
+      description: If there is an affected match file or page, specify it here. (optional)
+      placeholder: Reference the affected match file or page here...
     validations:
       required: false
   - type: textarea
     id: repro
     attributes:
       label: Steps to reproduce
-      description: What did you do, in order?
+      description: What are the steps to reproduce the bug?
       placeholder: |
+        Example:
         1. Run `python generate.py`
         2. Open docs/nova/amistosos/player_7.html
         3. Look at the "Ataque" row
@@ -46,7 +47,7 @@ body:
     id: expected
     attributes:
       label: Expected behavior
-      placeholder: The attack efficiency should be...
+      placeholder: The expected behavior is...
     validations:
       required: true
   - type: textarea
