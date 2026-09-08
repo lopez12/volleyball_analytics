@@ -24,6 +24,7 @@
   var RE_YT = /^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i;   // R6
   var RE_OUTCOME = /^@(won|lost)(?::(re|se))?$/i;    // mirrors analytics._parse_outcome_token
   var RE_PLAY = /^(\d*)([SREADB])([#+!\-])$/i;       // mirrors analytics._RE_ANY
+  var RE_TS = /^@t:(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?$/i;   // mirrors analytics._RE_TIMESTAMP
   var DATASET_CANDIDATES = ['../datasets.json', 'datasets.json'];
   var DB_NAME = 'registro-partido';
   var DB_VERSION = 1;
@@ -40,6 +41,12 @@
   var sel = { player: null, action: null };  // transient entry-machine selection
   var numBuf = '';         // keyboard digit accumulator for player numbers
   var saveTimer = null;
+
+  // YouTube IFrame Player API state (Brief 4/6). The plain <iframe> is upgraded
+  // to a controllable player so rally timestamps can be captured (getCurrentTime)
+  // and, later, sought (seekTo). All access goes through `videoController`.
+  var ytApiState = { loading: false, callbacks: [] };
+  var video = { player: null, mountedId: null, ready: false };
 
   // ---------------------------------------------------------------
   // Small helpers
@@ -373,7 +380,7 @@
   // straight to the canonical .txt grammar, so the log stays valid at
   // all times (validate_logs.py roster/@set/@youtube/outcome rules).
   // ---------------------------------------------------------------
-  function emptyEntry() { return { tokens: [], outcome: null }; }
+  function emptyEntry() { return { tokens: [], outcome: null, start: null, end: null }; }
 
   function newAnalysis(s) {
     var sets = (s.sets || []).map(function (st) {
@@ -472,28 +479,109 @@
       '" target="_blank" rel="noopener noreferrer">Abrir en YouTube ↗</a>';
   }
 
+  // ---------------------------------------------------------------
+  // Video controller (provider-agnostic seam over the YouTube IFrame API).
+  // Playback/capture logic calls only these methods, never YT.* directly,
+  // so a different provider could be dropped in later (Brief 6 R2).
+  // ---------------------------------------------------------------
+  var videoController = {
+    isReady: function () { return !!(video.player && video.ready); },
+    getCurrentTime: function () {
+      if (!this.isReady()) return null;
+      try { return video.player.getCurrentTime(); } catch (e) { return null; }
+    },
+    seekTo: function (seconds) {
+      if (!this.isReady()) return;
+      try { video.player.seekTo(seconds, true); } catch (e) {}
+    },
+    play: function () {
+      if (!this.isReady()) return;
+      try { video.player.playVideo(); } catch (e) {}
+    },
+    pause: function () {
+      if (!this.isReady()) return;
+      try { video.player.pauseVideo(); } catch (e) {}
+    }
+  };
+
+  function ytApiIsReady() { return !!(window.YT && window.YT.Player); }
+
+  // Load the IFrame API script once; fan out to any queued callbacks on ready.
+  function ensureYtApi(cb) {
+    if (ytApiIsReady()) { cb(); return; }
+    ytApiState.callbacks.push(cb);
+    if (ytApiState.loading) return;
+    ytApiState.loading = true;
+    var prev = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = function () {
+      if (typeof prev === 'function') { try { prev(); } catch (e) {} }
+      var cbs = ytApiState.callbacks.slice();
+      ytApiState.callbacks = [];
+      cbs.forEach(function (f) { try { f(); } catch (e) {} });
+    };
+    var tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+  }
+
+  function destroyPlayer() {
+    if (video.player) { try { video.player.destroy(); } catch (e) {} }
+    video.player = null;
+    video.mountedId = null;
+    video.ready = false;
+  }
+
+  function mountPlayer(id) {
+    ensureYtApi(function () {
+      if (!ytApiIsReady()) return;
+      var target = byId('lg-yt-player');
+      if (!target) return;   // video area was re-rendered away before we mounted
+      destroyPlayer();
+      video.mountedId = id;
+      video.player = new YT.Player('lg-yt-player', {
+        videoId: id,
+        playerVars: { rel: 0, modestbranding: 1, playsinline: 1, origin: window.location.origin },
+        events: {
+          onReady: function () { video.ready = true; }
+        }
+      });
+    });
+  }
+
+  // Current set's embeddable YouTube id, or null when there is no usable video.
+  function analysisVideoId() {
+    var set = currentSet();
+    var url = set && set.video_url ? set.video_url : '';
+    return url ? extractYouTubeId(url) : null;
+  }
+
+  // The controllable player only works over http(s) (YT rejects a null origin).
+  function videoEmbedActive() {
+    return !!analysisVideoId() && /^https?:$/.test(window.location.protocol);
+  }
+
   function renderVideo() {
     var host = byId('analysis-video');
     if (!host) return;
     var set = currentSet();
     var url = set && set.video_url ? set.video_url : '';
     var id = url ? extractYouTubeId(url) : null;
-    // YouTube rejects embeds with a null origin (error 153), which is what a
-    // file:// page sends. Only embed when served over http(s); otherwise link out.
     var served = /^https?:$/.test(window.location.protocol);
 
     if (id && served) {
+      // Reuse the live player when the set video is unchanged, so routine
+      // re-renders don't tear down playback or lose the current time.
+      if (video.player && video.mountedId === id && byId('lg-yt-player')) {
+        host.className = 'lg-video lg-a-video lg-video--embed';
+        return;
+      }
       host.className = 'lg-video lg-a-video lg-video--embed';
-      var origin = encodeURIComponent(window.location.origin);
-      host.innerHTML = '<iframe class="lg-video__frame" ' +
-        'src="https://www.youtube.com/embed/' + esc(id) +
-        '?rel=0&modestbranding=1&playsinline=1&origin=' + origin + '" ' +
-        'title="Video del set" allowfullscreen ' +
-        'referrerpolicy="strict-origin-when-cross-origin" ' +
-        'allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>';
+      host.innerHTML = '<div id="lg-yt-player" class="lg-video__frame"></div>';
+      mountPlayer(id);
       return;
     }
 
+    destroyPlayer();   // leaving embed mode: release any live player
     host.className = 'lg-video lg-a-video';
     if (id && !served) {
       host.innerHTML = '<span class="lg-video__icon" aria-hidden="true">▶</span>' +
@@ -507,6 +595,70 @@
       host.innerHTML = '<span class="lg-video__icon" aria-hidden="true">▶</span>' +
         '<span class="lg-video__hint">Sin video para este set</span>';
     }
+  }
+
+  // ---------------------------------------------------------------
+  // Timestamp capture (Brief 4): a rally's start is stamped when its entry
+  // begins (or via "Marcar inicio"); its end is stamped at "Enviar rally".
+  // ---------------------------------------------------------------
+  function nowVideoTime() {
+    var t = videoController.getCurrentTime();
+    return (typeof t === 'number' && isFinite(t) && t >= 0) ? t : null;
+  }
+
+  // Serialize seconds for the '@t:' token: whole seconds drop the decimal.
+  function fmtSecs(sec) {
+    var n = Math.round(sec * 10) / 10;
+    return String(n);
+  }
+
+  function tsToken(start, end) {
+    return '@t:' + fmtSecs(start) + (end != null ? '-' + fmtSecs(end) : '');
+  }
+
+  // Human-friendly mm:ss for on-screen capture readouts.
+  function fmtClock(sec) {
+    if (sec == null) return '—';
+    var s = Math.max(0, Math.round(sec));
+    var m = Math.floor(s / 60);
+    var r = s % 60;
+    return m + ':' + (r < 10 ? '0' : '') + r;
+  }
+
+  // Stamp the in-progress rally's start once, when it first gains content.
+  function markStartIfNeeded() {
+    if (!analysis || analysis.entry.start != null) return;
+    var t = nowVideoTime();
+    if (t != null) analysis.entry.start = t;
+  }
+
+  // One button drives the pre-analysis pass: the first press stamps the rally's
+  // start, the next stamps its end (both re-markable). A segmenter can mark
+  // start/end + result with no plays, leaving the grading for a later pass.
+  function markToggle() {
+    if (!analysis) return;
+    var t = nowVideoTime();
+    if (t == null) return;
+    if (analysis.entry.start == null) analysis.entry.start = t;
+    else analysis.entry.end = t;
+    renderCapture();
+    updateSendState();
+    saveDraftSoon();
+  }
+
+  function renderCapture() {
+    var bar = byId('analysis-capture');
+    if (!bar) return;
+    var active = videoEmbedActive();
+    bar.hidden = !active;
+    if (!active) return;
+    var e = analysis ? analysis.entry : null;
+    var s = byId('analysis-cap-start');
+    var f = byId('analysis-cap-end');
+    if (s) s.textContent = fmtClock(e ? e.start : null);
+    if (f) f.textContent = fmtClock(e ? e.end : null);
+    var btn = byId('analysis-mark');
+    if (btn) btn.textContent = (e && e.start != null) ? '⏱ Marcar fin' : '⏱ Marcar inicio';
   }
 
   function renderRoster() {
@@ -568,9 +720,13 @@
         badge = '<span class="result-badge ' + cls + ' lg-rally__outcome">' +
           esc(outcomeLabel(r.outcome)) + '</span>';
       }
+      var time = (r.start != null)
+        ? '<span class="lg-rally__time" title="Marca de tiempo del video">⏱ ' +
+          esc(fmtClock(r.start)) + (r.end != null ? '–' + esc(fmtClock(r.end)) : '') + '</span>'
+        : '';
       return '<li class="lg-rally" data-idx="' + i + '">' +
         '<span class="lg-rally__idx">' + (i + 1) + '</span>' +
-        '<code class="lg-rally__chain">' + esc(chain) + '</code>' + badge +
+        '<code class="lg-rally__chain">' + esc(chain) + '</code>' + badge + time +
         '<div class="lg-rally__actions">' +
           '<button type="button" class="lg-rally__edit" data-edit="' + i + '" aria-label="Editar rally ' + (i + 1) + '">✎</button>' +
           '<button type="button" class="lg-rally__del" data-del="' + i + '" aria-label="Eliminar rally ' + (i + 1) + '">🗑</button>' +
@@ -582,7 +738,7 @@
     var btn = byId('analysis-send');
     if (!btn || !analysis) return;
     var e = analysis.entry;
-    btn.disabled = !(e.tokens.length || e.outcome);
+    btn.disabled = !(e.tokens.length || e.outcome || e.start != null);
   }
 
   function renderAnalysis() {
@@ -591,6 +747,7 @@
     if (!analysis) return;
     renderSetTabs();
     renderVideo();
+    renderCapture();
     renderRoster();
     renderActions();
     renderChain();
@@ -626,9 +783,10 @@
     if (!sel.action) return;
     if (!isRosterNumber(sel.player)) return;
     var token = sel.player + sel.action + g;
+    markStartIfNeeded();
     analysis.entry.tokens.push(token);
     resetSelection();
-    renderRoster(); renderActions(); renderChain(); updateSendState();
+    renderRoster(); renderActions(); renderChain(); updateSendState(); renderCapture();
     saveDraftSoon();
   }
 
@@ -644,19 +802,23 @@
     if (!analysis) return;
     var cur = outcomeToCode(analysis.entry.outcome);
     analysis.entry.outcome = (cur === code) ? null : codeToOutcome(code);   // replace-on-reselect / toggle-off
-    renderOutcomes(); updateSendState();
+    renderOutcomes(); updateSendState(); renderCapture();
     saveDraftSoon();
   }
 
   function sendRally() {
     if (!analysis) return;
     var e = analysis.entry;
-    if (!e.tokens.length && !e.outcome) return;   // touchless allowed only with an outcome
-    currentSet().rallies.push({ tokens: e.tokens.slice(), outcome: e.outcome });
+    if (!e.tokens.length && !e.outcome && e.start == null) return;   // need plays, an outcome, or a marked segment
+    var end = (e.end != null) ? e.end : nowVideoTime();   // keep an explicitly marked end
+    currentSet().rallies.push({
+      tokens: e.tokens.slice(), outcome: e.outcome,
+      start: e.start, end: end
+    });
     analysis.entry = emptyEntry();
     resetSelection();
     renderRoster(); renderActions(); renderChain(); renderOutcomes();
-    renderRallies(); updateSendState();
+    renderRallies(); updateSendState(); renderCapture();
     saveDraftNow();
   }
 
@@ -674,9 +836,15 @@
     var r = set.rallies.splice(idx, 1)[0];
     // Don't lose an in-progress rally: commit it before loading the edited one.
     if (analysis.entry.tokens.length || analysis.entry.outcome) {
-      set.rallies.push({ tokens: analysis.entry.tokens.slice(), outcome: analysis.entry.outcome });
+      set.rallies.push({
+        tokens: analysis.entry.tokens.slice(), outcome: analysis.entry.outcome,
+        start: analysis.entry.start, end: analysis.entry.end
+      });
     }
-    analysis.entry = { tokens: r.tokens.slice(), outcome: r.outcome };
+    analysis.entry = {
+      tokens: r.tokens.slice(), outcome: r.outcome,
+      start: (r.start != null ? r.start : null), end: (r.end != null ? r.end : null)
+    };
     resetSelection();
     renderAnalysis();
     saveDraftNow();
@@ -693,7 +861,7 @@
   function switchSet(idx) {
     if (!analysis || idx < 0 || idx >= analysis.sets.length) return;
     analysis.currentSet = idx;
-    renderSetTabs(); renderVideo(); renderRallies();
+    renderSetTabs(); renderVideo(); renderCapture(); renderRallies();
     saveDraftNow();
   }
 
@@ -723,6 +891,7 @@
       set.rallies.forEach(function (r) {
         var parts = r.tokens.slice();
         if (r.outcome) parts.push(outcomeToken(r.outcome));
+        if (r.start != null) parts.push(tsToken(r.start, r.end));
         lines.push(parts.join(' '));
       });
       return lines.join('\n');
@@ -772,13 +941,17 @@
       }
       var ms = /^@set:\s*(\d+)-(\d+)$/i.exec(line);
       if (ms) { cur.score = parseInt(ms[1], 10) + '-' + parseInt(ms[2], 10); return; }
-      var plays = [], outcome = null;
+      var plays = [], outcome = null, start = null, end = null;
       line.split(/\s+/).forEach(function (tok) {
+        var mt = RE_TS.exec(tok);
+        if (mt) { if (start == null) { start = parseFloat(mt[1]); end = (mt[2] != null ? parseFloat(mt[2]) : null); } return; }
         var oc = parseOutcomeToken(tok);
         if (oc) { if (!outcome) outcome = oc; return; }
         if (RE_PLAY.test(tok)) plays.push(tok.toUpperCase());
       });
-      if (plays.length || outcome) cur.rallies.push({ tokens: plays, outcome: outcome });
+      if (plays.length || outcome || start != null) {
+        cur.rallies.push({ tokens: plays, outcome: outcome, start: start, end: end });
+      }
     });
     sets.push(cur);
     return sets;
@@ -824,6 +997,7 @@
     if ((el = t.closest('[data-del-set]'))) { removeSet(parseInt(el.getAttribute('data-del-set'), 10)); return; }
     if ((el = t.closest('[data-set]'))) { switchSet(parseInt(el.getAttribute('data-set'), 10)); return; }
     if (t.closest('#analysis-add-set')) { addSet(); return; }
+    if (t.closest('#analysis-mark')) { markToggle(); return; }
     if (t.closest('#analysis-undo')) { undoToken(); return; }
     if (t.closest('#analysis-send')) { sendRally(); return; }
     if ((el = t.closest('[data-edit]'))) { editRally(parseInt(el.getAttribute('data-edit'), 10)); return; }

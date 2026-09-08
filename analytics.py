@@ -156,6 +156,30 @@ def _parse_outcome_token(token):
         cause = None
     return {'result': result, 'cause': cause}
 
+# Optional, per-rally video timestamp (Phase 4). A trailing metadata token
+# '@t:<start>[-<end>]' giving seconds (int or decimal) into that set's video,
+# consumed as rally timing rather than a played token. Absence is never an
+# error; a malformed token is ignored here (validate_logs.py WARNs on it).
+_RE_TIMESTAMP = re.compile(r'^@t:(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?$', re.IGNORECASE)
+
+
+def _parse_timestamp_token(token):
+    """Parse a per-rally ``@t:<start>[-<end>]`` timestamp token, or return None.
+
+    Args:
+        token (str): A single whitespace-delimited token from a rally line.
+
+    Returns:
+        dict | None: ``{'start': float, 'end': float | None}`` in seconds when
+            the token is well-formed, otherwise None. ``end`` is None when only
+            a start time is given (e.g. ``@t:12``).
+    """
+    m = _RE_TIMESTAMP.match(token)
+    if not m:
+        return None
+    end = float(m.group(2)) if m.group(2) is not None else None
+    return {'start': float(m.group(1)), 'end': end}
+
 # ---------------------------------------------------------------------------
 # Data helpers
 # ---------------------------------------------------------------------------
@@ -245,6 +269,13 @@ def parse_log(log_string):
                                                      A line consisting solely of
                                                      an outcome token is a valid
                                                      "touchless" rally.
+        - Rally timestamp: '@t:<start>[-<end>]'      Optional, per-rally video
+                                                     time in seconds (int or
+                                                     decimal) into that set's
+                                                     video, e.g. '@t:3-9' or
+                                                     '@t:12'. Consumed as rally
+                                                     timing, not a played token;
+                                                     absence is never an error.
     Tokens that match neither the player nor team pattern are silently ignored.
     Player tokens are recorded in both the individual player's stats and the team stats.
     Team-only tokens are recorded only in team stats.
@@ -268,6 +299,11 @@ def parse_log(log_string):
                 're'|'se'|None}. 'result' is None when the rally carried no
                 explicit outcome token (heuristic-fallback marker). 'se' implies
                 a gifted serve-error point and is a subset of 're'.
+            'rally_timestamps' (list): One entry per rally in 'rallies' (same
+                order/length): {'start': float, 'end': float|None} in seconds
+                when the rally carried an '@t:' token, else None. A rally that
+                carried only a timestamp (no plays or outcome) is retained so
+                its timing stays aligned (a pre-analysis segment).
             'points' (dict): Team-level earned/gifted point summary derived from
                 the explicit outcomes: 'won', 'won_kill', 'won_rival_error',
                 'won_serve_error', 'lost'.
@@ -282,6 +318,7 @@ def parse_log(log_string):
     lines = log_string.strip().splitlines()
     rallies = []
     rally_outcomes = []
+    rally_timestamps = []
     players = {}
     youtube_urls = []
     set_scores = []
@@ -313,8 +350,17 @@ def parse_log(log_string):
         rally_tokens = []
         outcome = {'result': None, 'cause': None}
         outcome_seen = False
+        timestamp = None
+        ts_seen = False
 
         for token in tokens:
+            parsed_ts = _parse_timestamp_token(token)
+            if parsed_ts is not None:
+                # First timestamp token wins; duplicates on the line are ignored.
+                if not ts_seen:
+                    timestamp = parsed_ts
+                    ts_seen = True
+                continue
             parsed_outcome = _parse_outcome_token(token)
             if parsed_outcome is not None:
                 # First outcome token wins; duplicates on the same line are ignored.
@@ -338,10 +384,12 @@ def parse_log(log_string):
                     rally_tokens.append(token)
 
         # Keep the rally when it has playable tokens OR carried an explicit
-        # outcome (a touchless rally, e.g. an opponent serve fault '@won:se').
-        if rally_tokens or outcome_seen:
+        # outcome (a touchless rally, e.g. an opponent serve fault '@won:se') OR
+        # only a timestamp (a pre-analysis segment to be tagged later, Phase 4).
+        if rally_tokens or outcome_seen or ts_seen:
             rallies.append(rally_tokens)
             rally_outcomes.append(outcome)
+            rally_timestamps.append(timestamp)
 
     points = calculate_earned_points(rally_outcomes)
     return {
@@ -349,6 +397,7 @@ def parse_log(log_string):
         'team': team,
         'rallies': rallies,
         'rally_outcomes': rally_outcomes,
+        'rally_timestamps': rally_timestamps,
         'points': points,
         'youtube_urls': youtube_urls,
         'set_scores': set_scores,
