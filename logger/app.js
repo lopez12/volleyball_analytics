@@ -82,6 +82,18 @@
     return (n < 10 ? '0' : '') + n;
   }
 
+  // Return 'YYYY-MM-DD' for a well-formed, real calendar date, else null.
+  function normalizeDate(str) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((str || '').trim());
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], da = +m[3];
+    var dt = new Date(Date.UTC(y, mo - 1, da));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== da) {
+      return null;
+    }
+    return m[1] + '-' + m[2] + '-' + m[3];
+  }
+
   // ---------------------------------------------------------------
   // Navigation (Brief 1 behaviour, retained)
   // ---------------------------------------------------------------
@@ -121,6 +133,7 @@
       datasetKey: '',
       opponent: '',
       order: '',
+      date: '',
       sets: [emptySet()]
     };
   }
@@ -129,6 +142,7 @@
     if (!d.id) d.id = newDraft().id;
     if (!Array.isArray(d.sets)) d.sets = [emptySet()];
     if (typeof d.datasetKey !== 'string') d.datasetKey = '';
+    if (typeof d.date !== 'string') d.date = '';
     return d;
   }
 
@@ -279,12 +293,18 @@
     if (!/^\d{1,2}$/.test(order) || parseInt(order, 10) < 1) {
       return { ok: false, error: 'Número de partido inválido (1 o 2 dígitos, ej. 03).' };
     }
+    var matchDate = null;
+    var dateRaw = (d.date || '').trim();
+    if (dateRaw) {
+      matchDate = normalizeDate(dateRaw);      // optional; must be a real ISO date
+      if (!matchDate) return { ok: false, error: 'Fecha inválida (usa formato AAAA-MM-DD).' };
+    }
     var slug = slugify(opponent);
     if (!slug) return { ok: false, error: 'El nombre del rival no es válido.' };
     var nn = pad2(order);
     var stem = nn + '_' + slug;
     return {
-      ok: true, order_index: nn, opponent: opponent,
+      ok: true, order_index: nn, opponent: opponent, date: matchDate,
       filename: stem + '.txt', title: teamName + ' vs ' + titleFromSlug(slug)
     };
   }
@@ -337,6 +357,7 @@
       roster: v.team.roster,
       opponent: v.match.opponent,
       order_index: v.match.order_index,
+      date: v.match.date,
       filename: v.match.filename,
       title: v.match.title,
       sets: v.sets.sets
@@ -359,12 +380,13 @@
       return { score: st.score || null, video_url: st.video_url || null, rallies: [] };
     });
     if (!sets.length) sets.push({ score: null, video_url: null, rallies: [] });
-    return { sets: sets, currentSet: 0, entry: emptyEntry() };
+    return { sets: sets, currentSet: 0, entry: emptyEntry(), date: s.date || null };
   }
 
   // Refresh per-set metadata from a (re)built session without losing rallies.
   function syncAnalysisMeta(s) {
     if (!analysis) return;
+    analysis.date = s.date || null;
     (s.sets || []).forEach(function (st, i) {
       if (analysis.sets[i]) {
         analysis.sets[i].score = st.score || null;
@@ -694,7 +716,7 @@
   // ---------------------------------------------------------------
   function buildLog(a) {
     if (!a) return '';
-    return a.sets.map(function (set) {
+    var body = a.sets.map(function (set) {
       var lines = [];
       if (set.score) lines.push('@set: ' + set.score);
       if (set.video_url) lines.push('@youtube: ' + set.video_url);
@@ -705,6 +727,8 @@
       });
       return lines.join('\n');
     }).join('\n---\n');
+    // Match-level date header (optional) precedes the first set block.
+    return a.date ? ('@date: ' + a.date + '\n' + body) : body;
   }
 
   function renderReview() {
@@ -770,8 +794,11 @@
     var reader = new FileReader();
     reader.onload = function () {
       ensureAnalysis();
-      analysis.sets = parseLogToSets(String(reader.result || ''));
+      var text = String(reader.result || '');
+      analysis.sets = parseLogToSets(text);
       if (!analysis.sets.length) analysis.sets = newAnalysis(session).sets;
+      var dm = /^@date:\s*(\d{4}-\d{2}-\d{2})\s*$/im.exec(text);
+      analysis.date = dm ? normalizeDate(dm[1]) : null;
       analysis.currentSet = 0;
       analysis.entry = emptyEntry();
       resetSelection();
@@ -872,6 +899,7 @@
     }
     byId('setup-opponent').value = draft.opponent || '';
     byId('setup-order').value = draft.order || '';
+    byId('setup-date').value = draft.date || '';
     updateManualVisibility(draft.datasetKey);
     renderSets();
     refresh();
@@ -881,6 +909,7 @@
     draft.datasetKey = byId('setup-dataset').value;
     draft.opponent = byId('setup-opponent').value;
     draft.order = byId('setup-order').value;
+    draft.date = byId('setup-date').value;
     draft.sets = [];
     var rows = document.querySelectorAll('#setup-sets .lg-set');
     for (var i = 0; i < rows.length; i++) {

@@ -6,6 +6,7 @@ calculations. No knowledge of HTML or SQLite.
 
 import json
 import re
+from datetime import date as _date
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -97,6 +98,29 @@ _RE_ANY = re.compile(r'^(\d*)([SREADB])([#+!\-])$')
 _RE_PHASE = re.compile(r'^(\d+)([SREADB])([#+!\-])$|^([SREADB])([#+!\-])$')
 _RE_YT = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/')
 _RE_SET = re.compile(r'^@set:\s*(\d+)-(\d+)$', re.IGNORECASE)
+# Optional, match-level play date. ISO 8601 only; validity is confirmed against
+# the calendar in _parse_date_token (e.g. '2026-13-40' matches the shape but is
+# rejected). Absence is never an error.
+_RE_DATE = re.compile(r'^@date:\s*(\d{4})-(\d{2})-(\d{2})$', re.IGNORECASE)
+
+
+def _parse_date_token(trimmed):
+    """Return the ISO date string for a valid ``@date:`` line, else None.
+
+    Args:
+        trimmed (str): A stripped log line, e.g. '@date: 2026-05-17'.
+
+    Returns:
+        str | None: 'YYYY-MM-DD' when the line is a well-formed, real calendar
+            date; None when the shape is wrong or the date is impossible.
+    """
+    m = _RE_DATE.match(trimmed)
+    if not m:
+        return None
+    try:
+        return _date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+    except ValueError:
+        return None
 # Inline trailing rally-outcome tokens (Phase 2 - grade integrity).
 #   @won        -> we scored the rally by our own play (a kill).
 #   @won:re     -> we scored, cause = rival error (gifted point).
@@ -211,6 +235,9 @@ def parse_log(log_string):
                                                      youtube.com or youtu.be address.
         - Set score:     '@set: V-R'                 e.g. '@set: 25-18'. Team score
                                                      first, rival score second.
+        - Match date:    '@date: YYYY-MM-DD'         Optional, match-level. The
+                                                     first valid ISO date wins;
+                                                     malformed dates are dropped.
         - Rally outcome: '@won' / '@lost' / '@won:re' / '@won:se'  (inline,
                                                      trailing, case-insensitive).
                                                      Consumed as the rally's
@@ -248,6 +275,9 @@ def parse_log(log_string):
                 '@youtube:' lines, in the order they appear in the file.
             'set_scores' (list[tuple[int, int]]): List of (team, rival) score
                 tuples, one per '@set:' line, in file order. Empty list if none.
+            'match_date' (str | None): The match play date as an ISO
+                'YYYY-MM-DD' string from the first valid '@date:' line, or None
+                when absent or malformed. Distinct from the report build date.
     """
     lines = log_string.strip().splitlines()
     rallies = []
@@ -255,6 +285,7 @@ def parse_log(log_string):
     players = {}
     youtube_urls = []
     set_scores = []
+    match_date = None
     team = _new_stats()
 
     for line in lines:
@@ -265,6 +296,13 @@ def parse_log(log_string):
             url = trimmed[9:].strip()
             if _RE_YT.match(url):
                 youtube_urls.append(url)
+            continue
+        if trimmed.lower().startswith('@date:'):
+            # First valid date wins; malformed dates are dropped, not rallies.
+            if match_date is None:
+                iso = _parse_date_token(trimmed)
+                if iso is not None:
+                    match_date = iso
             continue
         m_set = _RE_SET.match(trimmed)
         if m_set:
@@ -314,6 +352,7 @@ def parse_log(log_string):
         'points': points,
         'youtube_urls': youtube_urls,
         'set_scores': set_scores,
+        'match_date': match_date,
     }
 
 # ---------------------------------------------------------------------------
