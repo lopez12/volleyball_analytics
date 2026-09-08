@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a defect in a report, page, or the build.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please fill in the fields below so it can be reproduced quickly.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: A short, clear description of the problem.
+      placeholder: The player-season page shows the wrong kill count for...
+    validations:
+      required: true
+  - type: input
+    id: dataset
+    attributes:
+      label: Affected dataset
+      description: The `team/dataset` slug, e.g. `nova/amistosos` or `vodkas/atlas-chapalita-cup-2026`. Leave blank if not dataset-specific.
+      placeholder: nova/amistosos
+    validations:
+      required: false
+  - type: input
+    id: page
+    attributes:
+      label: Affected match / page
+      description: The match file or page, e.g. `01_venus.txt` or the team-season page. Leave blank if not applicable.
+      placeholder: 01_venus.txt
+    validations:
+      required: false
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: What did you do, in order?
+      placeholder: |
+        1. Run `python generate.py`
+        2. Open docs/nova/amistosos/player_7.html
+        3. Look at the "Ataque" row
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: The attack efficiency should be...
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Instead it shows...
+    validations:
+      required: true
+  - type: checkboxes
+    id: verified
+    attributes:
+      label: Verification
+      options:
+        - label: I ran `python generate.py` locally or checked the published GitHub Pages page.
+          required: true

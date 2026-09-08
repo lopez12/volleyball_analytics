@@ -1,0 +1,54 @@
+name: Match data (correction or new log)
+description: Report a wrong/missing stat, or request adding a new match log or dataset.
+title: "[Data]: "
+labels: ["data"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For match-data issues. Please review the
+        [log grammar](https://github.com/lopez12/volleyball_analytics/blob/main/README.md#match-log-format)
+        first — most stat problems trace back to a mistyped token.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Type of request
+      options:
+        - Correction to an existing log
+        - New match log
+        - New dataset (team / tournament)
+    validations:
+      required: true
+  - type: input
+    id: dataset
+    attributes:
+      label: Dataset
+      description: The `team/dataset` slug, e.g. `vodkas/atlas-chapalita-cup-2026`.
+      placeholder: vodkas/atlas-chapalita-cup-2026
+    validations:
+      required: true
+  - type: input
+    id: matchfile
+    attributes:
+      label: Match file
+      description: Path under the dataset, e.g. `teams/nova/amistosos/matches/01_venus.txt`. Leave blank for a brand-new dataset.
+      placeholder: teams/nova/amistosos/matches/01_venus.txt
+    validations:
+      required: false
+  - type: textarea
+    id: detail
+    attributes:
+      label: The specific stat or rally
+      description: Which rally line, player number, or stat is wrong or missing? Paste the exact line if you can.
+      placeholder: |
+        Line 12: `7S+ 2D# 12E! 11A#`
+        Player 11's attack should be graded `!`, not `#`.
+    validations:
+      required: true
+  - type: checkboxes
+    id: grammar
+    attributes:
+      label: Grammar acknowledgement
+      options:
+        - label: I reviewed the [log grammar](https://github.com/lopez12/volleyball_analytics/blob/main/README.md#match-log-format) and, for any attached/edited log, ran `python validate_logs.py` locally.
+          required: true
