@@ -912,6 +912,81 @@
   display: block;
 }
 
+/* ----- Rally timestamp capture bar (Brief 4) ----- */
+.lg-capture {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: #f8fafc;
+  font-size: 0.85rem;
+}
+
+.lg-capture[hidden] {
+  display: none;
+}
+
+.lg-capture__mark {
+  flex-shrink: 0;
+}
+
+.lg-capture__times {
+  color: var(--text-muted, #64748b);
+}
+
+.lg-capture__times b {
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+}
+
+.lg-rally__time {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted, #64748b);
+  white-space: nowrap;
+}
+
+/* ----- Replay / grading navigation (Brief 6) ----- */
+.lg-replay {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 12px;
+  background: #f1f5f9;
+}
+
+.lg-replay[hidden] {
+  display: none;
+}
+
+.lg-replay__pos {
+  flex: 1;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-main);
+}
+
+.lg-replay__hint {
+  flex: 1;
+  font-size: 0.8rem;
+  color: var(--text-muted, #64748b);
+}
+
+.lg-rally.is-current {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: -2px;
+  background: #eff6ff;
+}
+
 /* ----- Rally row actions ----- */
 .lg-rally__actions {
   display: flex;

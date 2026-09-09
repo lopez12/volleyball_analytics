@@ -21,8 +21,9 @@ Rules:
     R6 (WARN)  ``@youtube:`` URL         - an invalid YouTube URL (link dropped).
     R7 (WARN)  unrecognized line/token   - text the parser silently ignores.
     R8 (WARN)  ``@date:`` format         - a malformed/impossible match date
-                                           (dropped; expected ``YYYY-MM-DD``).
-
+                                           (dropped; expected ``YYYY-MM-DD``).    R9 (WARN)  ``@t:`` timestamp format    - a malformed per-rally video
+                                           timestamp (expected
+                                           ``@t:<start>[-<end>]`` in seconds).
 Grammar is imported from ``analytics.py`` (single source of truth); it is never
 re-hard-coded here.
 
@@ -41,6 +42,7 @@ from pathlib import Path
 
 from analytics import (
     ACTIONS, GRADES, _RE_SET, _RE_YT, _parse_outcome_token, _parse_date_token,
+    _parse_timestamp_token,
 )
 
 TEAMS_ROOT = Path('teams')
@@ -148,8 +150,19 @@ def validate_file(txt_path, roster):
         valid_plays = []       # (token, number) for grammar-valid play tokens
         has_bad_candidate = False
         stray_tokens = []      # non-candidate free text on this line
+        ts_positions = []      # positions of '@t:' timestamp metadata tokens
 
         for idx, token in enumerate(tokens):
+            if token[:3].lower() == '@t:':
+                # Per-rally video timestamp metadata (Phase 4). Consumed by the
+                # parser as timing, never as a play token; WARN when malformed.
+                if _parse_timestamp_token(token) is None:
+                    issues.append((line_no, WARN, 'R9',
+                                   'malformed @t: timestamp token '
+                                   '(expected "@t:<start>[-<end>]" in seconds)', token))
+                else:
+                    ts_positions.append(idx)
+                continue
             if _parse_outcome_token(token) is not None:
                 outcome_positions.append(idx)
                 continue
@@ -165,7 +178,7 @@ def validate_file(txt_path, roster):
             else:
                 stray_tokens.append(token)
 
-        is_rally = bool(outcome_positions or valid_plays or has_bad_candidate)
+        is_rally = bool(outcome_positions or valid_plays or has_bad_candidate or ts_positions)
 
         if not is_rally:
             # Whole line yields nothing the parser records - it is silently
@@ -192,7 +205,13 @@ def validate_file(txt_path, roster):
                 issues.append((line_no, WARN, 'R4',
                                'multiple outcome tokens (only the first is used)',
                                tokens[outcome_positions[1]]))
-            if outcome_positions[-1] != len(tokens) - 1:
+            # A trailing '@t:' timestamp is legitimately last, so the outcome
+            # only needs to be the last non-timestamp token.
+            ts_set = set(ts_positions)
+            last_idx = len(tokens) - 1
+            while last_idx >= 0 and last_idx in ts_set:
+                last_idx -= 1
+            if outcome_positions[-1] != last_idx:
                 issues.append((line_no, WARN, 'R4',
                                'outcome token should be the last token on the line',
                                tokens[outcome_positions[0]]))
