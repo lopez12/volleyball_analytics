@@ -387,7 +387,7 @@
       return { score: st.score || null, video_url: st.video_url || null, rallies: [] };
     });
     if (!sets.length) sets.push({ score: null, video_url: null, rallies: [] });
-    return { sets: sets, currentSet: 0, entry: emptyEntry(), date: s.date || null };
+    return { sets: sets, currentSet: 0, entry: emptyEntry(), date: s.date || null, cursor: -1 };
   }
 
   // Refresh per-set metadata from a (re)built session without losing rallies.
@@ -411,6 +411,7 @@
     }
     if (!analysis.entry) analysis.entry = emptyEntry();
     if (typeof analysis.currentSet !== 'number') analysis.currentSet = 0;
+    if (typeof analysis.cursor !== 'number') analysis.cursor = -1;
     if (draft) draft.analysis = analysis;
   }
 
@@ -542,7 +543,15 @@
         videoId: id,
         playerVars: { rel: 0, modestbranding: 1, playsinline: 1, origin: window.location.origin },
         events: {
-          onReady: function () { video.ready = true; }
+          onReady: function () {
+            video.ready = true;
+            // Resume at the current graded rally's start once the player is live.
+            if (gradingActive()) {
+              var set = currentSet();
+              var r = set && set.rallies[analysis.cursor];
+              if (r && r.start != null) videoController.seekTo(r.start);
+            }
+          }
         }
       });
     });
@@ -724,7 +733,8 @@
         ? '<span class="lg-rally__time" title="Marca de tiempo del video">⏱ ' +
           esc(fmtClock(r.start)) + (r.end != null ? '–' + esc(fmtClock(r.end)) : '') + '</span>'
         : '';
-      return '<li class="lg-rally" data-idx="' + i + '">' +
+      var cur = (gradingActive() && i === analysis.cursor) ? ' is-current' : '';
+      return '<li class="lg-rally' + cur + '" data-idx="' + i + '">' +
         '<span class="lg-rally__idx">' + (i + 1) + '</span>' +
         '<code class="lg-rally__chain">' + esc(chain) + '</code>' + badge + time +
         '<div class="lg-rally__actions">' +
@@ -737,8 +747,14 @@
   function updateSendState() {
     var btn = byId('analysis-send');
     if (!btn || !analysis) return;
+    if (gradingActive()) {
+      btn.disabled = false;
+      btn.textContent = 'Siguiente rally ▶';
+      return;
+    }
     var e = analysis.entry;
     btn.disabled = !(e.tokens.length || e.outcome || e.start != null);
+    btn.textContent = '✓ Enviar rally';
   }
 
   function renderAnalysis() {
@@ -753,7 +769,88 @@
     renderChain();
     renderOutcomes();
     renderRallies();
+    renderReplay();
     updateSendState();
+  }
+
+  // ---------------------------------------------------------------
+  // Replay / grading (Brief 6): navigate an imported set of timestamped
+  // rallies, seeking the video to each one so the grader fills its plays.
+  // analysis.cursor is the index being graded, or -1 (append mode).
+  // ---------------------------------------------------------------
+  function gradingActive() { return !!(analysis && analysis.cursor >= 0); }
+
+  function setHasTimestamps() {
+    var set = currentSet();
+    return !!(set && set.rallies.some(function (r) { return r.start != null; }));
+  }
+
+  // Write the in-progress entry back into the rally it is graded against.
+  function saveCursor() {
+    if (!gradingActive()) return;
+    var set = currentSet();
+    if (!set || analysis.cursor >= set.rallies.length) return;
+    var e = analysis.entry;
+    set.rallies[analysis.cursor] = {
+      tokens: e.tokens.slice(), outcome: e.outcome, start: e.start, end: e.end
+    };
+  }
+
+  // Load rally `idx` into the entry and seek the video to its start.
+  function loadCursor(idx) {
+    var set = currentSet();
+    if (!set || idx < 0 || idx >= set.rallies.length) return;
+    analysis.cursor = idx;
+    var r = set.rallies[idx];
+    analysis.entry = {
+      tokens: r.tokens.slice(), outcome: r.outcome,
+      start: (r.start != null ? r.start : null), end: (r.end != null ? r.end : null)
+    };
+    resetSelection();
+    renderAnalysis();
+    if (r.start != null) { videoController.seekTo(r.start); videoController.play(); }
+    saveDraftNow();
+  }
+
+  function gotoRally(idx) {
+    var set = currentSet();
+    if (!set) return;
+    saveCursor();
+    if (idx >= set.rallies.length) {
+      // Past the last segmented rally: leave grading, ready to append new ones.
+      analysis.cursor = -1;
+      analysis.entry = emptyEntry();
+      resetSelection();
+      renderAnalysis();
+      saveDraftNow();
+      return;
+    }
+    loadCursor(Math.max(0, idx));
+  }
+
+  function nextRally() { if (analysis) gotoRally((gradingActive() ? analysis.cursor : -1) + 1); }
+  function prevRally() { if (gradingActive() && analysis.cursor > 0) gotoRally(analysis.cursor - 1); }
+  function startReplay() { loadCursor(0); }
+
+  function renderReplay() {
+    var bar = byId('analysis-replay');
+    if (!bar) return;
+    var set = currentSet();
+    var has = setHasTimestamps();
+    bar.hidden = !has;
+    if (!has) { bar.innerHTML = ''; return; }
+    if (!gradingActive()) {
+      bar.innerHTML = '<button type="button" id="replay-start" class="lg-btn-ghost">▶ Reproducir rallies</button>' +
+        '<span class="lg-replay__hint">' + set.rallies.length + ' rally(s) con marca de tiempo</span>';
+      return;
+    }
+    var i = analysis.cursor, n = set.rallies.length, r = set.rallies[i] || {};
+    var time = (r.start != null)
+      ? (fmtClock(r.start) + (r.end != null ? '–' + fmtClock(r.end) : '')) : '—';
+    bar.innerHTML =
+      '<button type="button" id="replay-prev" class="lg-btn-ghost"' + (i <= 0 ? ' disabled' : '') + '>◀ Anterior</button>' +
+      '<span class="lg-replay__pos">Rally ' + (i + 1) + ' / ' + n + ' · ⏱ ' + esc(time) + '</span>' +
+      '<button type="button" id="replay-next" class="lg-btn-ghost">Siguiente ▶</button>';
   }
 
   // -- entry state machine: player -> action -> grade -> token --
@@ -808,6 +905,7 @@
 
   function sendRally() {
     if (!analysis) return;
+    if (gradingActive()) { nextRally(); return; }   // save-in-place + seek to next rally
     var e = analysis.entry;
     if (!e.tokens.length && !e.outcome && e.start == null) return;   // need plays, an outcome, or a marked segment
     var end = (e.end != null) ? e.end : nowVideoTime();   // keep an explicitly marked end
@@ -833,6 +931,7 @@
   function editRally(idx) {
     var set = currentSet();
     if (!set || idx < 0 || idx >= set.rallies.length) return;
+    if (gradingActive()) { gotoRally(idx); return; }   // in replay, jump the cursor instead of reordering
     var r = set.rallies.splice(idx, 1)[0];
     // Don't lose an in-progress rally: commit it before loading the edited one.
     if (analysis.entry.tokens.length || analysis.entry.outcome) {
@@ -860,8 +959,12 @@
 
   function switchSet(idx) {
     if (!analysis || idx < 0 || idx >= analysis.sets.length) return;
+    saveCursor();
     analysis.currentSet = idx;
-    renderSetTabs(); renderVideo(); renderCapture(); renderRallies();
+    analysis.cursor = -1;
+    analysis.entry = emptyEntry();
+    resetSelection();
+    renderAnalysis();
     saveDraftNow();
   }
 
@@ -974,12 +1077,15 @@
       analysis.date = dm ? normalizeDate(dm[1]) : null;
       analysis.currentSet = 0;
       analysis.entry = emptyEntry();
+      analysis.cursor = -1;
       resetSelection();
       if (draft) draft.analysis = analysis;
       saveDraftNow();
       renderAnalysis();
       renderReview();
       window.location.hash = '#analysis';
+      // A file carrying pre-marked segments drops straight into grading at rally 1.
+      if (setHasTimestamps()) startReplay();
     };
     reader.readAsText(file);
   }
@@ -998,6 +1104,9 @@
     if ((el = t.closest('[data-set]'))) { switchSet(parseInt(el.getAttribute('data-set'), 10)); return; }
     if (t.closest('#analysis-add-set')) { addSet(); return; }
     if (t.closest('#analysis-mark')) { markToggle(); return; }
+    if (t.closest('#replay-start')) { startReplay(); return; }
+    if (t.closest('#replay-prev')) { prevRally(); return; }
+    if (t.closest('#replay-next')) { nextRally(); return; }
     if (t.closest('#analysis-undo')) { undoToken(); return; }
     if (t.closest('#analysis-send')) { sendRally(); return; }
     if ((el = t.closest('[data-edit]'))) { editRally(parseInt(el.getAttribute('data-edit'), 10)); return; }
