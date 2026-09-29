@@ -26,6 +26,47 @@ function toggleSection(el) {
 </script>"""
 
 
+# Inline <head> script: applies a stored theme choice before first paint so the
+# page never flashes the wrong colors. Absence of the key leaves the OS
+# prefers-color-scheme in charge (handled entirely in CSS).
+_THEME_BOOT = """<script>
+(function () {
+  try {
+    var t = localStorage.getItem('va-theme');
+    if (t === 'light' || t === 'dark') {
+      document.documentElement.setAttribute('data-theme', t);
+    }
+  } catch (e) {}
+})();
+</script>"""
+
+
+# Fixed-position light/dark toggle injected right after <body>. The inline
+# script runs synchronously next to the button so its icon matches the effective
+# theme without a flash.
+_THEME_TOGGLE = """<button type="button" class="theme-toggle" id="themeToggle" aria-label="Cambiar tema" title="Cambiar tema">🌙</button>
+<script>
+(function () {
+  var btn = document.getElementById('themeToggle');
+  if (!btn) return;
+  function effective() {
+    var t = null;
+    try { t = localStorage.getItem('va-theme'); } catch (e) {}
+    if (t === 'light' || t === 'dark') return t;
+    return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
+  function paintIcon() { btn.textContent = effective() === 'dark' ? '☀️' : '🌙'; }
+  paintIcon();
+  btn.addEventListener('click', function () {
+    var next = effective() === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('va-theme', next); } catch (e) {}
+    document.documentElement.setAttribute('data-theme', next);
+    paintIcon();
+  });
+})();
+</script>"""
+
+
 # ---------------------------------------------------------------------------
 # Shared layout helpers
 # ---------------------------------------------------------------------------
@@ -679,9 +720,11 @@ def render_match_page(match_title, parsed, generated_date):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{match_title} - Volleyball Analytics</title>
   <link rel="stylesheet" href="styles.css">
+  {_THEME_BOOT}
   {_COLLAPSIBLE_JS}
 </head>
 <body>
+{_THEME_TOGGLE}
 <div class="container">
   {_back_link('matches.html', '← Todos los partidos')}
   <div class="report-header">
@@ -791,8 +834,10 @@ def render_index_page(matches, generated_date, team_name, tournament_name, team_
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{team_name} - {tournament_name}</title>
   <link rel="stylesheet" href="styles.css">
+  {_THEME_BOOT}
 </head>
 <body>
+{_THEME_TOGGLE}
 <div class="container">
   <div class="hub-hero">
     <p style="margin:0 0 6px;"><a href="../../index.html" class="back-link">← Equipos</a></p>
@@ -970,10 +1015,12 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{display_name} - {tournament_name} - {team_name}</title>
   <link rel="stylesheet" href="styles.css">
+  {_THEME_BOOT}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   {_COLLAPSIBLE_JS}
 </head>
 <body>
+{_THEME_TOGGLE}
 <div class="container">
   {_back_link('players.html', '← Todos los jugadores')}
   <div class="report-header">
@@ -1138,10 +1185,12 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{team_name} - {tournament_name}</title>
   <link rel="stylesheet" href="styles.css">
+  {_THEME_BOOT}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   {_COLLAPSIBLE_JS}
 </head>
 <body>
+{_THEME_TOGGLE}
 <div class="container">
   {_back_link()}
   <div class="report-header">
@@ -1375,8 +1424,10 @@ def render_players_page(player_summaries, generated_date):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jugadores - Volleyball Analytics</title>
   <link rel="stylesheet" href="styles.css">
+  {_THEME_BOOT}
 </head>
 <body>
+{_THEME_TOGGLE}
 <div class="container">
   <div class="page-header">
     <a href="index.html" class="back-link">← Inicio</a>
@@ -1460,8 +1511,10 @@ def render_matches_page(matches, generated_date):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Partidos - Volleyball Analytics</title>
   <link rel="stylesheet" href="styles.css">
+  {_THEME_BOOT}
 </head>
 <body>
+{_THEME_TOGGLE}
 <div class="container">
   <div class="page-header">
     <a href="index.html" class="back-link">← Inicio</a>
@@ -1528,13 +1581,13 @@ def render_root_index_page(datasets, generated_date):
         if tournaments:
             cards = ''.join(_dataset_card(d) for d in tournaments)
             groups_html += (
-                '<h3 style="margin:18px 0 10px;color:#374151;font-size:1rem;">Torneos</h3>'
+                '<h3 style="margin:18px 0 10px;color:var(--text-main);font-size:1rem;">Torneos</h3>'
                 f'<div class="hub-nav">{cards}</div>'
             )
         if friendlies:
             cards = ''.join(_dataset_card(d) for d in friendlies)
             groups_html += (
-                '<h3 style="margin:18px 0 10px;color:#374151;font-size:1rem;">Amistosos</h3>'
+                '<h3 style="margin:18px 0 10px;color:var(--text-main);font-size:1rem;">Amistosos</h3>'
                 f'<div class="hub-nav">{cards}</div>'
             )
 
@@ -1550,7 +1603,7 @@ def render_root_index_page(datasets, generated_date):
     if not sections_html:
         sections_html = (
             '<div class="stat-card"><div class="card-body">'
-            '<p style="color:#6b7280;">Aún no hay datos disponibles.</p>'
+            '<p style="color:var(--text-muted);">Aún no hay datos disponibles.</p>'
             '</div></div>'
         )
 
@@ -1561,8 +1614,10 @@ def render_root_index_page(datasets, generated_date):
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Volleyball Analytics</title>
   <link rel="stylesheet" href="styles.css">
+  {_THEME_BOOT}
 </head>
 <body>
+{_THEME_TOGGLE}
 <div class="container">
   <div class="hub-hero">
     <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Volleyball Analytics</h1>
