@@ -8,6 +8,7 @@ A volleyball analytics dashboard that reads match log files and generates static
 - 📈 Player and team statistics with ratings (1–10 scale)
 - 🎯 Phase analysis: Side-Out and Transition efficiency
 - 🏆 Break Point and Side-Out point scoring stats
+- 🌙 Dark mode — follows your system preference, with a per-visitor toggle
 - 🌐 Auto-deployed to GitHub Pages on every push
 - 🐍 Pure Python — no JavaScript knowledge required to maintain
 
@@ -344,6 +345,16 @@ After that, every `git push` to `main` triggers an automatic rebuild.
 7. Static HTML is written to `docs/<team>/<tournament>/`, and a root `docs/index.html` selector links to every dataset
 
 Datasets with no valid match data (e.g. a brand-new team folder) are skipped automatically. All data stays in the repository. No server, no external services.
+
+## Dark Mode
+
+Every generated page supports a light and a dark theme:
+
+- **System default.** With no saved choice, the page follows your operating-system / browser color-scheme preference (`prefers-color-scheme`). Switch your OS to dark and the dashboards render dark automatically.
+- **Manual toggle.** A round button (🌙 / ☀️) in the top-right corner of every page flips between light and dark without reloading.
+- **Persistent.** Your choice is saved in the browser (`localStorage['va-theme']`, value `light` or `dark`) and applies across pages and reloads until you toggle again. Clearing it returns to following the system preference.
+
+Theming is pure CSS custom properties plus a tiny inline script — no build step, no libraries, and it works both from a local `file://` open and from GitHub Pages. Colors live as tokens in `styles.css` (`:root` for light, `:root[data-theme="dark"]` and a `prefers-color-scheme` block for dark).
 
 ## Troubleshooting
 

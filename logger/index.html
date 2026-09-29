@@ -9,6 +9,17 @@
   <link rel="stylesheet" href="../styles.css">
   <!-- Logger-specific layout -->
   <link rel="stylesheet" href="logger.css">
+  <!-- Apply a stored theme choice before first paint (shared with the reports). -->
+  <script>
+  (function () {
+    try {
+      var t = localStorage.getItem('va-theme');
+      if (t === 'light' || t === 'dark') {
+        document.documentElement.setAttribute('data-theme', t);
+      }
+    } catch (e) {}
+  })();
+  </script>
 </head>
 <body class="lg-body">
 <div class="container lg-container">
