@@ -678,6 +678,7 @@ def render_match_page(match_title, parsed, generated_date):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{match_title} - Volleyball Analytics</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_COLLAPSIBLE_JS}
 </head>
@@ -790,6 +791,7 @@ def render_index_page(matches, generated_date, team_name, tournament_name, team_
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{team_name} - {tournament_name}</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -969,6 +971,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{display_name} - {tournament_name} - {team_name}</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   {_COLLAPSIBLE_JS}
@@ -1137,6 +1140,7 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{team_name} - {tournament_name}</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   {_COLLAPSIBLE_JS}
@@ -1374,6 +1378,7 @@ def render_players_page(player_summaries, generated_date):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jugadores - Volleyball Analytics</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -1459,6 +1464,7 @@ def render_matches_page(matches, generated_date):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Partidos - Volleyball Analytics</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -1560,6 +1566,7 @@ def render_root_index_page(datasets, generated_date):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Volleyball Analytics</title>
+    <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>

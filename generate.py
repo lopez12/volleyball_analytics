@@ -41,6 +41,7 @@ from renderer import (
 TEAMS_ROOT = Path('teams')
 DOCS_ROOT = Path('docs')
 DATA_ROOT = Path('data')
+FAVICON_PATH = Path('favicon.ico')
 
 
 def discover_datasets():
@@ -283,6 +284,7 @@ def main():
     DOCS_ROOT.mkdir(exist_ok=True)
     DATA_ROOT.mkdir(exist_ok=True)
     shutil.copy('styles.css', DOCS_ROOT / 'styles.css')
+    shutil.copy(FAVICON_PATH, DOCS_ROOT / FAVICON_PATH.name)
 
     # Deploy the static Match Logger app to docs/logger/ (survives the rmtree
     # above). Guarded so the build never fails when logger/ is absent.
