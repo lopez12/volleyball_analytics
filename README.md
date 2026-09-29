@@ -155,6 +155,7 @@ The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much eac
 - `@set: V-R` — final set score (team score first, rival second), e.g. `@set: 25-18`
 - `@date: YYYY-MM-DD` — optional match play date, e.g. `@date: 2026-05-17`; shown on match and season pages (distinct from the report build date)
 - `@won` / `@lost` / `@won:re` / `@won:se` — **rally outcome** (see below)
+- `@t:<start>[-<end>]` — optional per-rally **video timestamp** in seconds into that set's video, e.g. `@t:3-9` or `@t:12` (see [Video timestamps](#video-timestamps--two-pass-tagging) below)
 
 ### Rally outcome tokens (grade integrity)
 
@@ -198,6 +199,23 @@ Backfilling is **incremental** — old matches keep working via the heuristic fa
 
 The **earned vs. gifted points** report only appears for matches that carry outcome tokens; un-graded matches show a _"sin marcadores de resultado"_ note.
 
+### Video timestamps & two-pass tagging
+
+Each rally line may carry an optional **video timestamp** token, `@t:<start>[-<end>]`, giving the seconds offset into that set's `@youtube` video, e.g. `@t:3-9` (a 3s→9s segment) or `@t:12` (start only). It is fully **optional and backward-compatible**: legacy logs without it parse and render exactly as before, and a malformed `@t:` is only a warning, never an error.
+
+```
+7R+ 12E# 20A#  @won  @t:14-21    # this rally spans 0:14–0:21 of the set video
+@won:se  @t:33                   # touchless point, marked at 0:33
+```
+
+These timestamps power the **Match Logger's** video features. Timestamp capture and replay only work when the logger is opened over http(s) (e.g. GitHub Pages or a local `python -m http.server`) with a YouTube URL set on the set — YouTube blocks the embed from `file://`.
+
+- **Live capture (while tagging):** with the set video playing, a rally's **start** is stamped when you enter its first touch (or press **⏱ Marcar inicio**) and its **end** when you press **✓ Enviar rally**. Nothing extra to do — the times land in the exported `.txt`.
+- **Segmentation-only pass:** the **⏱ Marcar inicio** button toggles to **⏱ Marcar fin**, so one person can go through the match marking each rally's start/end and its result (`@won`/`@lost`) **without grading the plays**, then export that file.
+- **Grading pass with skip (replay):** **importing** a `.txt` that has timestamps drops you into grading mode. The video seeks to the current rally, you type its plays, and **✓ Siguiente rally** (or Enter) saves them into that rally's timeframe and jumps the video to the next rally — skipping the dead time. Use **◀ Anterior** / **Siguiente ▶** to move around, or **▶ Reproducir rallies** to start the replay from the first rally.
+
+This enables a two-person split: one segments (times + result), another grades the plays quickly while the video auto-advances.
+
 ### Example log
 
 ```
@@ -223,7 +241,7 @@ python validate_logs.py teams/nova # validate a subset (file or folder)
 It reports two severities:
 
 - **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`, a player number missing from the roster, or a malformed `@set: V-R` line. These are genuinely broken data the engine would drop.
-- **WARN** (does not fail) — an outcome token that isn't last / is duplicated, a rally with no `@won`/`@lost` in a file that otherwise uses outcome tokens, an invalid `@youtube:` URL, or a line/token the parser ignores such as `(Sin registro)` or `--- SEGUNDO SET ---`.
+- **WARN** (does not fail) — an outcome token that isn't last / is duplicated, a rally with no `@won`/`@lost` in a file that otherwise uses outcome tokens, an invalid `@youtube:` URL, a malformed `@t:` video timestamp, or a line/token the parser ignores such as `(Sin registro)` or `--- SEGUNDO SET ---`.
 
 The _outcome-completeness_ check is intentionally advisory: legacy logs without outcome tokens still work via the heuristic fallback, so they are exempt. Use `--strict` if you want warnings to fail too.
 
