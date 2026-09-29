@@ -41,6 +41,7 @@ from renderer import (
 TEAMS_ROOT = Path('teams')
 DOCS_ROOT = Path('docs')
 DATA_ROOT = Path('data')
+FAVICON_PATH = Path('favicon.ico')
 
 
 def discover_datasets():
@@ -130,6 +131,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
     team_type = config['type']
     positions = config['positions']
     names = config['names']
+    objectives = config['objectives']
 
     matches_dir = ds_dir / 'matches'
     out_dir = DOCS_ROOT / team_slug / tournament_slug
@@ -187,7 +189,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
     # --- Season (dataset aggregate) pages ---
     team_season = get_team_season_stats(conn)
     if team_season:
-        html = render_team_season_page(team_season, today, team_name, tournament_name, team_type)
+        html = render_team_season_page(team_season, today, team_name, tournament_name, team_type, objectives)
         (out_dir / 'team_season.html').write_text(html, encoding='utf-8')
         print(f'  Generated: docs/{team_slug}/{tournament_slug}/team_season.html')
 
@@ -237,7 +239,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
 
     index_html = render_index_page(
         matches_meta, today, team_name, tournament_name, team_type,
-        player_summaries, team_season_summary,
+        player_summaries, team_season_summary, objectives,
     )
     (out_dir / 'index.html').write_text(index_html, encoding='utf-8')
     print(f'  Generated: docs/{team_slug}/{tournament_slug}/index.html')
@@ -283,6 +285,7 @@ def main():
     DOCS_ROOT.mkdir(exist_ok=True)
     DATA_ROOT.mkdir(exist_ok=True)
     shutil.copy('styles.css', DOCS_ROOT / 'styles.css')
+    shutil.copy(FAVICON_PATH, DOCS_ROOT / FAVICON_PATH.name)
 
     # Deploy the static Match Logger app to docs/logger/ (survives the rmtree
     # above). Guarded so the build never fails when logger/ is absent.

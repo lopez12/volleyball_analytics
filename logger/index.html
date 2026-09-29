@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Registro de Partido</title>
+    <link rel="icon" href="../favicon.ico" sizes="any">
   <!-- Shared design tokens from the generated reports (read-only) -->
   <link rel="stylesheet" href="../styles.css">
   <!-- Logger-specific layout -->
@@ -170,8 +171,16 @@
             <span class="lg-video__hint">Video del partido</span>
           </div>
 
+          <div id="analysis-capture" class="lg-capture" hidden>
+            <button type="button" id="analysis-mark" class="lg-btn-ghost lg-capture__mark">⏱ Marcar inicio</button>
+            <span class="lg-capture__times" aria-live="polite">
+              Inicio <b id="analysis-cap-start">—</b> · Fin <b id="analysis-cap-end">—</b>
+            </span>
+          </div>
+
           <section class="lg-panel lg-a-rallies" aria-labelledby="rallies-title">
             <h2 id="rallies-title" class="lg-panel__title">Rallies registrados</h2>
+            <div id="analysis-replay" class="lg-replay" hidden></div>
             <ol id="analysis-rallies" class="lg-rally-list"></ol>
           </section>
         </div>

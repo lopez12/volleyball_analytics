@@ -7,6 +7,7 @@ No knowledge of SQLite or file I/O.
 import json
 import re
 import statistics
+from html import escape as _html_escape
 
 from analytics import (
     ACTIONS, FULL_NAMES, GRADES, POSITION_LABELS,
@@ -719,6 +720,7 @@ def render_match_page(match_title, parsed, generated_date):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{match_title} - Volleyball Analytics</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
   {_COLLAPSIBLE_JS}
@@ -755,7 +757,7 @@ def render_match_page(match_title, parsed, generated_date):
 
 
 def render_index_page(matches, generated_date, team_name, tournament_name, team_type='tournament',
-                      player_summaries=None, team_season_summary=None):
+                      player_summaries=None, team_season_summary=None, objectives=None):
     """Render the static HTML index page as a navigation hub for one dataset.
 
     Sections (top to bottom): Team Season, Players, Matches.
@@ -768,6 +770,8 @@ def render_index_page(matches, generated_date, team_name, tournament_name, team_
         team_type (str): 'tournament' or 'friendly' (controls aggregate label).
         player_summaries (list[dict], optional): Per-player season summary for the Players section.
         team_season_summary (dict, optional): Team season summary for the Team Season link.
+        objectives (list, optional): Raw season-goal entries from team.json;
+            rendered as progress rings in the hero. Absent/empty omits them.
 
     Returns:
         str: A complete HTML document string.
@@ -796,6 +800,19 @@ def render_index_page(matches, generated_date, team_name, tournament_name, team_
         top = player_summaries[0]
         top_pos = POSITION_LABELS.get(top.get('position', 'U'), 'Universal')
         top_player_html = f'MVP: <strong>{top["name"]}</strong> ({top["rating"]}) · {top_pos}'
+
+    # --- Season objectives (progress rings) ---
+    normalized_objectives = _normalize_objectives(objectives)
+    if normalized_objectives:
+        rings = ''.join(_objective_ring_html(o) for o in normalized_objectives)
+        hub_objectives_html = (
+            '<div class="hub-hero-objectives">'
+            '<div class="hub-objectives-title">Objetivos de Temporada</div>'
+            f'<div class="objectives-grid">{rings}</div>'
+            '</div>'
+        )
+    else:
+        hub_objectives_html = ''
 
     last_match_html = ''
     if matches:
@@ -833,6 +850,7 @@ def render_index_page(matches, generated_date, team_name, tournament_name, team_
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{team_name} - {tournament_name}</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
 </head>
@@ -857,6 +875,7 @@ def render_index_page(matches, generated_date, team_name, tournament_name, team_
         <div class="stat-label">Partidos</div>
       </div>
     </div>
+    {hub_objectives_html}
   </div>
 
   <div class="hub-nav">
@@ -1014,6 +1033,7 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{display_name} - {tournament_name} - {team_name}</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1088,7 +1108,100 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 # ---------------------------------------------------------------------------
 
 
-def render_team_season_page(team_stats, generated_date, team_name, tournament_name, team_type='tournament'):
+def _objective_color(fill_pct):
+    """Return the completion-tier hex color for an objective ring fill percent.
+
+    Mirrors _rating_color tiers: <50% red, 50-99% amber, 100% green.
+    """
+    if fill_pct >= 100:
+        return '#16a34a'
+    if fill_pct >= 50:
+        return '#ca8a04'
+    return '#dc2626'
+
+
+def _normalize_objectives(objectives):
+    """Normalize raw team.json objective entries into renderable dicts.
+
+    Each valid entry yields {'label', 'fill' (int 0-100), 'center' (str)}.
+    Fill = clamp((current - baseline) / (target - baseline) * 100, 0, 100),
+    with baseline defaulting to 0. Malformed entries (missing label, non-numeric
+    current/target/baseline, or target == baseline) are skipped.
+
+    Args:
+        objectives (list): Raw 'objectives' list from load_team_config().
+
+    Returns:
+        list[dict]: One normalized dict per valid objective, in input order.
+    """
+    normalized = []
+    if not isinstance(objectives, list):
+        return normalized
+    for obj in objectives:
+        if not isinstance(obj, dict):
+            continue
+        label = obj.get('label')
+        if not isinstance(label, str) or not label.strip():
+            continue
+        current = obj.get('current')
+        target = obj.get('target')
+        baseline = obj.get('baseline', 0)
+        if not all(isinstance(v, (int, float)) and not isinstance(v, bool)
+                   for v in (current, target, baseline)):
+            continue
+        if target == baseline:
+            continue
+        fill = round((current - baseline) / (target - baseline) * 100)
+        fill = max(0, min(100, fill))
+        display = obj.get('display')
+        center = display if isinstance(display, str) and display.strip() else f'{current} / {target}'
+        normalized.append({'label': label, 'fill': fill, 'center': center})
+    return normalized
+
+
+def _objective_ring_html(objective):
+    """Build the static SVG progress-ring HTML for one normalized objective."""
+    fill = objective['fill']
+    color = _objective_color(fill)
+    center = _html_escape(objective['center'])
+    label = _html_escape(objective['label'])
+    # Ring geometry: r=52 in a 120x120 box; dashoffset encodes the fill fraction.
+    radius = 52
+    circumference = 2 * 3.141592653589793 * radius
+    offset = circumference * (1 - fill / 100)
+    return (
+        '<div class="objective-ring">'
+        '<svg class="objective-ring-svg" viewBox="0 0 120 120" role="img" '
+        f'aria-label="{label}: {fill}%">'
+        '<circle class="objective-ring-track" cx="60" cy="60" r="52"></circle>'
+        f'<circle class="objective-ring-fill" cx="60" cy="60" r="52" '
+        f'stroke="{color}" stroke-dasharray="{circumference:.2f}" '
+        f'stroke-dashoffset="{offset:.2f}"></circle>'
+        f'<text class="objective-ring-value" x="60" y="60" fill="{color}">{center}</text>'
+        '</svg>'
+        f'<div class="objective-ring-label">{label}</div>'
+        '</div>'
+    )
+
+
+def _objectives_section_html(objectives):
+    """Build the full objectives section, or '' when no valid objective exists.
+
+    Args:
+        objectives (list): Raw 'objectives' list from load_team_config().
+
+    Returns:
+        str: A _section(...) block of progress rings, or '' to omit the section.
+    """
+    normalized = _normalize_objectives(objectives)
+    if not normalized:
+        return ''
+    rings = ''.join(_objective_ring_html(o) for o in normalized)
+    return _section('Objetivos de Temporada', f'<div class="objectives-grid">{rings}</div>')
+
+
+def render_team_season_page(team_stats, generated_date, team_name, tournament_name, team_type='tournament',
+                            objectives=None):
     """Render a complete season analytics page for the team.
 
     Args:
@@ -1097,6 +1210,9 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
         team_name (str): Display name of the dataset's team (e.g. 'Vodkas').
         tournament_name (str): Display name of the tournament/competition.
         team_type (str): 'tournament' or 'friendly' (controls aggregate label).
+        objectives (list, optional): Raw season-goal entries from team.json;
+            rendered as progress rings above the summary. Absent/empty omits
+            the section entirely.
 
     Returns:
         str: Complete HTML document.
@@ -1178,12 +1294,15 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
     date_span = _date_span([m.get('match_date') for m in team_stats])
     span_line = f'<p>Fechas: {date_span}</p>\n    ' if date_span else ''
 
+    objectives_html = _objectives_section_html(objectives)
+
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{team_name} - {tournament_name}</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -1198,6 +1317,7 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
     {span_line}<p>Generado: {generated_date}</p>
   </div>
 
+  {objectives_html}
   {_section('Resumen de ' + comp_label, f'''<div class="general-stats">
     <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating {comp_label}</div></div>
     <div class="stat-card"><div class="stat-value">{matches_played}</div><div class="stat-label">Partidos</div></div>
@@ -1423,6 +1543,7 @@ def render_players_page(player_summaries, generated_date):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Jugadores - Volleyball Analytics</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
 </head>
@@ -1510,6 +1631,7 @@ def render_matches_page(matches, generated_date):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Partidos - Volleyball Analytics</title>
+    <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
 </head>
@@ -1613,6 +1735,7 @@ def render_root_index_page(datasets, generated_date):
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Volleyball Analytics</title>
+    <link rel="icon" href="favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
 </head>
