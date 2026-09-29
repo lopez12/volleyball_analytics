@@ -73,8 +73,37 @@ docs/index.html                                    # root team/tournament select
 | `tournament` | Display competition name (use `"Amistosos"` for friendlies).                           |
 | `type`       | `"tournament"` or `"friendly"`.                                                        |
 | `roster`     | Maps player number → `{ "name", "position" }`. Positions: `S`, `OH`, `OPP`, `MB`, `L`. |
+| `objectives` | Optional. Season goals shown as progress rings on the team/tournament page.             |
 
 Players without a name fall back to `#<number>` in the reports.
+
+### Season objectives (optional)
+
+Add an optional `objectives` array to a dataset's `team.json` to show manually-set
+season goals as progress rings at the top of that dataset's team/tournament page.
+The section is omitted entirely when `objectives` is absent or empty.
+
+```json
+"objectives": [
+  { "label": "Top 4 del torneo", "current": 5, "baseline": 12, "target": 4, "display": "5º" },
+  { "label": "Ganar 2 derbis",   "current": 1, "target": 2 },
+  { "label": "Saques ace",       "current": 87, "target": 130 }
+]
+```
+
+| Field      | Meaning                                                                                     |
+| ---------- | ------------------------------------------------------------------------------------------- |
+| `label`    | Required. Short goal name shown under the ring.                                              |
+| `current`  | Required. Current value (set by hand; no live calculation).                                  |
+| `target`   | Required. Value at 100% fill (the goal).                                                     |
+| `baseline` | Optional (default `0`). Value at 0% fill. Lets a **lower** number mean more progress.        |
+| `display`  | Optional. Center text override (default `"current / target"`).                               |
+
+Ring fill = `(current − baseline) / (target − baseline)`, clamped to 0–100%. The two
+anchors handle both directions: counts rise from `0` toward `target` (e.g. aces `0`→`130`),
+while a rank improves as the number **drops** — for a 12-team tournament, set `baseline: 12`
+(last place = 0%) and `target: 4` (top 4 = 100%). Fill color is red below 50%, amber 50–99%,
+and green at 100%. Malformed entries are skipped without breaking the build.
 
 ## Adding a New Team
 

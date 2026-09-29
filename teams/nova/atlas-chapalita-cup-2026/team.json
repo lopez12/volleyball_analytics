@@ -4,13 +4,18 @@
   "type": "tournament",
   "roster": {
     "2":  { "name": "Sari",        "position": "OH"   },
-    "5":  { "name": "Eva",        "position": "OH"   },
-    "7":  { "name": "Gio",         "position": "OPP" },
-    "8":  { "name": "Gis",         "position": "OH"  },
-    "11":  { "name": "Chacon",     "position": "MB"  },
-    "12": { "name": "Salcedo",     "position": "S"   },
-    "13": { "name": "Sayu",        "position": "MB"  },
-    "21": { "name": "Sandy",       "position": "OH"  },
-    "22": { "name": "Valencia",    "position": "MB"  }
-  }
+    "5":  { "name": "Eva",         "position": "OH"   },
+    "7":  { "name": "Gio",         "position": "OPP"  },
+    "8":  { "name": "Gis",         "position": "OH"   },
+    "11": { "name": "Chacon",      "position": "MB"   },
+    "12": { "name": "Salcedo",     "position": "S"    },
+    "13": { "name": "Sayu",        "position": "MB"   },
+    "21": { "name": "Sandy",       "position": "OH"   },
+    "22": { "name": "Valencia",    "position": "MB"   }
+  },
+  "objectives": [
+    { "label": "Top 4 del torneo", "current": 12, "baseline": 12, "target": 4, "display": "12º" },
+    { "label": "Ganar 2 derbis",   "current": 0, "target": 2 },
+    { "label": "Saques ace",       "current": 0, "target": 130 }
+  ]
 }
