@@ -8,8 +8,8 @@ A volleyball analytics dashboard that reads match log files and generates static
 - 📈 Player and team statistics with ratings (1–10 scale)
 - 🎯 Phase analysis: Side-Out and Transition efficiency
 - 🏆 Break Point and Side-Out point scoring stats
-- � Dark mode — follows your system preference, with a per-visitor toggle
-- �🌐 Auto-deployed to GitHub Pages on every push
+- 🌙 Dark mode — follows your system preference, with a per-visitor toggle
+- 🌐 Auto-deployed to GitHub Pages on every push
 - 🐍 Pure Python — no JavaScript knowledge required to maintain
 
 ## Tech Stack
