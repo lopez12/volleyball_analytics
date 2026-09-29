@@ -64,7 +64,11 @@ def load_team_config(path):
             "roster": {
                 "7": { "name": "Gio", "position": "OH" },
                 ...
-            }
+            },
+            "objectives": [                   # optional season goals (see renderer)
+                { "label": "Saques ace", "current": 87, "target": 130 },
+                ...
+            ]
         }
 
     Args:
@@ -78,18 +82,24 @@ def load_team_config(path):
             'positions' (dict): Maps player number string -> position code.
             'names' (dict): Maps player number string -> display name. Players
                 without a name are omitted so callers can fall back to '#<num>'.
+            'objectives' (list): Optional raw season-goal entries (empty when
+                absent); normalized and rendered by render_team_season_page().
     """
     with open(path, encoding='utf-8') as f:
         cfg = json.load(f)
     roster = cfg.get('roster', {})
     positions = {num: info.get('position', 'U') for num, info in roster.items()}
     names = {num: info['name'] for num, info in roster.items() if info.get('name')}
+    objectives = cfg.get('objectives', [])
+    if not isinstance(objectives, list):
+        objectives = []
     return {
         'team': cfg.get('team', ''),
         'tournament': cfg.get('tournament', ''),
         'type': cfg.get('type', 'tournament'),
         'positions': positions,
         'names': names,
+        'objectives': objectives,
     }
 
 _RE_PLAYER = re.compile(r'^(\d+)([SREADB])([#+!\-])$')
