@@ -75,6 +75,10 @@ window.LOGGER_DATASETS = [
         "name": "Sayu",
         "position": "MB"
       },
+      "18": {
+        "name": "Yuris",
+        "position": "OH"
+      },
       "21": {
         "name": "Sandy",
         "position": "OH"
