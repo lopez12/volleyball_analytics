@@ -30,6 +30,7 @@
   var DB_VERSION = 1;
   var STORE = 'drafts';
   var MANUAL_KEY = '__manual__';
+  var RECENT_RALLY_LIMIT = 10;   // rallies shown before older ones collapse
 
   // ---------------------------------------------------------------
   // Module state
@@ -41,6 +42,7 @@
   var sel = { player: null, action: null };  // transient entry-machine selection
   var numBuf = '';         // keyboard digit accumulator for player numbers
   var saveTimer = null;
+  var ralliesExpanded = false;   // transient: reveal collapsed older rallies
 
   // YouTube IFrame Player API state (Brief 4/6). The plain <iframe> is upgraded
   // to a controllable player so rally timestamps can be captured (getCurrentTime)
@@ -710,6 +712,29 @@
     }
   }
 
+  // Render one rally <li>. `i` is the rally's true 0-based index in the set.
+  function rallyRow(r, i) {
+    var chain = r.tokens.join(' ') || (r.outcome ? outcomeToken(r.outcome) : '—');
+    var badge = '';
+    if (r.outcome) {
+      var cls = r.outcome.result === 'lost' ? 'result-loss' : 'result-win';
+      badge = '<span class="result-badge ' + cls + ' lg-rally__outcome">' +
+        esc(outcomeLabel(r.outcome)) + '</span>';
+    }
+    var time = (r.start != null)
+      ? '<span class="lg-rally__time" title="Marca de tiempo del video">⏱ ' +
+        esc(fmtClock(r.start)) + (r.end != null ? '–' + esc(fmtClock(r.end)) : '') + '</span>'
+      : '';
+    var cur = (gradingActive() && i === analysis.cursor) ? ' is-current' : '';
+    return '<li class="lg-rally' + cur + '" data-idx="' + i + '">' +
+      '<span class="lg-rally__idx">' + (i + 1) + '</span>' +
+      '<code class="lg-rally__chain">' + esc(chain) + '</code>' + badge + time +
+      '<div class="lg-rally__actions">' +
+        '<button type="button" class="lg-rally__edit" data-edit="' + i + '" aria-label="Editar rally ' + (i + 1) + '">✎</button>' +
+        '<button type="button" class="lg-rally__del" data-del="' + i + '" aria-label="Eliminar rally ' + (i + 1) + '">🗑</button>' +
+      '</div></li>';
+  }
+
   function renderRallies() {
     var host = byId('analysis-rallies');
     if (!host || !analysis) return;
@@ -721,27 +746,25 @@
         '<code class="lg-rally__chain">Los rallies enviados aparecerán aquí.</code></li>';
       return;
     }
-    host.innerHTML = rallies.map(function (r, i) {
-      var chain = r.tokens.join(' ') || (r.outcome ? outcomeToken(r.outcome) : '—');
-      var badge = '';
-      if (r.outcome) {
-        var cls = r.outcome.result === 'lost' ? 'result-loss' : 'result-win';
-        badge = '<span class="result-badge ' + cls + ' lg-rally__outcome">' +
-          esc(outcomeLabel(r.outcome)) + '</span>';
-      }
-      var time = (r.start != null)
-        ? '<span class="lg-rally__time" title="Marca de tiempo del video">⏱ ' +
-          esc(fmtClock(r.start)) + (r.end != null ? '–' + esc(fmtClock(r.end)) : '') + '</span>'
-        : '';
-      var cur = (gradingActive() && i === analysis.cursor) ? ' is-current' : '';
-      return '<li class="lg-rally' + cur + '" data-idx="' + i + '">' +
-        '<span class="lg-rally__idx">' + (i + 1) + '</span>' +
-        '<code class="lg-rally__chain">' + esc(chain) + '</code>' + badge + time +
-        '<div class="lg-rally__actions">' +
-          '<button type="button" class="lg-rally__edit" data-edit="' + i + '" aria-label="Editar rally ' + (i + 1) + '">✎</button>' +
-          '<button type="button" class="lg-rally__del" data-del="' + i + '" aria-label="Eliminar rally ' + (i + 1) + '">🗑</button>' +
-        '</div></li>';
-    }).join('');
+    // Collapse old rallies so the list stays short on long sets. Replay forces
+    // the full list so the highlighted cursor rally is never hidden.
+    var collapsible = !gradingActive() && rallies.length > RECENT_RALLY_LIMIT;
+    var hidden = (collapsible && !ralliesExpanded) ? rallies.length - RECENT_RALLY_LIMIT : 0;
+    var html = '';
+    if (collapsible) {
+      html += ralliesExpanded
+        ? '<li class="lg-rally-more"><button type="button" class="lg-rally-more__btn" data-rally-toggle aria-expanded="true">▾ Ocultar rallies anteriores</button></li>'
+        : '<li class="lg-rally-more"><button type="button" class="lg-rally-more__btn" data-rally-toggle aria-expanded="false">▸ Mostrar ' + hidden + ' rallies anteriores</button></li>';
+    }
+    for (var i = hidden; i < rallies.length; i++) {
+      html += rallyRow(rallies[i], i);
+    }
+    host.innerHTML = html;
+  }
+
+  function toggleRallies() {
+    ralliesExpanded = !ralliesExpanded;
+    renderRallies();
   }
 
   function updateSendState() {
@@ -961,6 +984,7 @@
     if (!analysis || idx < 0 || idx >= analysis.sets.length) return;
     saveCursor();
     analysis.currentSet = idx;
+    ralliesExpanded = false;   // each set view starts compact
     analysis.cursor = -1;
     analysis.entry = emptyEntry();
     resetSelection();
@@ -1109,6 +1133,7 @@
     if (t.closest('#replay-next')) { nextRally(); return; }
     if (t.closest('#analysis-undo')) { undoToken(); return; }
     if (t.closest('#analysis-send')) { sendRally(); return; }
+    if (t.closest('[data-rally-toggle]')) { toggleRallies(); return; }
     if ((el = t.closest('[data-edit]'))) { editRally(parseInt(el.getAttribute('data-edit'), 10)); return; }
     if ((el = t.closest('[data-del]'))) { deleteRally(parseInt(el.getAttribute('data-del'), 10)); return; }
   }

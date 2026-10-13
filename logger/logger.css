@@ -635,6 +635,34 @@
   font-style: italic;
 }
 
+/* Collapse toggle for older rallies */
+.lg-rally-more {
+  display: flex;
+  margin: 0;
+  padding: 0;
+}
+
+.lg-rally-more__btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lg-rally-more__btn:hover {
+  color: var(--text-main);
+  border-color: var(--primary);
+}
+
 /* Roster grid */
 .lg-roster {
   display: grid;
