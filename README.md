@@ -14,7 +14,7 @@ A volleyball analytics dashboard that reads match log files and generates static
 
 ## Tech Stack
 
-- **Python 3.12** (standard library only — no dependencies)
+- **Python 3.12** (standard library only — no _runtime_ dependencies; [ruff](https://docs.astral.sh/ruff/) is a dev-only lint/format tool)
 - **HTML/CSS** for report styling
 - **GitHub Actions** for automated builds and deployment
 
@@ -275,7 +275,32 @@ It reports two severities:
 
 The _outcome-completeness_ check is intentionally advisory: legacy logs without outcome tokens still work via the heuristic fallback, so they are exempt. Use `--strict` if you want warnings to fail too.
 
-On every pull request to `main`, `.github/workflows/qa.yml` validates only the match logs **changed in that PR** (so pre-existing legacy files are left alone), then runs a **smoke build** (`python generate.py`) to confirm the reports still generate without crashing. The exit code fails the check when any error is present.
+On every pull request to `main`, `.github/workflows/qa.yml` runs two jobs in parallel:
+
+- **`lint`** — `ruff check` (findings appear as inline PR annotations) and `ruff format --check`. See [Linting & formatting](#linting--formatting-ruff).
+- **`qa`** — validates only the match logs **changed in that PR** (so pre-existing legacy files are left alone). If a dataset's `team.json` changed, that whole dataset folder is validated instead, so a roster edit that orphans a player number is caught. It then runs a **smoke build** (`python generate.py`) and checks that `docs/index.html` was written.
+
+The exit code fails the check when any error is present. A newer push to the same PR cancels the in-flight run.
+
+## Linting & formatting (ruff)
+
+Python code is linted and formatted with [ruff](https://docs.astral.sh/ruff/), configured in `ruff.toml` (Python 3.12, line length 100, single quotes). Ruff is a **dev-only** tool — nothing in the build imports it, and CI installs it on its own.
+
+```bash
+pip install ruff          # once
+ruff check .              # lint
+ruff check --fix .        # lint and apply safe fixes
+ruff format .             # format in place (ruff format --check . to only verify)
+```
+
+Optional extras:
+
+```bash
+pip install pre-commit && pre-commit install          # run ruff + validate_logs.py on every commit
+git config blame.ignoreRevsFile .git-blame-ignore-revs # hide the one-time reformat commit from git blame
+```
+
+The ruff version is pinned in `.github/workflows/qa.yml` and `.pre-commit-config.yaml`; bump both together.
 
 ## Exporting Data to CSV
 
@@ -306,12 +331,14 @@ volleyball_analytics/
 ├── export_csv.py                # Export each dataset's tables to CSV files
 ├── styles.css                   # Shared CSS for all generated pages
 ├── validate_logs.py             # Match-log format validator (PR QA gate)
+├── ruff.toml                    # ruff lint + format config (dev-only tool)
+├── .pre-commit-config.yaml      # optional local hooks: ruff + validate_logs.py
 ├── teams/                       # COMMITTED source data
 │   └── <team>/<tournament>/
 │       ├── team.json            # roster + metadata
 │       └── matches/NN_*.txt     # match logs (prefix controls order)
 ├── .github/workflows/build.yml  # GitHub Actions: build + deploy on push
-├── .github/workflows/qa.yml     # GitHub Actions: validate logs + smoke build on PRs
+├── .github/workflows/qa.yml     # GitHub Actions: ruff lint + validate logs + smoke build on PRs
 ├── data/                        # GENERATED databases + CSVs (not committed)
 │   └── <team>/<tournament>/volleyball.db
 ├── docs/                        # GENERATED static site (not committed)

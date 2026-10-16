@@ -19,6 +19,7 @@ Usage: python generate.py
 """
 
 import json
+import os
 import shutil
 import sqlite3
 import webbrowser
@@ -305,7 +306,8 @@ def main():
     parses its match logs into a per-dataset SQLite database and renders a full
     dashboard under 'docs/<team>/<tournament>/'. Datasets with no valid match
     data are skipped. Finally a root 'docs/index.html' selector page links to
-    every generated dataset, and the result is opened in the default browser.
+    every generated dataset, and the result is opened in the default browser
+    (skipped when the CI environment variable is set, e.g. in GitHub Actions).
 
     Returns:
         None
@@ -346,8 +348,9 @@ def main():
 
     print(f'Done. {len(summaries)} dataset(s) processed.')
 
-    index_path = (DOCS_ROOT / 'index.html').resolve().as_uri()
-    webbrowser.open(index_path)
+    if not os.environ.get('CI'):
+        index_path = (DOCS_ROOT / 'index.html').resolve().as_uri()
+        webbrowser.open(index_path)
 
 
 if __name__ == '__main__':

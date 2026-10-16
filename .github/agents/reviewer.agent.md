@@ -41,6 +41,7 @@ You are the quality gate between "the developer says it's done" and "it ships to
 **The gate (run it, do not assume)**
 - `python validate_logs.py` on the changed logs reports **no ERRORs** (`--strict` to also surface WARNs).
 - `python generate.py` completes without crashing (the CI smoke build).
+- `ruff check .` and `ruff format --check .` pass (the CI `lint` job).
 
 ---
 
