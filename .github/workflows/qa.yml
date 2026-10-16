@@ -49,6 +49,12 @@ jobs:
               "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
             DIFF=$(git diff --name-only --diff-filter=d \
               "origin/${{ github.base_ref }}...HEAD")
+            # A grammar change can break every log: validate the whole repo.
+            if echo "$DIFF" | grep -qE '^(analytics|validate_logs)\.py$'; then
+              echo "Grammar/validator changed - validating the whole repository."
+              python validate_logs.py
+              exit 0
+            fi
             # A roster edit can orphan player numbers: validate its whole dataset.
             ROSTER_DIRS=$(echo "$DIFF" \
               | grep -E '^teams/[^/]+/[^/]+/team\.json$' \

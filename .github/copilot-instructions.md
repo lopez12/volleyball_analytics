@@ -48,7 +48,7 @@ One line per rally; space-separated, chronological tokens.
 - **Build / preview:** `python generate.py` (also opens the root selector unless `CI` is set). This is the CI smoke test.
 - **Validate match data:** `python validate_logs.py [paths]` - must report no **ERRORs** (`--strict` also fails on WARNs). A player number missing from `team.json` is an ERROR.
 - **Lint / format:** `ruff check .` and `ruff format --check .` must pass (config in `ruff.toml`; `ruff check --fix .` / `ruff format .` to fix). Optional: `pre-commit install`.
-- **CI:** `.github/workflows/qa.yml` runs a `lint` job (ruff) and a `qa` job that validates the logs (or rosters) changed in a PR and runs a smoke build; `.github/workflows/build.yml` regenerates `docs/` and deploys to GitHub Pages on push to `main`.
+- **CI:** `.github/workflows/qa.yml` runs a `lint` job (ruff) and a `qa` job that validates the logs (or rosters) changed in a PR - or every log when `analytics.py` / `validate_logs.py` changed - and runs a smoke build; `.github/workflows/build.yml` regenerates `docs/` and deploys to GitHub Pages on push to `main`.
 
 ## Agents and the brief workflow
 

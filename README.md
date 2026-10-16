@@ -278,7 +278,7 @@ The _outcome-completeness_ check is intentionally advisory: legacy logs without 
 On every pull request to `main`, `.github/workflows/qa.yml` runs two jobs in parallel:
 
 - **`lint`** — `ruff check` (findings appear as inline PR annotations) and `ruff format --check`. See [Linting & formatting](#linting--formatting-ruff).
-- **`qa`** — validates only the match logs **changed in that PR** (so pre-existing legacy files are left alone). If a dataset's `team.json` changed, that whole dataset folder is validated instead, so a roster edit that orphans a player number is caught. It then runs a **smoke build** (`python generate.py`) and checks that `docs/index.html` was written.
+- **`qa`** — validates only the match logs **changed in that PR** (so pre-existing legacy files are left alone). If a dataset's `team.json` changed, that whole dataset folder is validated instead, so a roster edit that orphans a player number is caught. If the grammar itself changed (`analytics.py` or `validate_logs.py`), the **whole repository** is validated, since a grammar change can break any log. It then runs a **smoke build** (`python generate.py`) and checks that `docs/index.html` was written.
 
 The exit code fails the check when any error is present. A newer push to the same PR cancels the in-flight run.
 
