@@ -10,8 +10,14 @@ import statistics
 from html import escape as _html_escape
 
 from analytics import (
-    ACTIONS, FULL_NAMES, GRADES, POSITION_LABELS,
-    calculate_rating, calculate_efficiency, calculate_phase_stats, calculate_point_stats,
+    ACTIONS,
+    FULL_NAMES,
+    GRADES,
+    POSITION_LABELS,
+    calculate_efficiency,
+    calculate_phase_stats,
+    calculate_point_stats,
+    calculate_rating,
 )
 
 # ---------------------------------------------------------------------------
@@ -140,15 +146,18 @@ def _section(title, content_html, collapsed=False):
 
 # Actions that are less relevant per position and should start collapsed
 _POSITION_COLLAPSED_ACTIONS = {
-    'L':   {'S', 'A', 'B', 'E'},   # Libero: Reception + Defense are primary
-    'MB':  {'R', 'D', 'E'},          # Middle Blocker: Attack + Block + Serve primary
-    'OH':  {'B', 'E'},              # Outside Hitter: Attack + Reception primary
-    'OPP': {'R', 'B'},              # Opposite: Attack focused
-    'S':   {'A', 'R', 'B'},         # Setter: Set is primary; no blocking
-    'U':   set(),                   # Universal: nothing collapsed
+    'L': {'S', 'A', 'B', 'E'},  # Libero: Reception + Defense are primary
+    'MB': {'R', 'D', 'E'},  # Middle Blocker: Attack + Block + Serve primary
+    'OH': {'B', 'E'},  # Outside Hitter: Attack + Reception primary
+    'OPP': {'R', 'B'},  # Opposite: Attack focused
+    'S': {'A', 'R', 'B'},  # Setter: Set is primary; no blocking
+    'U': set(),  # Universal: nothing collapsed
 }
 
-def _action_efficiency_charts(match_stats, chart_labels_json, canvas_prefix, collapsed_actions=None):
+
+def _action_efficiency_charts(
+    match_stats, chart_labels_json, canvas_prefix, collapsed_actions=None
+):
     """Build collapsible dual-line (Perfecto / Positivo) efficiency charts for each action.
 
     Args:
@@ -287,6 +296,7 @@ def _rating_color(rating):
         return '#ca8a04'
     return '#dc2626'
 
+
 # ---------------------------------------------------------------------------
 # Card HTML builders
 # ---------------------------------------------------------------------------
@@ -336,8 +346,7 @@ def build_card_html(title, data, rating, extra_class=''):
         if a['tot'] == 0:
             continue
         eff = a['good'] / a['tot']
-        pill_class = 'high-perf' if eff == 1.0 else (
-            'low-perf' if eff < 0.4 else '')
+        pill_class = 'high-perf' if eff == 1.0 else ('low-perf' if eff < 0.4 else '')
         name = FULL_NAMES[action]
         good = a['good']
         tot = a['tot']
@@ -350,8 +359,7 @@ def build_card_html(title, data, rating, extra_class=''):
     pills_html = ''.join(pills)
 
     # Summary table – highlight max values per column
-    max_good = max(
-        (max(grade_count['#'][a], grade_count['+'][a]) for a in ACTIONS), default=0)
+    max_good = max((max(grade_count['#'][a], grade_count['+'][a]) for a in ACTIONS), default=0)
     max_regular = max((grade_count['!'][a] for a in ACTIONS), default=0)
     max_bad = max((grade_count['-'][a] for a in ACTIONS), default=0)
 
@@ -433,8 +441,8 @@ def build_phase_card_html(phase_stats):
     """
     phases = [
         ('so_good', 'Side-Out (Pase Bueno)'),
-        ('so_bad',  'Side-Out (Pase Regular)'),
-        ('trans',   'Transición'),
+        ('so_bad', 'Side-Out (Pase Regular)'),
+        ('trans', 'Transición'),
     ]
     parts = []
     for key, label in phases:
@@ -444,8 +452,9 @@ def build_phase_card_html(phase_stats):
         if attempts == 0:
             continue
         p = _pct(kills, attempts)
-        bar_color = 'var(--success)' if p >= 50 else (
-            'var(--primary)' if p >= 35 else 'var(--danger)')
+        bar_color = (
+            'var(--success)' if p >= 50 else ('var(--primary)' if p >= 35 else 'var(--danger)')
+        )
         parts.append(
             f'<div class="metric-row" style="margin-top:12px;">'
             f'<span>{label} <span style="font-weight:normal;color:#6b7280;font-size:0.8em;">({kills}/{attempts} pts)</span></span>'
@@ -502,10 +511,16 @@ def build_scoring_card_html(point_stats):
     so_total = so['total']
     bp_pct = _pct(bp_won, bp_total)
     so_pct = _pct(so_won, so_total)
-    bp_color = 'var(--success)' if bp_pct >= 40 else (
-        'var(--primary)' if bp_pct >= 30 else 'var(--danger)')
-    so_color = 'var(--success)' if so_pct >= 60 else (
-        'var(--primary)' if so_pct >= 50 else 'var(--danger)')
+    bp_color = (
+        'var(--success)'
+        if bp_pct >= 40
+        else ('var(--primary)' if bp_pct >= 30 else 'var(--danger)')
+    )
+    so_color = (
+        'var(--success)'
+        if so_pct >= 60
+        else ('var(--primary)' if so_pct >= 50 else 'var(--danger)')
+    )
     return (
         '<div class="stat-card team-summary-card" style="margin-top:10px;">'
         '<div class="card-header"><span class="player-number">Rendimiento de Puntos</span></div>'
@@ -555,8 +570,8 @@ def build_earned_points_card_html(earned):
     )
     if not graded:
         return (
-            header +
-            '<div style="padding:10px;text-align:center;color:#9ca3af;font-size:0.82rem;line-height:1.5;">'
+            header
+            + '<div style="padding:10px;text-align:center;color:#9ca3af;font-size:0.82rem;line-height:1.5;">'
             'Sin marcadores de resultado.<br>'
             'Agrega <code>@won</code> / <code>@lost</code> / <code>@won:re</code> a las jugadas '
             'para separar puntos propios de regalados.'
@@ -574,8 +589,8 @@ def build_earned_points_card_html(earned):
     gift_pct = _pct(rival, won)
 
     return (
-        header +
-        '<div style="margin-bottom:15px;font-size:0.85rem;color:#4b5563;background:#f8fafc;'
+        header
+        + '<div style="margin-bottom:15px;font-size:0.85rem;color:#4b5563;background:#f8fafc;'
         'padding:10px;border-radius:6px;border:1px solid #e2e8f0;line-height:1.4;">'
         '<strong>Propios:</strong> puntos ganados por nuestro remate/saque/bloqueo.<br>'
         '<strong>Regalados:</strong> puntos por error del rival (incluye saques fallados).'
@@ -595,6 +610,7 @@ def build_earned_points_card_html(earned):
         '</div>'
         '</div></div>'
     )
+
 
 # ---------------------------------------------------------------------------
 # Page rendering
@@ -680,36 +696,41 @@ def render_match_page(match_title, parsed, generated_date):
             '</div>'
         )
 
-    team_card = build_card_html(
-        'Equipo', team, team_rating, 'team-summary-card')
+    team_card = build_card_html('Equipo', team, team_rating, 'team-summary-card')
 
     # Use pre-computed stats from DB if rallies are empty
     if rallies:
         phase_stats = calculate_phase_stats(rallies)
         point_stats = calculate_point_stats(rallies)
     else:
-        phase_stats = parsed.get('_phase_stats', {
-            'so_good': {'attempts': 0, 'kills': 0},
-            'so_bad': {'attempts': 0, 'kills': 0},
-            'trans': {'attempts': 0, 'kills': 0},
-        })
-        point_stats = parsed.get('_point_stats', {
-            'bp': {'total': 0, 'won': 0},
-            'so': {'total': 0, 'won': 0},
-        })
+        phase_stats = parsed.get(
+            '_phase_stats',
+            {
+                'so_good': {'attempts': 0, 'kills': 0},
+                'so_bad': {'attempts': 0, 'kills': 0},
+                'trans': {'attempts': 0, 'kills': 0},
+            },
+        )
+        point_stats = parsed.get(
+            '_point_stats',
+            {
+                'bp': {'total': 0, 'won': 0},
+                'so': {'total': 0, 'won': 0},
+            },
+        )
 
     phase_card = build_phase_card_html(phase_stats)
     scoring_card = build_scoring_card_html(point_stats)
     earned_card = build_earned_points_card_html(parsed.get('_earned_points'))
 
     players_sorted = sorted(
-        [(num, data, calculate_rating(data))
-         for num, data in players.items() if data['total'] > 0],
+        [(num, data, calculate_rating(data)) for num, data in players.items() if data['total'] > 0],
         key=lambda x: x[2],
         reverse=True,
     )
-    player_cards = ''.join(build_card_html(
-        f'#{num}', data, rating) for num, data, rating in players_sorted)
+    player_cards = ''.join(
+        build_card_html(f'#{num}', data, rating) for num, data, rating in players_sorted
+    )
 
     match_date = _format_iso_date(parsed.get('match_date'))
     date_line = f'<p>Fecha: {match_date}</p>\n    ' if match_date else ''
@@ -735,18 +756,28 @@ def render_match_page(match_title, parsed, generated_date):
     {yt_html}
   </div>
 
-  {_section('Resumen Global', f'''<div class="general-stats">
+  {
+        _section(
+            'Resumen Global',
+            f'''<div class="general-stats">
     <div class="stat-card"><div class="stat-value">{team_rating}</div><div class="stat-label">Rating Equipo</div></div>
     <div class="stat-card"><div class="stat-value">{total_actions}</div><div class="stat-label">Acciones Totales</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--success)">{perfect_pct}%</div><div class="stat-label">Eficacia Perfecta</div></div>
-  </div>''')}
+  </div>''',
+        )
+    }
 
-  {_section('Acciones de Equipo', f'''<div class="players-grid">
+  {
+        _section(
+            'Acciones de Equipo',
+            f'''<div class="players-grid">
     {team_card}
     {phase_card}
     {scoring_card}
     {earned_card}
-  </div>''')}
+  </div>''',
+        )
+    }
 
   {_section('Detalle por Jugador', f'<div class="players-grid">{player_cards}</div>')}
 
@@ -756,8 +787,16 @@ def render_match_page(match_title, parsed, generated_date):
 </html>"""
 
 
-def render_index_page(matches, generated_date, team_name, tournament_name, team_type='tournament',
-                      player_summaries=None, team_season_summary=None, objectives=None):
+def render_index_page(
+    matches,
+    generated_date,
+    team_name,
+    tournament_name,
+    team_type='tournament',
+    player_summaries=None,
+    team_season_summary=None,
+    objectives=None,
+):
     """Render the static HTML index page as a navigation hub for one dataset.
 
     Sections (top to bottom): Team Season, Players, Matches.
@@ -910,8 +949,17 @@ def render_index_page(matches, generated_date, team_name, tournament_name, team_
 # ---------------------------------------------------------------------------
 
 
-def render_player_season_page(player_num, match_stats, team_match_ratings, generated_date,
-                              positions, names, team_name, tournament_name, team_type='tournament'):
+def render_player_season_page(
+    player_num,
+    match_stats,
+    team_match_ratings,
+    generated_date,
+    positions,
+    names,
+    team_name,
+    tournament_name,
+    team_type='tournament',
+):
     """Render a complete season analytics page for a single player.
 
     Args:
@@ -967,14 +1015,18 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
 
     # Action efficiency trends (per match) — each action is its own collapsible section
     collapsed_actions = _POSITION_COLLAPSED_ACTIONS.get(pos_code, set())
-    action_charts_html = _action_efficiency_charts(match_stats, chart_labels, 'chart-action', collapsed_actions)
+    action_charts_html = _action_efficiency_charts(
+        match_stats, chart_labels, 'chart-action', collapsed_actions
+    )
 
     # Season totals cross-tab
     season_data = aggregate_season_data(match_stats)
     season_actions = season_data['actions']  # also used for strengths/weaknesses below
     season_efficiency = calculate_efficiency(season_data)
 
-    season_card = build_card_html(f'{display_name} - {comp_label}', season_data, season_rating, 'team-summary-card')
+    season_card = build_card_html(
+        f'{display_name} - {comp_label}', season_data, season_rating, 'team-summary-card'
+    )
 
     # Strengths & Improvement Areas
     action_effs = []
@@ -989,8 +1041,14 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     if action_effs:
         strengths = action_effs[:2]
         weaknesses = action_effs[-2:] if len(action_effs) >= 4 else action_effs[-1:]
-        s_items = ''.join(f'<div class="metric-row"><span>{name}</span><span style="color:var(--success);">{eff}%</span></div>' for name, eff in strengths)
-        w_items = ''.join(f'<div class="metric-row"><span>{name}</span><span style="color:var(--danger);">{eff}%</span></div>' for name, eff in weaknesses)
+        s_items = ''.join(
+            f'<div class="metric-row"><span>{name}</span><span style="color:var(--success);">{eff}%</span></div>'
+            for name, eff in strengths
+        )
+        w_items = ''.join(
+            f'<div class="metric-row"><span>{name}</span><span style="color:var(--danger);">{eff}%</span></div>'
+            for name, eff in weaknesses
+        )
         strengths_html = (
             '<div class="stat-card" style="margin-top:16px;">'
             '<div class="card-header"><span class="player-number">Fortalezas y Áreas de Mejora</span></div>'
@@ -1048,18 +1106,26 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
     {span_line}<p>{tournament_name} - Generado: {generated_date}</p>
   </div>
 
-  {_section('Resumen de ' + comp_label, f'''<div class="general-stats">
+  {
+        _section(
+            'Resumen de ' + comp_label,
+            f'''<div class="general-stats">
     <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating {comp_label}</div></div>
     <div class="stat-card"><div class="stat-value">{matches_played}</div><div class="stat-label">Partidos Jugados</div></div>
     <div class="stat-card"><div class="stat-value">{total_actions}</div><div class="stat-label">Acciones Totales</div></div>
     <div class="stat-card"><div class="stat-value" style="color:{consistency_color};font-size:1.2rem;word-break:break-word;">{consistency_label}<span style="display:block;font-size:0.75em;color:#6b7280;font-weight:normal;">σ={std_dev}</span></div><div class="stat-label" title="Desviación estándar del rating entre partidos. σ &lt; 0.5: Consistente | σ &lt; 1.0: Moderado | σ ≥ 1.0: Variable">Consistencia ⓘ</div></div>
   </div>
   <div class="general-stats" style="margin-top:12px;">
-    <div class="stat-card"><div class="stat-value" style="color:var(--success);">{best_match["rating"]}</div><div class="stat-label">Mejor: {best_match["match_title"].replace(team_prefix, "")}</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{worst_match["rating"]}</div><div class="stat-label">Peor: {worst_match["match_title"].replace(team_prefix, "")}</div></div>
-  </div>''')}
+    <div class="stat-card"><div class="stat-value" style="color:var(--success);">{best_match['rating']}</div><div class="stat-label">Mejor: {best_match['match_title'].replace(team_prefix, '')}</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{worst_match['rating']}</div><div class="stat-label">Peor: {worst_match['match_title'].replace(team_prefix, '')}</div></div>
+  </div>''',
+        )
+    }
 
-  {_section('Progresión de Rating', f'''<div class="stat-card"><div class="card-body"><canvas id="chart-rating" height="250"></canvas></div></div>
+  {
+        _section(
+            'Progresión de Rating',
+            f'''<div class="stat-card"><div class="card-body"><canvas id="chart-rating" height="250"></canvas></div></div>
   <script>
   (function() {{
     new Chart(document.getElementById('chart-rating'), {{
@@ -1082,20 +1148,32 @@ def render_player_season_page(player_num, match_stats, team_match_ratings, gener
       }}
     }});
   }})();
-  </script>''')}
+  </script>''',
+        )
+    }
 
   {action_charts_html}
 
-  {_section('Estadísticas Acumuladas', f'<div class="players-grid">{season_card}{strengths_html}</div>')}
+  {
+        _section(
+            'Estadísticas Acumuladas',
+            f'<div class="players-grid">{season_card}{strengths_html}</div>',
+        )
+    }
 
   {_section('Eficiencia por Fundamento', _efficiency_block_html(season_efficiency))}
 
-  {_section('Detalle por Partido', f'''<div style="overflow-x:auto;">
+  {
+        _section(
+            'Detalle por Partido',
+            f'''<div style="overflow-x:auto;">
     <table class="summary-table">
       <thead><tr><th>Rival</th><th>Rating</th><th>Acciones</th><th>Perfecto %</th><th>Error %</th></tr></thead>
       <tbody>{match_table_html}</tbody>
     </table>
-  </div>''')}
+  </div>''',
+        )
+    }
 
   {_back_nav('players.html', '← Todos los jugadores')}
 </div>
@@ -1146,15 +1224,19 @@ def _normalize_objectives(objectives):
         current = obj.get('current')
         target = obj.get('target')
         baseline = obj.get('baseline', 0)
-        if not all(isinstance(v, (int, float)) and not isinstance(v, bool)
-                   for v in (current, target, baseline)):
+        if not all(
+            isinstance(v, (int, float)) and not isinstance(v, bool)
+            for v in (current, target, baseline)
+        ):
             continue
         if target == baseline:
             continue
         fill = round((current - baseline) / (target - baseline) * 100)
         fill = max(0, min(100, fill))
         display = obj.get('display')
-        center = display if isinstance(display, str) and display.strip() else f'{current} / {target}'
+        center = (
+            display if isinstance(display, str) and display.strip() else f'{current} / {target}'
+        )
         normalized.append({'label': label, 'fill': fill, 'center': center})
     return normalized
 
@@ -1200,8 +1282,9 @@ def _objectives_section_html(objectives):
     return _section('Objetivos de Temporada', f'<div class="objectives-grid">{rings}</div>')
 
 
-def render_team_season_page(team_stats, generated_date, team_name, tournament_name, team_type='tournament',
-                            objectives=None):
+def render_team_season_page(
+    team_stats, generated_date, team_name, tournament_name, team_type='tournament', objectives=None
+):
     """Render a complete season analytics page for the team.
 
     Args:
@@ -1248,7 +1331,9 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
     # Season totals
     season_data = aggregate_season_data(team_stats)
     team_efficiency = calculate_efficiency(season_data)
-    season_card = build_card_html(f'{team_name} - {comp_label}', season_data, season_rating, 'team-summary-card')
+    season_card = build_card_html(
+        f'{team_name} - {comp_label}', season_data, season_rating, 'team-summary-card'
+    )
 
     # Earned vs. gifted points across the season (Phase 2). Only matches graded
     # with explicit outcome tokens carry a rival-error breakdown; sum those.
@@ -1257,8 +1342,12 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
         season_earned = {
             'points_won': sum(m.get('points_won') or 0 for m in graded_matches),
             'points_won_kill': sum(m.get('points_won_kill') or 0 for m in graded_matches),
-            'points_won_rival_error': sum(m.get('points_won_rival_error') or 0 for m in graded_matches),
-            'points_won_serve_error': sum(m.get('points_won_serve_error') or 0 for m in graded_matches),
+            'points_won_rival_error': sum(
+                m.get('points_won_rival_error') or 0 for m in graded_matches
+            ),
+            'points_won_serve_error': sum(
+                m.get('points_won_serve_error') or 0 for m in graded_matches
+            ),
             'points_lost': sum(m.get('points_lost') or 0 for m in graded_matches),
         }
     else:
@@ -1275,7 +1364,9 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
         r_color = _rating_color(rating)
         result = m.get('result', '')
         result_str = 'W' if result == 'W' else ('L' if result == 'L' else '-')
-        result_color = 'var(--success)' if result == 'W' else ('var(--danger)' if result == 'L' else '#6b7280')
+        result_color = (
+            'var(--success)' if result == 'W' else ('var(--danger)' if result == 'L' else '#6b7280')
+        )
         sets = m.get('set_scores', [])
         sets_str = ' / '.join(f'{v}-{r}' for v, r in sets) if sets else '-'
         href = f'{m["match_stem"]}.html'
@@ -1313,19 +1404,29 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
 <div class="container">
   {_back_link()}
   <div class="report-header">
-    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> {team_name} - {tournament_name}</h1>
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> {team_name} - {
+        tournament_name
+    }</h1>
     {span_line}<p>Generado: {generated_date}</p>
   </div>
 
   {objectives_html}
-  {_section('Resumen de ' + comp_label, f'''<div class="general-stats">
+  {
+        _section(
+            'Resumen de ' + comp_label,
+            f'''<div class="general-stats">
     <div class="stat-card"><div class="stat-value" style="color:{r_color}">{season_rating}</div><div class="stat-label">Rating {comp_label}</div></div>
     <div class="stat-card"><div class="stat-value">{matches_played}</div><div class="stat-label">Partidos</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--success);">{wins}W</div><div class="stat-label">Victorias</div></div>
     <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{losses}L</div><div class="stat-label">Derrotas</div></div>
-  </div>''')}
+  </div>''',
+        )
+    }
 
-  {_section('Progresión de Rating', f'''<div class="stat-card"><div class="card-body"><canvas id="chart-team-rating" height="250"></canvas></div></div>
+  {
+        _section(
+            'Progresión de Rating',
+            f'''<div class="stat-card"><div class="card-body"><canvas id="chart-team-rating" height="250"></canvas></div></div>
   <script>
   (function() {{
     new Chart(document.getElementById('chart-team-rating'), {{
@@ -1344,9 +1445,14 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
       }}
     }});
   }})();
-  </script>''')}
+  </script>''',
+        )
+    }
 
-  {_section('Rendimiento de Puntos (Tendencia)', f'''<div style="font-size:0.82rem;color:#6b7280;margin-bottom:14px;line-height:1.7;">
+  {
+        _section(
+            'Rendimiento de Puntos (Tendencia)',
+            f'''<div style="font-size:0.82rem;color:#6b7280;margin-bottom:14px;line-height:1.7;">
     <span style="color:#f59e0b;font-weight:600;">Break Point %</span>: {_SCORING_DESCRIPTIONS['bp']}<br>
     <span style="color:#22c55e;font-weight:600;">Side-Out %</span>: {_SCORING_DESCRIPTIONS['so']}
   </div>
@@ -1370,7 +1476,9 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
       }}
     }});
   }})();
-  </script>''')}
+  </script>''',
+        )
+    }
 
   {_section('Eficiencia por Acción (Tendencia)', action_charts_html)}
 
@@ -1380,12 +1488,17 @@ def render_team_season_page(team_stats, generated_date, team_name, tournament_na
 
   {_section('Eficiencia por Fundamento', _efficiency_block_html(team_efficiency, all_graded))}
 
-  {_section('Detalle por Partido', f'''<div style="overflow-x:auto;">
+  {
+        _section(
+            'Detalle por Partido',
+            f'''<div style="overflow-x:auto;">
     <table class="summary-table">
       <thead><tr><th>Rival</th><th>Resultado</th><th>Rating</th><th>Sets</th></tr></thead>
       <tbody>{match_table_html}</tbody>
     </table>
-  </div>''')}
+  </div>''',
+        )
+    }
 
   {_back_nav()}
 </div>
@@ -1460,14 +1573,16 @@ def _efficiency_block_html(eff, outcomes_graded=False):
         for label, value in cards
     )
     glossary_items = [
-        ('Ataque (Efic.)',
-         'Eficiencia de ataque = (ataques ganados − ataques error) ÷ total de ataques. '
-         'Rango: −100% a +100%'),
-        ('Recepción +',
-         'Porcentaje de recepciones buenas (perfectas o positivas) sobre el total. '
-         ),
-        ('Acomodo +',
-         'Porcentaje de acomodos buenos sobre el total.')
+        (
+            'Ataque (Efic.)',
+            'Eficiencia de ataque = (ataques ganados − ataques error) ÷ total de ataques. '
+            'Rango: −100% a +100%',
+        ),
+        (
+            'Recepción +',
+            'Porcentaje de recepciones buenas (perfectas o positivas) sobre el total. ',
+        ),
+        ('Acomodo +', 'Porcentaje de acomodos buenos sobre el total.'),
     ]
     glossary_rows = ''.join(
         f'<div style="margin-bottom:6px;"><strong style="color:#374151;">{label}:</strong> '
@@ -1475,13 +1590,12 @@ def _efficiency_block_html(eff, outcomes_graded=False):
         for label, desc in glossary_items
     )
     glossary = (
-        '<div style="margin-top:14px;font-size:0.8rem;line-height:1.5;">'
-        f'{glossary_rows}'
-        '</div>'
+        f'<div style="margin-top:14px;font-size:0.8rem;line-height:1.5;">{glossary_rows}</div>'
     )
     note = (
-        '' if outcomes_graded else
-        f'<p style="color:#9ca3af;font-size:0.75rem;margin:12px 0 0;">* {_ATTACK_EFF_NOTE}</p>'
+        ''
+        if outcomes_graded
+        else f'<p style="color:#9ca3af;font-size:0.75rem;margin:12px 0 0;">* {_ATTACK_EFF_NOTE}</p>'
     )
     return f'<div class="general-stats">{items}</div>{glossary}{note}'
 
@@ -1604,7 +1718,8 @@ def render_matches_page(matches, generated_date):
         match_date = _format_iso_date(m.get('match_date'))
         date_html = (
             f'<div class="metric-row"><span>Fecha</span><span>{match_date}</span></div>'
-            if match_date else ''
+            if match_date
+            else ''
         )
 
         cards.append(

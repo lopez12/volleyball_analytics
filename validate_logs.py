@@ -41,7 +41,12 @@ import sys
 from pathlib import Path
 
 from analytics import (
-    ACTIONS, GRADES, _RE_SET, _RE_YT, _parse_outcome_token, _parse_date_token,
+    _RE_SET,
+    _RE_YT,
+    ACTIONS,
+    GRADES,
+    _parse_date_token,
+    _parse_outcome_token,
     _parse_timestamp_token,
 )
 
@@ -116,9 +121,7 @@ def validate_file(txt_path, roster):
 
     # First pass: does this file use the outcome grammar at all? (D4/R5)
     file_uses_outcomes = any(
-        _parse_outcome_token(tok)
-        for line in lines
-        for tok in line.strip().split()
+        _parse_outcome_token(tok) for line in lines for tok in line.strip().split()
     )
 
     for line_no, raw in enumerate(lines, start=1):
@@ -130,36 +133,51 @@ def validate_file(txt_path, roster):
         if low.startswith('@youtube:'):
             url = trimmed[9:].strip()
             if not _RE_YT.match(url):
-                issues.append((line_no, WARN, 'R6',
-                               'invalid YouTube URL (link ignored by parser)', url))
+                issues.append(
+                    (line_no, WARN, 'R6', 'invalid YouTube URL (link ignored by parser)', url)
+                )
             continue
         if low.startswith('@set:'):
             if not _RE_SET.match(trimmed):
-                issues.append((line_no, ERROR, 'R3',
-                               'malformed @set: line (expected "@set: V-R")', trimmed))
+                issues.append(
+                    (line_no, ERROR, 'R3', 'malformed @set: line (expected "@set: V-R")', trimmed)
+                )
             continue
         if low.startswith('@date:'):
             if _parse_date_token(trimmed) is None:
-                issues.append((line_no, WARN, 'R8',
-                               'malformed @date: line (expected "@date: YYYY-MM-DD")',
-                               trimmed))
+                issues.append(
+                    (
+                        line_no,
+                        WARN,
+                        'R8',
+                        'malformed @date: line (expected "@date: YYYY-MM-DD")',
+                        trimmed,
+                    )
+                )
             continue
 
         tokens = trimmed.split()
         outcome_positions = []
-        valid_plays = []       # (token, number) for grammar-valid play tokens
+        valid_plays = []  # (token, number) for grammar-valid play tokens
         has_bad_candidate = False
-        stray_tokens = []      # non-candidate free text on this line
-        ts_positions = []      # positions of '@t:' timestamp metadata tokens
+        stray_tokens = []  # non-candidate free text on this line
+        ts_positions = []  # positions of '@t:' timestamp metadata tokens
 
         for idx, token in enumerate(tokens):
             if token[:3].lower() == '@t:':
                 # Per-rally video timestamp metadata (Phase 4). Consumed by the
                 # parser as timing, never as a play token; WARN when malformed.
                 if _parse_timestamp_token(token) is None:
-                    issues.append((line_no, WARN, 'R9',
-                                   'malformed @t: timestamp token '
-                                   '(expected "@t:<start>[-<end>]" in seconds)', token))
+                    issues.append(
+                        (
+                            line_no,
+                            WARN,
+                            'R9',
+                            'malformed @t: timestamp token '
+                            '(expected "@t:<start>[-<end>]" in seconds)',
+                            token,
+                        )
+                    )
                 else:
                     ts_positions.append(idx)
                 continue
@@ -172,9 +190,15 @@ def validate_file(txt_path, roster):
                     valid_plays.append((token, m.group(1)))
                 else:
                     has_bad_candidate = True
-                    issues.append((line_no, ERROR, 'R1',
-                                   'malformed play token '
-                                   '(expected <num?><SREADB><#+!->)', token))
+                    issues.append(
+                        (
+                            line_no,
+                            ERROR,
+                            'R1',
+                            'malformed play token (expected <num?><SREADB><#+!->)',
+                            token,
+                        )
+                    )
             else:
                 stray_tokens.append(token)
 
@@ -183,28 +207,40 @@ def validate_file(txt_path, roster):
         if not is_rally:
             # Whole line yields nothing the parser records - it is silently
             # ignored (e.g. '(Sin registro)', '--- SEGUNDO SET ---').
-            issues.append((line_no, WARN, 'R7',
-                           'line ignored by parser (no valid tokens)', trimmed))
+            issues.append(
+                (line_no, WARN, 'R7', 'line ignored by parser (no valid tokens)', trimmed)
+            )
             continue
 
         # R2 - roster membership for player-tagged tokens.
         for token, number in valid_plays:
             if number and number not in roster:
-                issues.append((line_no, ERROR, 'R2',
-                               f'player #{number} is not in the team.json roster',
-                               token))
+                issues.append(
+                    (
+                        line_no,
+                        ERROR,
+                        'R2',
+                        f'player #{number} is not in the team.json roster',
+                        token,
+                    )
+                )
 
         # R7 - stray free-text tokens on an otherwise valid rally line.
         for token in stray_tokens:
-            issues.append((line_no, WARN, 'R7',
-                           'token ignored by parser', token))
+            issues.append((line_no, WARN, 'R7', 'token ignored by parser', token))
 
         # R4 - outcome token placement / duplication.
         if outcome_positions:
             if len(outcome_positions) > 1:
-                issues.append((line_no, WARN, 'R4',
-                               'multiple outcome tokens (only the first is used)',
-                               tokens[outcome_positions[1]]))
+                issues.append(
+                    (
+                        line_no,
+                        WARN,
+                        'R4',
+                        'multiple outcome tokens (only the first is used)',
+                        tokens[outcome_positions[1]],
+                    )
+                )
             # A trailing '@t:' timestamp is legitimately last, so the outcome
             # only needs to be the last non-timestamp token.
             ts_set = set(ts_positions)
@@ -212,15 +248,27 @@ def validate_file(txt_path, roster):
             while last_idx >= 0 and last_idx in ts_set:
                 last_idx -= 1
             if outcome_positions[-1] != last_idx:
-                issues.append((line_no, WARN, 'R4',
-                               'outcome token should be the last token on the line',
-                               tokens[outcome_positions[0]]))
+                issues.append(
+                    (
+                        line_no,
+                        WARN,
+                        'R4',
+                        'outcome token should be the last token on the line',
+                        tokens[outcome_positions[0]],
+                    )
+                )
 
         # R5 - outcome completeness (only in files that use the grammar).
         elif file_uses_outcomes:
-            issues.append((line_no, WARN, 'R5',
-                           'rally has no @won/@lost outcome token '
-                           '(file uses outcome grammar)', trimmed))
+            issues.append(
+                (
+                    line_no,
+                    WARN,
+                    'R5',
+                    'rally has no @won/@lost outcome token (file uses outcome grammar)',
+                    trimmed,
+                )
+            )
 
     return issues
 
@@ -273,17 +321,15 @@ def _find_team_json(txt_path):
 
 def main(argv=None):
     """CLI entry point. Returns the process exit code (0 ok, 1 on errors)."""
-    parser = argparse.ArgumentParser(
-        description='Validate volleyball match-log .txt files.')
-    parser.add_argument('paths', nargs='*',
-                        help='files or directories to validate '
-                             '(default: whole repository)')
-    parser.add_argument('--strict', action='store_true',
-                        help='promote warnings to errors')
+    parser = argparse.ArgumentParser(description='Validate volleyball match-log .txt files.')
+    parser.add_argument(
+        'paths', nargs='*', help='files or directories to validate (default: whole repository)'
+    )
+    parser.add_argument('--strict', action='store_true', help='promote warnings to errors')
     args = parser.parse_args(argv)
 
     roster_cache = {}
-    files_report = {}       # rel_path -> list of issues
+    files_report = {}  # rel_path -> list of issues
     total_errors = 0
     total_warnings = 0
     files_checked = 0
@@ -294,8 +340,7 @@ def main(argv=None):
         issues = []
 
         if team_json is None:
-            issues.append((0, ERROR, 'R2',
-                           'no team.json found for this match file', ''))
+            issues.append((0, ERROR, 'R2', 'no team.json found for this match file', ''))
             roster = set()
         else:
             key = str(team_json.resolve())
@@ -303,8 +348,7 @@ def main(argv=None):
                 roster_cache[key] = _load_roster(team_json)
             roster, roster_err = roster_cache[key]
             if roster is None:
-                issues.append((0, ERROR, 'R2',
-                               f'{roster_err} ({_rel(team_json)})', ''))
+                issues.append((0, ERROR, 'R2', f'{roster_err} ({_rel(team_json)})', ''))
                 roster = set()
 
         issues.extend(validate_file(txt_path, roster))
@@ -325,8 +369,10 @@ def main(argv=None):
             print(f'  {loc}: [{effective}] {rule} {message}{token_note}')
         print()
 
-    print(f'{total_errors} error(s), {total_warnings} warning(s) '
-          f'across {files_checked} file(s) checked.')
+    print(
+        f'{total_errors} error(s), {total_warnings} warning(s) '
+        f'across {files_checked} file(s) checked.'
+    )
     return 1 if total_errors else 0
 
 

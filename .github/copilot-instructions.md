@@ -25,7 +25,7 @@ A dependency-free **Python static-site generator** that turns volleyball match l
 
 - **Grammar is single-source.** The match-log grammar lives in `analytics.py` and is enforced by `validate_logs.py`. Add any new token or rule in both - never hard-code it twice.
 - **Source vs. generated.** Committed input: `teams/**` (rosters `team.json` + `matches/*.txt`), `styles.css`, `logger/`. Generated and never hand-edited: everything under `data/` and `docs/` - including `docs/logger/`, which `generate.py` copies from `logger/`. Edit the source, then rebuild.
-- **No dependencies, no build step.** Python stays standard-library only; the logger stays framework-less; output stays static.
+- **No dependencies, no build step.** Python stays standard-library only; the logger stays framework-less; output stays static. Dev tooling (ruff, pre-commit) is allowed but is never imported at runtime.
 - **Escape HTML.** Data-derived strings that reach HTML go through `html.escape` (Python) or the logger's `esc()` helper.
 - **Backward-compatible logs.** Outcome tokens (`@won` / `@lost` / `@won:re` / `@won:se`) and `@t:` video timestamps are optional, with a heuristic fallback. Old matches must keep building unchanged.
 - **One `styles.css`.** It is copied verbatim to every output location and uses `:root` custom properties with `data-theme` light/dark tokens. Use the tokens - no hardcoded colors.
@@ -45,9 +45,10 @@ One line per rally; space-separated, chronological tokens.
 
 ## Workflow
 
-- **Build / preview:** `python generate.py` (also opens the root selector). This is the CI smoke test.
+- **Build / preview:** `python generate.py` (also opens the root selector unless `CI` is set). This is the CI smoke test.
 - **Validate match data:** `python validate_logs.py [paths]` - must report no **ERRORs** (`--strict` also fails on WARNs). A player number missing from `team.json` is an ERROR.
-- **CI:** `.github/workflows/qa.yml` validates the logs changed in a PR and runs a smoke build; `.github/workflows/build.yml` regenerates `docs/` and deploys to GitHub Pages on push to `main`.
+- **Lint / format:** `ruff check .` and `ruff format --check .` must pass (config in `ruff.toml`; `ruff check --fix .` / `ruff format .` to fix). Optional: `pre-commit install`.
+- **CI:** `.github/workflows/qa.yml` runs a `lint` job (ruff) and a `qa` job that validates the logs (or rosters) changed in a PR - or every log when `analytics.py` / `validate_logs.py` changed - and runs a smoke build; `.github/workflows/build.yml` regenerates `docs/` and deploys to GitHub Pages on push to `main`.
 
 ## Agents and the brief workflow
 

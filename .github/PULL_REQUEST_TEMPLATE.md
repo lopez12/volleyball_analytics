@@ -12,6 +12,12 @@
 - [ ] Docs
 - [ ] Tooling / CI
 
+## Code checklist
+
+<!-- Complete this section only if this PR changes any *.py file. -->
+
+- [ ] `ruff check .` and `ruff format --check .` pass.
+
 ## Match-data checklist
 
 <!-- Complete this section only if this PR adds or edits any teams/**/*.txt log. -->

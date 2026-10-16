@@ -1,0 +1,5 @@
+# Revisions skipped by git blame. Enable locally with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Mechanical ruff check --fix + ruff format (import sort, formatting, CRLF->LF)
+242aa1fb50124e7edb2e941dbe37c067ea477c6d
