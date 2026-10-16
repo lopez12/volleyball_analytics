@@ -28,11 +28,11 @@ GRADES = ['#', '+', '!', '-']
 # discounted. ACTION_WEIGHTS['E'] is the primary tuning dial: lower it to
 # further reduce setter inflation, raise it to reward playmaking.
 ACTION_WEIGHTS = {
-    'A': 1.3,   # Ataque   - terminal, scores points
-    'B': 1.2,   # Bloqueo  - terminal, scores points
-    'S': 1.1,   # Saque    - can ace or break serve-receive
-    'R': 1.0,   # Recepción - baseline
-    'D': 1.0,   # Defensa  - baseline
+    'A': 1.3,  # Ataque   - terminal, scores points
+    'B': 1.2,  # Bloqueo  - terminal, scores points
+    'S': 1.1,  # Saque    - can ace or break serve-receive
+    'R': 1.0,  # Recepción - baseline
+    'D': 1.0,  # Defensa  - baseline
     'E': 0.65,  # Acomodo  - low-risk continuation (primary dial)
 }
 
@@ -102,6 +102,7 @@ def load_team_config(path):
         'objectives': objectives,
     }
 
+
 _RE_PLAYER = re.compile(r'^(\d+)([SREADB])([#+!\-])$')
 _RE_TEAM = re.compile(r'^([SREADB])([#+!\-])$')
 _RE_ANY = re.compile(r'^(\d*)([SREADB])([#+!\-])$')
@@ -131,6 +132,8 @@ def _parse_date_token(trimmed):
         return _date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
     except ValueError:
         return None
+
+
 # Inline trailing rally-outcome tokens (Phase 2 - grade integrity).
 #   @won        -> we scored the rally by our own play (a kill).
 #   @won:re     -> we scored, cause = rival error (gifted point).
@@ -166,6 +169,7 @@ def _parse_outcome_token(token):
         cause = None
     return {'result': result, 'cause': cause}
 
+
 # Optional, per-rally video timestamp (Phase 4). A trailing metadata token
 # '@t:<start>[-<end>]' giving seconds (int or decimal) into that set's video,
 # consumed as rally timing rather than a played token. Absence is never an
@@ -189,6 +193,7 @@ def _parse_timestamp_token(token):
         return None
     end = float(m.group(2)) if m.group(2) is not None else None
     return {'start': float(m.group(1)), 'end': end}
+
 
 # ---------------------------------------------------------------------------
 # Data helpers
@@ -251,6 +256,7 @@ def _record(stats, action, grade):
     if grade in ('#', '+'):
         stats['actions'][action]['good'] += 1
     stats['grade_count'][grade][action] += 1
+
 
 # ---------------------------------------------------------------------------
 # Parsing
@@ -414,6 +420,7 @@ def parse_log(log_string):
         'match_date': match_date,
     }
 
+
 # ---------------------------------------------------------------------------
 # Calculations
 # ---------------------------------------------------------------------------
@@ -534,8 +541,8 @@ def calculate_phase_stats(rallies, rally_outcomes=None):
     """
     stats = {
         'so_good': {'attempts': 0, 'kills': 0},
-        'so_bad':  {'attempts': 0, 'kills': 0},
-        'trans':   {'attempts': 0, 'kills': 0},
+        'so_bad': {'attempts': 0, 'kills': 0},
+        'trans': {'attempts': 0, 'kills': 0},
     }
     for i, rally in enumerate(rallies):
         outcome = rally_outcomes[i] if rally_outcomes and i < len(rally_outcomes) else None

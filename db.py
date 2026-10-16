@@ -8,9 +8,13 @@ import json
 import sqlite3
 
 from analytics import (
-    ACTIONS, GRADES,
-    calculate_rating, calculate_phase_stats, calculate_point_stats,
-    calculate_earned_points, _determine_win,
+    ACTIONS,
+    GRADES,
+    _determine_win,
+    calculate_earned_points,
+    calculate_phase_stats,
+    calculate_point_stats,
+    calculate_rating,
 )
 
 # ---------------------------------------------------------------------------
@@ -123,10 +127,10 @@ def _ensure_team_outcome_columns(conn):
     Returns:
         None
     """
-    existing = {row[1] for row in conn.execute("PRAGMA table_info(team_match_stats)")}
+    existing = {row[1] for row in conn.execute('PRAGMA table_info(team_match_stats)')}
     for col in _TEAM_OUTCOME_COLUMNS:
         if col not in existing:
-            conn.execute(f"ALTER TABLE team_match_stats ADD COLUMN {col} INTEGER")
+            conn.execute(f'ALTER TABLE team_match_stats ADD COLUMN {col} INTEGER')
 
 
 def _ensure_match_date_column(conn):
@@ -141,9 +145,9 @@ def _ensure_match_date_column(conn):
     Returns:
         None
     """
-    existing = {row[1] for row in conn.execute("PRAGMA table_info(matches)")}
+    existing = {row[1] for row in conn.execute('PRAGMA table_info(matches)')}
     if 'match_date' not in existing:
-        conn.execute("ALTER TABLE matches ADD COLUMN match_date TEXT")
+        conn.execute('ALTER TABLE matches ADD COLUMN match_date TEXT')
 
 
 def init_db(conn):
@@ -166,10 +170,11 @@ def init_db(conn):
         None
     """
     conn.executescript(_SCHEMA)
-    conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute('PRAGMA foreign_keys = ON')
     _ensure_team_outcome_columns(conn)
     _ensure_match_date_column(conn)
     conn.commit()
+
 
 # ---------------------------------------------------------------------------
 # Upsert
@@ -249,6 +254,7 @@ def upsert_match(conn, stem, title, parsed):
         None
     """
     from datetime import date
+
     generated_date = date.today().strftime('%d/%m/%Y')
     youtube_json = json.dumps(parsed['youtube_urls'])
     match_date = parsed.get('match_date')
@@ -264,9 +270,7 @@ def upsert_match(conn, stem, title, parsed):
                youtube_urls = excluded.youtube_urls""",
         (stem, title, generated_date, match_date, youtube_json),
     )
-    match_id = conn.execute(
-        "SELECT id FROM matches WHERE stem = ?", (stem,)
-    ).fetchone()[0]
+    match_id = conn.execute('SELECT id FROM matches WHERE stem = ?', (stem,)).fetchone()[0]
 
     # Team stats
     team_row = _stats_to_row(parsed['team'])
@@ -274,35 +278,37 @@ def upsert_match(conn, stem, title, parsed):
     rally_outcomes = parsed.get('rally_outcomes')
     phase = calculate_phase_stats(rallies, rally_outcomes)
     point_stats = calculate_point_stats(rallies, rally_outcomes)
-    team_row.update({
-        'so_good_attempts': phase['so_good']['attempts'],
-        'so_good_kills': phase['so_good']['kills'],
-        'so_bad_attempts': phase['so_bad']['attempts'],
-        'so_bad_kills': phase['so_bad']['kills'],
-        'trans_attempts': phase['trans']['attempts'],
-        'trans_kills': phase['trans']['kills'],
-        'bp_total': point_stats['bp']['total'],
-        'bp_won': point_stats['bp']['won'],
-        'so_total': point_stats['so']['total'],
-        'so_won': point_stats['so']['won'],
-    })
+    team_row.update(
+        {
+            'so_good_attempts': phase['so_good']['attempts'],
+            'so_good_kills': phase['so_good']['kills'],
+            'so_bad_attempts': phase['so_bad']['attempts'],
+            'so_bad_kills': phase['so_bad']['kills'],
+            'trans_attempts': phase['trans']['attempts'],
+            'trans_kills': phase['trans']['kills'],
+            'bp_total': point_stats['bp']['total'],
+            'bp_won': point_stats['bp']['won'],
+            'so_total': point_stats['so']['total'],
+            'so_won': point_stats['so']['won'],
+        }
+    )
 
     # Earned vs. gifted points (Phase 2). When the match carries explicit outcome
     # tokens, store the full breakdown. Otherwise store fallback-derived won/lost
     # totals and leave the kill/rival-error/serve-error columns NULL to signal
     # "not graded for outcomes" to the renderer.
-    has_outcomes = bool(rally_outcomes) and any(
-        o.get('result') is not None for o in rally_outcomes
-    )
+    has_outcomes = bool(rally_outcomes) and any(o.get('result') is not None for o in rally_outcomes)
     if has_outcomes:
         earned = parsed.get('points') or calculate_earned_points(rally_outcomes)
-        team_row.update({
-            'points_won': earned['won'],
-            'points_won_kill': earned['won_kill'],
-            'points_won_rival_error': earned['won_rival_error'],
-            'points_won_serve_error': earned['won_serve_error'],
-            'points_lost': earned['lost'],
-        })
+        team_row.update(
+            {
+                'points_won': earned['won'],
+                'points_won_kill': earned['won_kill'],
+                'points_won_rival_error': earned['won_rival_error'],
+                'points_won_serve_error': earned['won_serve_error'],
+                'points_lost': earned['lost'],
+            }
+        )
     else:
         won = lost = 0
         for r in range(len(rallies)):
@@ -310,25 +316,27 @@ def upsert_match(conn, stem, title, parsed):
                 won += 1
             else:
                 lost += 1
-        team_row.update({
-            'points_won': won,
-            'points_won_kill': None,
-            'points_won_rival_error': None,
-            'points_won_serve_error': None,
-            'points_lost': lost,
-        })
+        team_row.update(
+            {
+                'points_won': won,
+                'points_won_kill': None,
+                'points_won_rival_error': None,
+                'points_won_serve_error': None,
+                'points_lost': lost,
+            }
+        )
 
     team_row['match_id'] = match_id
 
     # Delete existing team/player/set rows for idempotency
-    conn.execute("DELETE FROM team_match_stats WHERE match_id = ?", (match_id,))
-    conn.execute("DELETE FROM player_match_stats WHERE match_id = ?", (match_id,))
-    conn.execute("DELETE FROM match_sets WHERE match_id = ?", (match_id,))
+    conn.execute('DELETE FROM team_match_stats WHERE match_id = ?', (match_id,))
+    conn.execute('DELETE FROM player_match_stats WHERE match_id = ?', (match_id,))
+    conn.execute('DELETE FROM match_sets WHERE match_id = ?', (match_id,))
 
     cols = ', '.join(team_row.keys())
     placeholders = ', '.join(['?'] * len(team_row))
     conn.execute(
-        f"INSERT INTO team_match_stats ({cols}) VALUES ({placeholders})",
+        f'INSERT INTO team_match_stats ({cols}) VALUES ({placeholders})',
         list(team_row.values()),
     )
 
@@ -342,18 +350,19 @@ def upsert_match(conn, stem, title, parsed):
         cols = ', '.join(p_row.keys())
         placeholders = ', '.join(['?'] * len(p_row))
         conn.execute(
-            f"INSERT INTO player_match_stats ({cols}) VALUES ({placeholders})",
+            f'INSERT INTO player_match_stats ({cols}) VALUES ({placeholders})',
             list(p_row.values()),
         )
 
     # Set scores
     for set_number, (team_score, rival_score) in enumerate(parsed.get('set_scores', []), start=1):
         conn.execute(
-            "INSERT INTO match_sets (match_id, set_number, team_score, rival_score) VALUES (?, ?, ?, ?)",
+            'INSERT INTO match_sets (match_id, set_number, team_score, rival_score) VALUES (?, ?, ?, ?)',
             (match_id, set_number, team_score, rival_score),
         )
 
     conn.commit()
+
 
 # ---------------------------------------------------------------------------
 # Query helpers
@@ -373,7 +382,7 @@ def get_match_sets(conn, match_id):
     """
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT set_number, team_score, rival_score FROM match_sets WHERE match_id = ? ORDER BY set_number",
+        'SELECT set_number, team_score, rival_score FROM match_sets WHERE match_id = ? ORDER BY set_number',
         (match_id,),
     ).fetchall()
     return [(row['set_number'], row['team_score'], row['rival_score']) for row in rows]
@@ -450,9 +459,7 @@ def get_match(conn, stem):
             with the given stem exists in the database.
     """
     conn.row_factory = sqlite3.Row
-    match_row = conn.execute(
-        "SELECT * FROM matches WHERE stem = ?", (stem,)
-    ).fetchone()
+    match_row = conn.execute('SELECT * FROM matches WHERE stem = ?', (stem,)).fetchone()
     if not match_row:
         return None
 
@@ -461,12 +468,12 @@ def get_match(conn, stem):
     match_date = match_row['match_date']
 
     team_row = conn.execute(
-        "SELECT * FROM team_match_stats WHERE match_id = ?", (match_id,)
+        'SELECT * FROM team_match_stats WHERE match_id = ?', (match_id,)
     ).fetchone()
     team = _row_to_stats(dict(team_row))
 
     player_rows = conn.execute(
-        "SELECT * FROM player_match_stats WHERE match_id = ?", (match_id,)
+        'SELECT * FROM player_match_stats WHERE match_id = ?', (match_id,)
     ).fetchall()
     players = {}
     for p_row in player_rows:
@@ -507,7 +514,8 @@ def get_phase_stats_from_db(conn, stem):
     row = conn.execute(
         """SELECT t.* FROM team_match_stats t
            JOIN matches m ON m.id = t.match_id
-           WHERE m.stem = ?""", (stem,)
+           WHERE m.stem = ?""",
+        (stem,),
     ).fetchone()
     if not row:
         return {
@@ -544,7 +552,8 @@ def get_point_stats_from_db(conn, stem):
     row = conn.execute(
         """SELECT t.* FROM team_match_stats t
            JOIN matches m ON m.id = t.match_id
-           WHERE m.stem = ?""", (stem,)
+           WHERE m.stem = ?""",
+        (stem,),
     ).fetchone()
     if not row:
         return {'bp': {'total': 0, 'won': 0}, 'so': {'total': 0, 'won': 0}}
@@ -577,7 +586,8 @@ def get_earned_points_from_db(conn, stem):
     row = conn.execute(
         """SELECT t.* FROM team_match_stats t
            JOIN matches m ON m.id = t.match_id
-           WHERE m.stem = ?""", (stem,)
+           WHERE m.stem = ?""",
+        (stem,),
     ).fetchone()
     if not row:
         return None
@@ -636,16 +646,18 @@ def get_all_matches_meta(conn):
             result = 'W' if team_sets > rival_sets else 'L'
         else:
             result = None
-        matches.append({
-            'title': row['title'],
-            'file': f"{row['stem']}.html",
-            'rating': rating,
-            'total_actions': total,
-            'perfect_pct': pct,
-            'set_scores': set_scores,
-            'result': result,
-            'match_date': row['match_date'],
-        })
+        matches.append(
+            {
+                'title': row['title'],
+                'file': f'{row["stem"]}.html',
+                'rating': rating,
+                'total_actions': total,
+                'perfect_pct': pct,
+                'set_scores': set_scores,
+                'result': result,
+                'match_date': row['match_date'],
+            }
+        )
     return matches
 
 
@@ -658,7 +670,7 @@ def get_all_player_nums(conn):
     """Return a sorted list of all distinct player numbers in the database."""
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        "SELECT DISTINCT player_num FROM player_match_stats ORDER BY CAST(player_num AS INTEGER)"
+        'SELECT DISTINCT player_num FROM player_match_stats ORDER BY CAST(player_num AS INTEGER)'
     ).fetchall()
     return [row['player_num'] for row in rows]
 
