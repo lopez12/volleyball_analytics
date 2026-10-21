@@ -69,7 +69,7 @@ _CSP = (
     "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; "
     "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: https://i.ytimg.com; "
-    "frame-src https://www.youtube.com https://www.youtube-nocookie.com; "
+    'frame-src https://www.youtube.com https://www.youtube-nocookie.com; '
     "connect-src 'self' https://www.youtube.com; "
     "font-src 'self'; "
     "object-src 'none'; "
@@ -109,8 +109,7 @@ def _build_sitemap(docs_root, site_url, lastmod):
         if p.name != '404.html'
     )
     urls = ''.join(
-        f'  <url><loc>{xml_escape(f"{site_url}/{rel}")}</loc>'
-        f'<lastmod>{lastmod}</lastmod></url>\n'
+        f'  <url><loc>{xml_escape(f"{site_url}/{rel}")}</loc><lastmod>{lastmod}</lastmod></url>\n'
         for rel in rel_paths
     )
     return (
