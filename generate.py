@@ -19,23 +19,36 @@ Usage: python generate.py
 """
 
 import json
+import os
 import shutil
 import sqlite3
 import webbrowser
-from pathlib import Path
 from datetime import date
+from pathlib import Path
 
-from analytics import parse_log, load_team_config, calculate_efficiency
+from analytics import calculate_efficiency, load_team_config, parse_log
 from db import (
-    init_db, upsert_match, get_all_matches_meta, get_match,
-    get_phase_stats_from_db, get_point_stats_from_db, get_earned_points_from_db,
-    get_all_player_nums, get_player_season_stats, get_team_season_stats,
+    get_all_matches_meta,
+    get_all_player_nums,
+    get_earned_points_from_db,
+    get_match,
+    get_phase_stats_from_db,
+    get_player_season_stats,
+    get_point_stats_from_db,
+    get_team_season_stats,
+    init_db,
+    upsert_match,
 )
 from renderer import (
-    format_title, render_match_page, render_index_page,
-    render_player_season_page, render_team_season_page,
-    render_players_page, render_matches_page, render_root_index_page,
     aggregate_season_data,
+    format_title,
+    render_index_page,
+    render_match_page,
+    render_matches_page,
+    render_player_season_page,
+    render_players_page,
+    render_root_index_page,
+    render_team_season_page,
 )
 
 TEAMS_ROOT = Path('teams')
@@ -83,14 +96,16 @@ def write_datasets_manifest(datasets):
         except (OSError, ValueError) as exc:
             print(f'  Skipped manifest entry ({team_slug}/{tournament_slug}): {exc}')
             continue
-        manifest.append({
-            'team_slug': team_slug,
-            'tournament_slug': tournament_slug,
-            'team': cfg.get('team', ''),
-            'tournament': cfg.get('tournament', ''),
-            'type': cfg.get('type', 'tournament'),
-            'roster': cfg.get('roster', {}),
-        })
+        manifest.append(
+            {
+                'team_slug': team_slug,
+                'tournament_slug': tournament_slug,
+                'team': cfg.get('team', ''),
+                'tournament': cfg.get('tournament', ''),
+                'type': cfg.get('type', 'tournament'),
+                'roster': cfg.get('roster', {}),
+            }
+        )
     DOCS_ROOT.mkdir(exist_ok=True)
     payload = json.dumps(manifest, ensure_ascii=False, indent=2)
     (DOCS_ROOT / 'datasets.json').write_text(payload, encoding='utf-8')
@@ -147,9 +162,9 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
     current_stems = [p.stem for p in txt_files]
     if current_stems:
         placeholders = ','.join('?' * len(current_stems))
-        conn.execute(f"DELETE FROM matches WHERE stem NOT IN ({placeholders})", current_stems)
+        conn.execute(f'DELETE FROM matches WHERE stem NOT IN ({placeholders})', current_stems)
     else:
-        conn.execute("DELETE FROM matches")
+        conn.execute('DELETE FROM matches')
     conn.commit()
 
     # Parse all .txt files and upsert into the database
@@ -189,7 +204,9 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
     # --- Season (dataset aggregate) pages ---
     team_season = get_team_season_stats(conn)
     if team_season:
-        html = render_team_season_page(team_season, today, team_name, tournament_name, team_type, objectives)
+        html = render_team_season_page(
+            team_season, today, team_name, tournament_name, team_type, objectives
+        )
         (out_dir / 'team_season.html').write_text(html, encoding='utf-8')
         print(f'  Generated: docs/{team_slug}/{tournament_slug}/team_season.html')
 
@@ -205,8 +222,15 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
             continue
         team_match_ratings = [team_ratings_by_match.get(m['match_id'], 0.0) for m in pstats]
         html = render_player_season_page(
-            pnum, pstats, team_match_ratings, today,
-            positions, names, team_name, tournament_name, team_type,
+            pnum,
+            pstats,
+            team_match_ratings,
+            today,
+            positions,
+            names,
+            team_name,
+            tournament_name,
+            team_type,
         )
         (out_dir / f'player_{pnum}.html').write_text(html, encoding='utf-8')
         print(f'  Generated: docs/{team_slug}/{tournament_slug}/player_{pnum}.html')
@@ -214,15 +238,17 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
         ratings = [m['rating'] for m in pstats]
         avg_rating = round(sum(ratings) / len(ratings), 1)
         season_efficiency = calculate_efficiency(aggregate_season_data(pstats))
-        player_summaries.append({
-            'player_num': pnum,
-            'name': names.get(pnum, f'#{pnum}'),
-            'position': positions.get(pnum, 'U'),
-            'rating': avg_rating,
-            'matches_played': len(pstats),
-            'total_actions': sum(m['total'] for m in pstats),
-            'efficiency': season_efficiency,
-        })
+        player_summaries.append(
+            {
+                'player_num': pnum,
+                'name': names.get(pnum, f'#{pnum}'),
+                'position': positions.get(pnum, 'U'),
+                'rating': avg_rating,
+                'matches_played': len(pstats),
+                'total_actions': sum(m['total'] for m in pstats),
+                'efficiency': season_efficiency,
+            }
+        )
 
     player_summaries.sort(key=lambda x: x['rating'], reverse=True)
 
@@ -238,8 +264,14 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
         }
 
     index_html = render_index_page(
-        matches_meta, today, team_name, tournament_name, team_type,
-        player_summaries, team_season_summary, objectives,
+        matches_meta,
+        today,
+        team_name,
+        tournament_name,
+        team_type,
+        player_summaries,
+        team_season_summary,
+        objectives,
     )
     (out_dir / 'index.html').write_text(index_html, encoding='utf-8')
     print(f'  Generated: docs/{team_slug}/{tournament_slug}/index.html')
@@ -274,7 +306,8 @@ def main():
     parses its match logs into a per-dataset SQLite database and renders a full
     dashboard under 'docs/<team>/<tournament>/'. Datasets with no valid match
     data are skipped. Finally a root 'docs/index.html' selector page links to
-    every generated dataset, and the result is opened in the default browser.
+    every generated dataset, and the result is opened in the default browser
+    (skipped when the CI environment variable is set, e.g. in GitHub Actions).
 
     Returns:
         None
@@ -315,8 +348,9 @@ def main():
 
     print(f'Done. {len(summaries)} dataset(s) processed.')
 
-    index_path = (DOCS_ROOT / 'index.html').resolve().as_uri()
-    webbrowser.open(index_path)
+    if not os.environ.get('CI'):
+        index_path = (DOCS_ROOT / 'index.html').resolve().as_uri()
+        webbrowser.open(index_path)
 
 
 if __name__ == '__main__':

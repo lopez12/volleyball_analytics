@@ -8,9 +8,30 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same PR supersedes the in-flight run.
+concurrency:
+  group: qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ruff lint
+        uses: astral-sh/ruff-action@v3
+        with:
+          version: '0.17.1'   # keep in sync with .pre-commit-config.yaml
+          args: check --output-format=github .
+
+      - name: Ruff format check
+        run: ruff format --check --diff .
+
   qa:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -26,20 +47,37 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin \
               "+refs/heads/${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}"
-            CHANGED=$(git diff --name-only --diff-filter=d \
-              "origin/${{ github.base_ref }}...HEAD" \
-              | grep -E '^teams/.*\.txt$' || true)
-            if [ -z "$CHANGED" ]; then
-              echo "No match logs changed in this PR - nothing to validate."
+            DIFF=$(git diff --name-only --diff-filter=d \
+              "origin/${{ github.base_ref }}...HEAD")
+            # A grammar change can break every log: validate the whole repo.
+            if echo "$DIFF" | grep -qE '^(analytics|validate_logs)\.py$'; then
+              echo "Grammar/validator changed - validating the whole repository."
+              python validate_logs.py
               exit 0
             fi
-            echo "Validating changed match logs:"
-            echo "$CHANGED"
-            echo "$CHANGED" | xargs python validate_logs.py
+            # A roster edit can orphan player numbers: validate its whole dataset.
+            ROSTER_DIRS=$(echo "$DIFF" \
+              | grep -E '^teams/[^/]+/[^/]+/team\.json$' \
+              | sed 's#/team\.json$##' || true)
+            LOGS=$(echo "$DIFF" | grep -E '^teams/.*\.txt$' || true)
+            # Drop logs already covered by a dataset folder above.
+            for d in $ROSTER_DIRS; do
+              LOGS=$(echo "$LOGS" | grep -v -F "$d/" || true)
+            done
+            TARGETS=$(printf '%s\n' "$ROSTER_DIRS" "$LOGS" | sed '/^$/d' | sort -u)
+            if [ -z "$TARGETS" ]; then
+              echo "No match logs or rosters changed in this PR - nothing to validate."
+              exit 0
+            fi
+            echo "Validating:"
+            echo "$TARGETS"
+            echo "$TARGETS" | xargs -d '\n' python validate_logs.py
           else
             echo "Manual run - validating the whole repository."
             python validate_logs.py
           fi
 
       - name: Smoke build (generate static reports)
-        run: python generate.py
+        run: |
+          python generate.py
+          test -s docs/index.html

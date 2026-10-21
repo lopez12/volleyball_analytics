@@ -64,7 +64,7 @@
 24S#
 24S+ 17D-
 1R-
-X-
+(error de todas)
 10R-
 2R# 12E# 25A#
 12S+ 2D+ 12E+ 17A! 1D-

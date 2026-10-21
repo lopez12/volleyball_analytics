@@ -1,0 +1,17 @@
+# Optional local hooks. CI (.github/workflows/qa.yml) is the real gate.
+# Setup: pip install pre-commit && pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.1   # keep in sync with the ruff version in .github/workflows/qa.yml
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: validate-logs
+        name: validate match logs
+        language: system
+        entry: python validate_logs.py
+        files: ^teams/.*\.txt$
