@@ -572,12 +572,16 @@ button:active { transform: translateY(0); }
 
 .action-name { color: var(--text-soft); margin-right: 4px; font-weight: 500; }
 .action-count { font-weight: 500; color: var(--text-strong); }
+.action-pct { margin-left: 6px; color: var(--text-soft); font-weight: 500; }
+.action-rating { margin-left: 6px; font-weight: 700; padding: 0 6px; border-radius: 10px; background: var(--card-bg); }
 
 /* Count inherits the pill's semantic color on high/low performance */
 .action-pill.high-perf .action-name { color: var(--good-text); }
 .action-pill.high-perf .action-count { color: var(--good-text); font-weight: 800; }
+.action-pill.high-perf .action-pct { color: var(--good-text); }
 .action-pill.low-perf .action-name { color: var(--bad-text); }
 .action-pill.low-perf .action-count { color: var(--bad-text); font-weight: 800; }
+.action-pill.low-perf .action-pct { color: var(--bad-text); }
 
 /* Section title headings */
 .section-title {
