@@ -25,6 +25,7 @@ import sqlite3
 import webbrowser
 from datetime import date
 from pathlib import Path
+from xml.sax.saxutils import escape as xml_escape
 
 from analytics import calculate_efficiency, load_team_config, parse_log
 from db import (
@@ -45,6 +46,7 @@ from renderer import (
     render_index_page,
     render_match_page,
     render_matches_page,
+    render_not_found_page,
     render_player_season_page,
     render_players_page,
     render_root_index_page,
@@ -55,6 +57,67 @@ TEAMS_ROOT = Path('teams')
 DOCS_ROOT = Path('docs')
 DATA_ROOT = Path('data')
 FAVICON_PATH = Path('favicon.ico')
+
+# Canonical origin for absolute URLs in robots.txt and sitemap.xml. Overridable
+# so forks and preview deploys can point at a different host.
+SITE_URL = os.environ.get('SITE_URL', 'https://volleyballanalytics.app').strip().rstrip('/')
+
+# Content-Security-Policy allowing the site's existing inline scripts/styles,
+# Chart.js (jsDelivr), and the logger's YouTube IFrame playback. One line.
+_CSP = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://www.youtube.com https://s.ytimg.com; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https://i.ytimg.com; "
+    'frame-src https://www.youtube.com https://www.youtube-nocookie.com; '
+    "connect-src 'self' https://www.youtube.com; "
+    "font-src 'self'; "
+    "object-src 'none'; "
+    "base-uri 'self'; "
+    "frame-ancestors 'self'"
+)
+
+# Cloudflare Pages _headers file: security headers applied to every path.
+# Ignored harmlessly by GitHub Pages and on file://.
+_HEADERS_FILE = f"""/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+  X-Frame-Options: SAMEORIGIN
+  Content-Security-Policy: {_CSP}
+"""
+
+
+def _build_sitemap(docs_root, site_url, lastmod):
+    """Build the sitemap.xml document listing every generated HTML page.
+
+    Walks docs_root for '*.html' files (excluding 404.html), maps each to an
+    absolute URL under site_url, and returns a well-formed urlset. Entries are
+    sorted so the build is deterministic.
+
+    Args:
+        docs_root (Path): The generated site root (docs/).
+        site_url (str): Canonical origin with no trailing slash.
+        lastmod (str): ISO 8601 date applied to every entry.
+
+    Returns:
+        str: The sitemap.xml document.
+    """
+    rel_paths = sorted(
+        p.relative_to(docs_root).as_posix()
+        for p in docs_root.rglob('*.html')
+        if p.name != '404.html'
+    )
+    urls = ''.join(
+        f'  <url><loc>{xml_escape(f"{site_url}/{rel}")}</loc><lastmod>{lastmod}</lastmod></url>\n'
+        for rel in rel_paths
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+        f'{urls}'
+        '</urlset>\n'
+    )
 
 
 def discover_datasets():
@@ -345,6 +408,17 @@ def main():
     root_html = render_root_index_page(summaries, today)
     (DOCS_ROOT / 'index.html').write_text(root_html, encoding='utf-8')
     print(f'  Generated: docs/index.html (root selector, {len(summaries)} dataset(s))')
+
+    # Deploy artifacts for the hosted site. robots.txt/sitemap.xml use absolute
+    # URLs from SITE_URL; 404.html and _headers are platform conventions.
+    (DOCS_ROOT / '404.html').write_text(render_not_found_page(today), encoding='utf-8')
+    (DOCS_ROOT / 'robots.txt').write_text(
+        f'User-agent: *\nAllow: /\nSitemap: {SITE_URL}/sitemap.xml\n', encoding='utf-8'
+    )
+    sitemap = _build_sitemap(DOCS_ROOT, SITE_URL, date.today().isoformat())
+    (DOCS_ROOT / 'sitemap.xml').write_text(sitemap, encoding='utf-8')
+    (DOCS_ROOT / '_headers').write_text(_HEADERS_FILE, encoding='utf-8')
+    print('  Generated: docs/404.html, robots.txt, sitemap.xml, _headers')
 
     print(f'Done. {len(summaries)} dataset(s) processed.')
 

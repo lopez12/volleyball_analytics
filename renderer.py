@@ -1868,3 +1868,42 @@ def render_root_index_page(datasets, generated_date):
 </div>
 </body>
 </html>"""
+
+
+def render_not_found_page(generated_date):
+    """Render the site-wide 404 page served for any missing URL.
+
+    Uses root-absolute asset and link paths (/styles.css, /favicon.ico, /)
+    because the page is served for misses at any URL depth, where the
+    depth-relative paths of the other pages would resolve incorrectly.
+
+    Args:
+        generated_date (str): Build date 'DD/MM/YYYY' shown in the subtitle.
+
+    Returns:
+        str: Full HTML document for docs/404.html.
+    """
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Página no encontrada · Volleyball Analytics</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/styles.css">
+  {_THEME_BOOT}
+</head>
+<body>
+{_THEME_TOGGLE}
+<div class="container">
+  <div class="hub-hero">
+    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> 404</h1>
+    <p class="hub-subtitle">Página no encontrada · Generado: {generated_date}</p>
+  </div>
+  <div class="stat-card"><div class="card-body" style="text-align:center;">
+    <p style="color:var(--text-muted);margin:0 0 18px;">La página que buscas no existe o fue movida.</p>
+    <a href="/" class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-weight:700;text-decoration:none;">🏠 Volver al inicio</a>
+  </div></div>
+</div>
+</body>
+</html>"""
