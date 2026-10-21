@@ -426,6 +426,21 @@ def parse_log(log_string):
 # ---------------------------------------------------------------------------
 
 
+def _scale_rating(weighted, total):
+    """Map a weighted grade sum onto the 1-10 rating scale.
+
+    Args:
+        weighted (float): Sum of per-touch weights.
+        total (int): Touch count the sum is averaged over. Must be > 0.
+
+    Returns:
+        float: ``6.0 + (weighted / total) * 4.0`` clamped to [1.0, 10.0],
+            rounded to one decimal.
+    """
+    raw = 6.0 + (weighted / total) * 4.0
+    return round(max(1.0, min(10.0, raw)), 1)
+
+
 def calculate_rating(data):
     """Compute the overall performance rating for a player or team on a 1–10 scale.
 
@@ -461,8 +476,44 @@ def calculate_rating(data):
     for grade in GRADES:
         for action in ACTIONS:
             weighted += grade_count[grade][action] * WEIGHTS[grade] * ACTION_WEIGHTS[action]
-    raw = 6.0 + (weighted / total) * 4.0
-    return round(max(1.0, min(10.0, raw)), 1)
+    return _scale_rating(weighted, total)
+
+
+def calculate_action_stats(data):
+    """Compute the positive percentage and 1-10 grade ("Nota") for every action.
+
+    The grade uses the same scale as calculate_rating() but without
+    ACTION_WEIGHTS: within a single action the leverage weight is a constant
+    multiplier that would only shrink that action's attainable range. Hence
+    per-action grades are not expected to average to the overall rating.
+
+    Args:
+        data (dict): A stats dict with 'actions' and 'grade_count' keys (from
+            parse_log, _row_to_stats, or a season aggregate).
+
+    Returns:
+        dict: Keyed by action letter in ACTIONS order, each value being {
+            'tot'     (int): Attempts of the action.
+            'good'    (int): Attempts graded '#' or '+'.
+            'pos_pct' (float|None): good / tot in [0, 1]; None if tot == 0.
+            'rating'  (float|None): 1-10 grade; None if tot == 0.
+        }
+    """
+    actions = data['actions']
+    gc = data['grade_count']
+    result = {}
+    for action in ACTIONS:
+        tot = actions[action]['tot']
+        good = actions[action]['good']
+        if tot:
+            weighted = sum(gc[grade][action] * WEIGHTS[grade] for grade in GRADES)
+            pos_pct = good / tot
+            rating = _scale_rating(weighted, tot)
+        else:
+            pos_pct = None
+            rating = None
+        result[action] = {'tot': tot, 'good': good, 'pos_pct': pos_pct, 'rating': rating}
+    return result
 
 
 def calculate_efficiency(data):

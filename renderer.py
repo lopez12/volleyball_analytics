@@ -14,6 +14,7 @@ from analytics import (
     FULL_NAMES,
     GRADES,
     POSITION_LABELS,
+    calculate_action_stats,
     calculate_efficiency,
     calculate_phase_stats,
     calculate_point_stats,
@@ -171,6 +172,7 @@ def _action_efficiency_charts(
     """
     if collapsed_actions is None:
         collapsed_actions = set()
+    season_actions = calculate_action_stats(aggregate_season_data(match_stats))
     charts_html = ''
     for action in ACTIONS:
         a_lower = action.lower()
@@ -217,8 +219,10 @@ def _action_efficiency_charts(
       }});
     }})();
     </script>'''
+        season_pct = round(season_actions[action]['pos_pct'] * 100)
+        season_rating = season_actions[action]['rating']
         charts_html += _section(
-            f'{action_name} - Eficiencia',
+            f'{action_name} - Eficiencia · {season_pct}% · Nota {season_rating}',
             chart_html,
             collapsed=(action in collapsed_actions),
         )
@@ -330,7 +334,6 @@ def build_card_html(title, data, rating, extra_class=''):
     """
     total = data['total']
     grades = data['grades']
-    actions = data['actions']
     grade_count = data['grade_count']
 
     perfect_pct = _pct(grades['#'], total)
@@ -341,19 +344,22 @@ def build_card_html(title, data, rating, extra_class=''):
 
     # Action pills
     pills = []
-    for action in ACTIONS:
-        a = actions[action]
+    for action, a in calculate_action_stats(data).items():
         if a['tot'] == 0:
             continue
-        eff = a['good'] / a['tot']
+        eff = a['pos_pct']
         pill_class = 'high-perf' if eff == 1.0 else ('low-perf' if eff < 0.4 else '')
         name = FULL_NAMES[action]
         good = a['good']
         tot = a['tot']
+        a_rating = a['rating']
         pills.append(
             f'<div class="action-pill {pill_class}">'
             f'<span class="action-name">{name}</span>'
             f'<span class="action-count">{good}/{tot}</span>'
+            f'<span class="action-pct">{round(eff * 100)}%</span>'
+            f'<span class="action-rating" style="color:{_rating_color(a_rating)};" '
+            f'title="Nota de la acción (1-10)">{a_rating}</span>'
             f'</div>'
         )
     pills_html = ''.join(pills)
@@ -400,7 +406,7 @@ def build_card_html(title, data, rating, extra_class=''):
         f'<div class="metric-row"><span>Error (-)</span><span style="color:var(--danger);">{error_pct}%</span></div>'
         f'<div class="bar-container"><div class="bar-fill" style="width:{error_pct}%;background-color:var(--danger);"></div></div>'
         f'<div class="action-section">'
-        f'<div class="action-title">Efectividad por Acción (Buenos/Total)</div>'
+        f'<div class="action-title">Efectividad por Acción (Buenos/Total · % · Nota)</div>'
         f'<div class="action-grid">{pills_html}</div>'
         f'</div>'
         f'<div class="action-section" style="margin-top:16px;">'
@@ -1021,7 +1027,6 @@ def render_player_season_page(
 
     # Season totals cross-tab
     season_data = aggregate_season_data(match_stats)
-    season_actions = season_data['actions']  # also used for strengths/weaknesses below
     season_efficiency = calculate_efficiency(season_data)
 
     season_card = build_card_html(
@@ -1030,11 +1035,9 @@ def render_player_season_page(
 
     # Strengths & Improvement Areas
     action_effs = []
-    for action in ACTIONS:
-        tot = season_actions[action]['tot']
-        if tot >= 10:
-            eff = round((season_actions[action]['good'] / tot) * 100)
-            action_effs.append((FULL_NAMES[action], eff))
+    for action, a in calculate_action_stats(season_data).items():
+        if a['tot'] >= 10:
+            action_effs.append((FULL_NAMES[action], round(a['pos_pct'] * 100), a['rating']))
     action_effs.sort(key=lambda x: x[1], reverse=True)
 
     strengths_html = ''
@@ -1042,12 +1045,14 @@ def render_player_season_page(
         strengths = action_effs[:2]
         weaknesses = action_effs[-2:] if len(action_effs) >= 4 else action_effs[-1:]
         s_items = ''.join(
-            f'<div class="metric-row"><span>{name}</span><span style="color:var(--success);">{eff}%</span></div>'
-            for name, eff in strengths
+            f'<div class="metric-row"><span>{name}</span><span><span style="color:var(--success);">{eff}%</span>'
+            f' · <span style="color:{_rating_color(rating)};font-weight:600;">{rating}</span></span></div>'
+            for name, eff, rating in strengths
         )
         w_items = ''.join(
-            f'<div class="metric-row"><span>{name}</span><span style="color:var(--danger);">{eff}%</span></div>'
-            for name, eff in weaknesses
+            f'<div class="metric-row"><span>{name}</span><span><span style="color:var(--danger);">{eff}%</span>'
+            f' · <span style="color:{_rating_color(rating)};font-weight:600;">{rating}</span></span></div>'
+            for name, eff, rating in weaknesses
         )
         strengths_html = (
             '<div class="stat-card" style="margin-top:16px;">'
