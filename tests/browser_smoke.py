@@ -101,6 +101,11 @@ window.YT = {Player: function (id, options) {
     var controls = document.querySelector('.replay-controls');
     var fallback = document.getElementById('replay-youtube');
     var pass = fallback.hidden && !controls.contains(fallback) && controls.children.length === 3
+      && controls.scrollWidth <= controls.clientWidth
+      && Math.abs(document.getElementById('replay-set').getBoundingClientRect().top
+        - document.querySelector('[data-replay="repeat"]').getBoundingClientRect().top) <= 6
+      && Math.abs(document.querySelector('[data-replay="repeat"]').getBoundingClientRect().top
+        - document.querySelector('[data-replay="next"]').getBoundingClientRect().top) <= 2
       && wrap.scrollWidth <= wrap.clientWidth && pinned && pinned.dataset.player === '5'
       && document.getElementById('replay-current').textContent.includes('23');
     var result = document.createElement('p');

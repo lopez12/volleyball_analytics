@@ -260,23 +260,26 @@
                             assert(score() === '8 – 4', 'Restored poller does not follow playback');
                             var controls = document.querySelector('.replay-controls');
                             var mobileControls = matchMedia('(max-width: 600px)').matches;
-                            assert(getComputedStyle(controls).display === (mobileControls ? 'grid' : 'flex'),
-                                'Control bar does not match the responsive layout');
+                            assert(getComputedStyle(controls).display === 'flex',
+                                'Control bar must stay a single flex row');
                             assert(controls.children.length === 3 && !controls.contains(youtube) && youtube.hidden,
                                 'Control bar must contain only set/repeat/next, with fallback hidden');
                             var setBox = document.querySelector('.replay-control-set').getBoundingClientRect();
                             var repeatBox = action('repeat').getBoundingClientRect();
                             var nextBox = action('next').getBoundingClientRect();
-                            assert(repeatBox.top === nextBox.top && repeatBox.right <= nextBox.left,
+                            assert(Math.abs(repeatBox.top - nextBox.top) <= 2 && repeatBox.right <= nextBox.left,
                                 'Replay buttons must share a row');
-                            assert(mobileControls ? setBox.bottom <= repeatBox.top :
-                                setBox.left < repeatBox.left && setBox.top < repeatBox.bottom &&
-                                repeatBox.top < setBox.bottom, 'Set selector is on the wrong row');
+                            assert(Math.abs(setBox.top - repeatBox.top) <= 4 && setBox.right <= repeatBox.left,
+                                'Set selector must share the row with the buttons');
+                            assert(repeatBox.height >= 40 && nextBox.height >= 40, 'Buttons must be at least 40px tall');
+                            assert(controls.scrollWidth <= controls.clientWidth, 'Control bar overflows horizontally');
+                            assert(action('repeat').getAttribute('aria-label') === '\u25c0 Repetir jugada' &&
+                                action('next').getAttribute('aria-label') === 'Siguiente jugada \u25b6',
+                                'Buttons must keep their full aria-labels');
                             if (mobileControls) {
-                                assert(getComputedStyle(controls).gridTemplateColumns.trim().split(/\s+/).length === 2,
-                                    'Mobile control bar does not use two columns');
-                                assert(getComputedStyle(document.querySelector('.replay-control-set')).gridColumnEnd === '-1',
-                                    'Set selector must occupy the first full row');
+                                assert(action('repeat').textContent.trim() !== '' &&
+                                    getComputedStyle(action('repeat').querySelector('.replay-label-full')).display === 'none',
+                                    'Mobile must show the short labels');
                             }
                             assert(document.documentElement.scrollWidth <= window.innerWidth,
                                 'Page overflows horizontally');
