@@ -383,6 +383,72 @@ Every generated page supports a light and a dark theme:
 
 Theming is pure CSS custom properties plus a tiny inline script — no build step, no libraries, and it works both from a local `file://` open and from GitHub Pages. Colors live as tokens in `styles.css` (`:root` for light, `:root[data-theme="dark"]` and a `prefers-color-scheme` block for dark).
 
+## Spectator replay: Ver con estadísticas
+
+Published match reports offer **Ver con estadísticas** when at least one set
+has a complete, unambiguous replay timeline. The separate `<match>_watch.html`
+page embeds YouTube alongside **Estadísticas del set hasta este momento**.
+It starts at 0–0: a rally's score and touches appear only when playback reaches
+its recorded end. Rewinding restores the corresponding earlier snapshot.
+Future rally rows reveal only their set/rally identity and a seek button.
+The full-report backlink contains final results. This is spoiler-safe
+presentation, not secrecy: the embedded public JSON contains all snapshots.
+
+Eligibility is strict and **per set**, not a new log-validation requirement:
+
+- Exact `---` lines separate independent set/video clocks; empty blocks are
+  ignored. Each set needs one supported YouTube URL with an 11-character ID.
+- Every rally needs exactly one explicit outcome and one complete, finite
+  `@t:start-end` interval with `0 ≤ start ≤ end`. Intervals must already be in
+  chronological, non-overlapping order; equal boundaries and zero-duration
+  events are supported. Nothing is inferred, sorted, or corrected.
+- Every rally needs graded touches, except touchless `@won:se` opponent serve
+  faults. Outcome/timestamp-only segmentation is not evidence of full grading.
+- If `@set: V-R` exists, its score must match all explicit outcomes. Conflicting
+  final scores, repeated video declarations and unrecognized content exclude
+  that set. Without a final score, the viewer explicitly disclaims independent
+  score reconciliation. Reports explain exclusions in Spanish; mixed matches
+  still offer their eligible sets.
+
+Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks
+and all `-` touches (**Toques con error**, not points lost). Attack efficiency
+is the existing `(A# − A-) / A_total`; player ratings use the existing weighted
+rating formula. Unattributed touches affect team totals only. Undefined
+efficiency and no-touch player ratings display `—`. The longest *completed*
+rally uses the timestamp interval, with the first winning ties; this is not a
+measurement of exact ball-in-play time.
+
+**Siguiente jugada** seeks to the earliest start strictly after the video's
+actual current time. **Repetir jugada** replays the active interval or latest
+completed rally during a gap. List and longest-rally buttons seek to their
+starts, preserving playing/paused intent subject to YouTube restrictions.
+Selecting a set resets its statistics and cues its own video at zero. There is
+no automatic skipping or cross-set advancement.
+
+Playback requires JavaScript, HTTP(S), access to the YouTube IFrame API and
+permission to embed the selected video. `file://`, API failures, blocked
+embeds and invalid payloads disable synchronized controls with an explanation
+and a YouTube fallback link. The static final reports still work without JS.
+For local playback, run `python -m http.server` and open the generated `docs/`
+page through localhost, not directly from disk.
+
+Dependency-free replay tests:
+
+```bash
+python -m unittest discover -s tests
+node tests/viewer_test.js           # optional local Node, no npm dependencies
+python validate_logs.py
+# PowerShell: $env:CI = '1'; python generate.py
+CI=1 python generate.py             # POSIX shells
+ruff check .
+ruff format --check .
+```
+
+Before merging, check real YouTube playback and seeking, native paused scrubbing,
+set switching, blocked embeds, keyboard controls, light/dark themes, mobile
+(~375px) and desktop (~1440px), and the browser console/CSP on an HTTP(S) preview.
+Synthetic integration fixtures cover eligible sets without changing real logs.
+
 ## Troubleshooting
 
 ### GitHub Pages not updating?

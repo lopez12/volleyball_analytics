@@ -1,9 +1,17 @@
 """Dependency-free replay regression tests; synthetic logs never alter teams/."""
 
 import json
+import re
+import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
+from unittest.mock import patch
 
+import generate
 from analytics import calculate_efficiency, calculate_rating, parse_log, youtube_video_id
+from renderer import render_match_page, render_watch_page
 
 VIDEO = '@youtube: https://youtu.be/abcdefghijk\n'
 LOG = VIDEO + '7A# @won @t:10-15\n7A- @lost @t:30-38\n@set: 1-1'
@@ -148,6 +156,99 @@ class ReplayAnalyticsTests(unittest.TestCase):
         self.assertEqual([s['eligible'] for s in sets], [True, False])
         self.assertTrue(replay(VIDEO + '# comment\n7A# @won @t:1-2 # comment')['eligible'])
         self.assertEqual(parse_log('# comment\n---\n---')['replay']['sets'], [])
+
+
+class ReplayRenderingTests(unittest.TestCase):
+    def test_safe_payload_and_initial_html(self):
+        name = '</script><img src=x onerror=alert(1)>&\u2028'
+        page = render_watch_page('<Test & Match>', parse_log(LOG)['replay'], {'7': name}, 'a".html')
+        self.assertIn('&lt;Test &amp; Match&gt;', page)
+        self.assertIn('href="a&quot;.html"', page)
+        self.assertNotIn(name, page)
+        data = re.search(
+            r'<script id="replay-data" type="application/json">(.*?)</script>', page, re.S
+        )
+        self.assertEqual(json.loads(data.group(1))['names']['7'], name)
+        self.assertNotIn('final_score', data.group(1))
+        self.assertNotIn('"source"', data.group(1))
+        self.assertIn('aria-live="polite">0 - 0', page)
+        self.assertIn('data-replay="next" disabled', page)
+        self.assertIn('data-replay="longest" disabled', page)
+        self.assertIn('<ol id="replay-rallies"></ol>', page)
+
+    def test_mixed_exclusions_and_legacy_report(self):
+        parsed = parse_log(LOG + '\n---\n' + VIDEO + '8S# @won @t:1')
+        old = render_match_page('Test', parsed, '21/10/2026')
+        self.assertNotIn('Ver con estadísticas', old)
+        page = render_match_page('Test', parsed, '21/10/2026', parsed['replay'], 'match_watch.html')
+        self.assertIn('Ver con estadísticas', page)
+        self.assertIn('Set 2:', page)
+        viewer = render_watch_page('Test', parsed['replay'], {}, 'match.html')
+        self.assertIn('Set 2:', viewer)
+        self.assertNotIn('Reproducción sincronizada no disponible.', viewer)
+        data = re.search(r'type="application/json">(.*?)</script>', viewer, re.S)
+        self.assertEqual(len(json.loads(data.group(1))['sets']), 1)
+        bad = parse_log(VIDEO + '7A#')
+        report = render_match_page('Test', bad, '21/10/2026', bad['replay'])
+        self.assertNotIn('Ver con estadísticas', report)
+        self.assertIn('Reproducción sincronizada no disponible.', report)
+
+
+class ReplayIntegrationTests(unittest.TestCase):
+    def test_source_to_output_and_precise_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'source'
+            matches = source / 'matches'
+            matches.mkdir(parents=True)
+            (source / 'team.json').write_text(
+                json.dumps(
+                    {
+                        'team': 'Test',
+                        'tournament': 'Synthetic',
+                        'roster': {'7': {'name': 'Player', 'position': 'OH'}},
+                    }
+                ),
+                encoding='utf-8',
+            )
+            path = matches / '01_test.txt'
+            path.write_text(LOG, encoding='utf-8')
+            out = root / 'docs' / 'test' / 'synthetic'
+            with (
+                patch.object(generate, 'DOCS_ROOT', root / 'docs'),
+                patch.object(generate, 'DATA_ROOT', root / 'data'),
+                patch.object(generate, 'parse_log', wraps=parse_log) as parser,
+                redirect_stdout(StringIO()),
+            ):
+                generate._generate_dataset('test', 'synthetic', source, '21/10/2026')
+                self.assertEqual(parser.call_count, 1)
+                report = (out / '01_test.html').read_text(encoding='utf-8')
+                self.assertIn('href="01_test_watch.html"', report)
+                watch = out / '01_test_watch.html'
+                self.assertTrue(watch.exists())
+                content = watch.read_bytes()
+                self.assertEqual((out / 'viewer.js').read_bytes(), Path('viewer.js').read_bytes())
+                generate._generate_dataset('test', 'synthetic', source, '21/10/2026')
+                self.assertEqual(watch.read_bytes(), content)
+                # Known ineligible stem loses only its own stale watch page.
+                neighbor = out / 'unrelated_watch.html'
+                neighbor.write_text('preserve', encoding='utf-8')
+                path.write_text('7A#', encoding='utf-8')
+                generate._generate_dataset('test', 'synthetic', source, '21/10/2026')
+                self.assertFalse(watch.exists())
+                self.assertEqual(neighbor.read_text(encoding='utf-8'), 'preserve')
+                self.assertNotIn(
+                    'Ver con estadísticas', (out / '01_test.html').read_text(encoding='utf-8')
+                )
+                # Even a zero-touch known source cleans up its stale watch file.
+                watch.write_text('stale', encoding='utf-8')
+                path.write_text('@won @t:0-1', encoding='utf-8')
+                generate._generate_dataset('test', 'synthetic', source, '21/10/2026')
+                self.assertFalse(watch.exists())
+                # A fully graded touchless serve-fault set is publishable.
+                path.write_text(VIDEO + '@won:se @t:0-0\n@set: 1-0', encoding='utf-8')
+                generate._generate_dataset('test', 'synthetic', source, '21/10/2026')
+                self.assertTrue(watch.exists())
 
 
 if __name__ == '__main__':
