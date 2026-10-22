@@ -902,8 +902,10 @@ def render_watch_page(
         '<label for="replay-spotlight-select">Destacar jugador</label>'
         '<select id="replay-spotlight-select"><option value="">Ninguno</option></select>'
         '</div><div id="replay-spotlight" class="stat-card replay-spotlight" hidden></div>'
-        '<div class="replay-table-wrap"><table class="summary-table">'
-        '<caption>Toques registrados, no estad\u00edsticas del rival</caption>'
+        '<p id="replay-table-note" class="replay-muted replay-table-note">'
+        'Toques registrados, no estad\u00edsticas del rival</p>'
+        '<div class="replay-table-wrap">'
+        '<table class="summary-table" aria-describedby="replay-table-note">'
         '<thead><tr><th scope="col">Jugador</th><th scope="col">Toques</th>'
         '<th scope="col">Kills</th><th scope="col">Aces</th><th scope="col">Bloqueos</th>'
         '<th scope="col">Rating</th></tr></thead><tbody id="replay-players"></tbody>'
@@ -948,7 +950,7 @@ def render_watch_page(
     <p id="replay-current" class="stat-label replay-current">Antes de la primera jugada</p>
     <p id="replay-start-note" class="replay-start-note"{' ' if offset else ' hidden'}>{start_note}</p>
   </div>
-  <div class="replay-video stat-card"><div id="replay-player"></div></div>
+  <div class="replay-video stat-card"><div class="replay-video-frame"><div id="replay-player"></div></div></div>
   <nav class="replay-controls" aria-label="Controles de reproducci\u00f3n">
     <div class="replay-control-set"><label for="replay-set">Set</label><select id="replay-set">{options}</select></div>
     <button type="button" data-replay="repeat" disabled>\u25c0 Repetir jugada</button>

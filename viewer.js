@@ -376,7 +376,7 @@
                 ['Toques con error', snapshot.team.errors],
                 ['Eficiencia de ataque', snapshot.team.attack_efficiency === null ? '—' :
                     (snapshot.team.attack_efficiency * 100).toFixed(1) + '%'],
-                ['Rally m\u00e1s largo', snapshot.longest ? snapshot.longest.duration + ' s' : '—']
+                ['Rally m\u00e1s largo', snapshot.longest ? Math.round(snapshot.longest.duration * 10) / 10 + ' s' : '—']
             ].forEach(function (pair) {
                 var card = element('div');
                 card.className = 'stat-card';

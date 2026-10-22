@@ -145,22 +145,24 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    gap: 12px;
+    gap: 20px;
 }
-.replay-side-label { color: var(--text-main); font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
-.replay-side-label:last-child { text-align: right; }
+.replay-side-label { color: var(--text-main); font-size: 1.2rem; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+/* Mirror the labels around the centred score: team reads toward it from the left, rival from the right. */
+.replay-side-label:first-child { text-align: right; }
+.replay-side-label:last-child { text-align: left; }
 .replay-score { white-space: nowrap; font-size: 2rem; }
 .replay-current { margin: 10px 0 0; }
 .replay-start-note { color: var(--text-muted); font-size: 0.8rem; margin: 8px 0 0; }
-.replay-video {
+.replay-video { margin: 0 0 14px; padding: 10px; }
+.replay-video-frame {
     aspect-ratio: 16 / 9;
     background: var(--surface-3);
-    border-radius: 12px;
-    margin: 0 0 14px;
+    border-radius: 8px;
     overflow: hidden;
-    padding: 0;
+    width: 100%;
 }
-.replay-video > *, .replay-video iframe { width: 100%; height: 100%; border: 0; }
+.replay-video-frame > *, .replay-video-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
 .replay-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .replay-control-set { display: flex; align-items: center; gap: 8px; }
 .replay-viewer button, .replay-viewer select, .replay-link {
@@ -185,7 +187,16 @@
 .general-stats.replay-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .replay-cards .stat-card { margin: 0; width: auto; }
 .replay-cards .stat-value { overflow-wrap: anywhere; }
-.replay-table-wrap { overflow-x: auto; }
+.replay-table-note { margin: 0 0 8px; overflow-wrap: anywhere; }
+.replay-table-wrap {
+    background: var(--card-bg);
+    border-radius: 8px;
+    overflow-x: auto;
+    scrollbar-color: var(--border) var(--surface-2);
+}
+.replay-table-wrap::-webkit-scrollbar { height: 8px; }
+.replay-table-wrap::-webkit-scrollbar-track { background: var(--surface-2); }
+.replay-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 .replay-table-wrap .summary-table { min-width: 620px; }
 .replay-spotlight-control { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .replay-spotlight-control label { color: var(--text-main); font-weight: 600; }
@@ -199,7 +210,8 @@
 .replay-spotlight-value span { color: var(--text-muted); font-size: 0.68rem; }
 .replay-spotlight-empty { color: var(--text-muted); font-size: 0.82rem; margin: 10px 0 0; }
 .replay-table-wrap tr[aria-current="true"] { background: var(--primary-soft); font-weight: 700; }
-.replay-table-wrap tr[aria-current="true"] td { background: var(--primary-soft); border-left: 2px solid var(--primary); font-weight: 700; }
+.replay-table-wrap tr[aria-current="true"] td { background: var(--primary-soft); font-weight: 700; }
+.replay-table-wrap tr[aria-current="true"] td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
 .replay-rallies { gap: 8px; padding: 0; margin: 0; }
 .replay-rallies button { min-width: 36px; justify-content: center; padding: 5px 11px; }
 .replay-rallies button[aria-current="true"] { background: var(--primary); border-color: var(--primary); color: var(--card-bg); font-weight: 800; }
@@ -217,9 +229,12 @@
     100% { background: var(--surface-2); }
 }
 @media (max-width: 600px) {
-    .replay-scoreboard { padding: 12px 8px; }
-    .replay-scoreboard-row { gap: 4px; }
-    .replay-side-label { font-size: 0.82rem; }
+    /* The shared mobile .stat-card rule uses !important padding; override it here. */
+    .replay-viewer .replay-scoreboard.stat-card { padding: 12px 8px !important; }
+    .replay-viewer .replay-video.stat-card { padding: 4px !important; }
+    .replay-video-frame { border-radius: 6px; }
+    .replay-scoreboard-row { gap: 10px; }
+    .replay-side-label { font-size: 1rem; }
     .replay-score { font-size: 1.8rem; }
     .replay-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .replay-control-set, .replay-viewer .replay-link { grid-column: 1 / -1; }
