@@ -636,10 +636,11 @@ def build_replay(source_sets):
                 sum(r['outcomes'][0]['result'] == result for r in source['rallies'])
                 for result in ('won', 'lost')
             ]
-            actual = [start + count for start, count in zip(start_score, actual, strict=True)]
+            recorded = actual
+            actual = [start + count for start, count in zip(start_score, recorded, strict=True)]
             if actual != scores[0]:
                 reasons.append('Los resultados de las jugadas no coinciden con el marcador final.')
-                missing = [final - count for final, count in zip(scores[0], actual, strict=True)]
+                missing = [final - count for final, count in zip(scores[0], recorded, strict=True)]
                 if all(count >= 0 for count in missing):
                     won, lost = missing
                     reasons.append(

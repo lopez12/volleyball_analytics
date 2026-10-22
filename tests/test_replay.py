@@ -102,6 +102,15 @@ class ReplayAnalyticsTests(unittest.TestCase):
             any('Faltan' in d for d in replay(LOG.replace('1-1', '0-1'))['diagnostics'])
         )
 
+    def test_hint_replaces_existing_offset(self):
+        item = replay('@start: 7-4\n' + LOG.replace('1-1', '8-6'))
+        self.assertFalse(item['eligible'])
+        self.assertIn(
+            'Faltan 7 ganados y 5 perdidos; si la grabación empezó tarde, agrega `@start: 7-5`.',
+            item['diagnostics'],
+        )
+        self.assertTrue(replay('@start: 7-5\n' + LOG.replace('1-1', '8-6'))['eligible'])
+
     def test_validator_r10(self):
         cases = [
             ('@start: bad\n' + LOG, ['ERROR']),
