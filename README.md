@@ -14,7 +14,7 @@ A volleyball analytics dashboard that reads match log files and generates static
 
 ## Tech Stack
 
-- **Python 3.12** (standard library only — no _runtime_ dependencies; [ruff](https://docs.astral.sh/ruff/) is a dev-only lint/format tool)
+- **Python 3.12** (standard library only — no _runtime_ dependencies; pytest and [ruff](https://docs.astral.sh/ruff/) are dev-only test and lint/format tools)
 - **HTML/CSS** for report styling
 - **GitHub Actions** for automated builds and deployment
 
@@ -278,9 +278,23 @@ The _outcome-completeness_ check is intentionally advisory: legacy logs without 
 On every pull request to `main`, `.github/workflows/qa.yml` runs two jobs in parallel:
 
 - **`lint`** — `ruff check` (findings appear as inline PR annotations) and `ruff format --check`. See [Linting & formatting](#linting--formatting-ruff).
-- **`qa`** — validates only the match logs **changed in that PR** (so pre-existing legacy files are left alone). If a dataset's `team.json` changed, that whole dataset folder is validated instead, so a roster edit that orphans a player number is caught. If the grammar itself changed (`analytics.py` or `validate_logs.py`), the **whole repository** is validated, since a grammar change can break any log. It then runs a **smoke build** (`python generate.py`) and checks that `docs/index.html` was written.
+- **`qa`** — installs the dev-only test requirements and runs the full engine pytest suite on every PR and manual run. It then validates only the match logs **changed in that PR** (so pre-existing legacy files are left alone). If a dataset's `team.json` changed, that whole dataset folder is validated instead, so a roster edit that orphans a player number is caught. If the grammar itself changed (`analytics.py` or `validate_logs.py`), the **whole repository** is validated, since a grammar change can break any log. It then runs a **smoke build** (`python generate.py`) and checks that `docs/index.html` was written.
 
 The exit code fails the check when any error is present. A newer push to the same PR cancels the in-flight run.
+
+## Engine tests (pytest)
+
+Use Python 3.12 and run these commands from the repository root:
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest -q                         # all engine tests
+python -m pytest -q tests/test_parse_log.py  # a single module
+```
+
+Pytest is pinned in `requirements-dev.txt` and is **dev-only**. Generation, deployment, and log validation still need only the Python standard library. Use `python -m pytest` so imports resolve the local engine without path changes.
+
+The suite covers parsing and metadata alignment, player/team aggregation, roster configuration, leverage-weighted ratings and clamps, per-action grades, efficiency, phase sequences, explicit outcomes, legacy win inference, and earned/gifted points. Tests use synthetic inputs and temporary files, not production match logs or generated output. The existing log validator and smoke build remain separate QA checks; unit tests do not replace them.
 
 ## Linting & formatting (ruff)
 
@@ -331,6 +345,9 @@ volleyball_analytics/
 ├── export_csv.py                # Export each dataset's tables to CSV files
 ├── styles.css                   # Shared CSS for all generated pages
 ├── validate_logs.py             # Match-log format validator (PR QA gate)
+├── tests/                       # Synthetic engine regression tests
+├── pytest.ini                   # pytest discovery and strict configuration
+├── requirements-dev.txt         # Pinned dev-only pytest dependency
 ├── ruff.toml                    # ruff lint + format config (dev-only tool)
 ├── .pre-commit-config.yaml      # optional local hooks: ruff + validate_logs.py
 ├── teams/                       # COMMITTED source data
