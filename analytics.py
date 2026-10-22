@@ -5,8 +5,10 @@ calculations. No knowledge of HTML or SQLite.
 """
 
 import json
+import math
 import re
 from datetime import date as _date
+from urllib.parse import parse_qs, urlparse
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -340,13 +342,21 @@ def parse_log(log_string):
     set_scores = []
     match_date = None
     team = _new_stats()
+    replay_sets = []
+    replay_set = _new_replay_set()
 
     for line in lines:
         trimmed = line.strip()
-        if not trimmed or trimmed == '---':
+        if trimmed == '---':
+            if any(replay_set.values()):
+                replay_sets.append(replay_set)
+            replay_set = _new_replay_set()
+            continue
+        if not trimmed:
             continue
         if trimmed.lower().startswith('@youtube:'):
             url = trimmed[9:].strip()
+            replay_set['videos'].append(url)
             if _RE_YT.match(url):
                 youtube_urls.append(url)
             continue
@@ -360,6 +370,7 @@ def parse_log(log_string):
         m_set = _RE_SET.match(trimmed)
         if m_set:
             set_scores.append((int(m_set.group(1)), int(m_set.group(2))))
+            replay_set['scores'].append([int(m_set.group(1)), int(m_set.group(2))])
             continue
 
         tokens = trimmed.split()
@@ -368,10 +379,19 @@ def parse_log(log_string):
         outcome_seen = False
         timestamp = None
         ts_seen = False
+        replay_tokens = []
+        replay_outcomes = []
+        replay_times = []
+        replay_comment = False
 
         for token in tokens:
+            if token.startswith('#'):
+                replay_comment = True
+            replay_content = not replay_comment
             parsed_ts = _parse_timestamp_token(token)
             if parsed_ts is not None:
+                if replay_content:
+                    replay_times.append(parsed_ts)
                 # First timestamp token wins; duplicates on the line are ignored.
                 if not ts_seen:
                     timestamp = parsed_ts
@@ -379,6 +399,8 @@ def parse_log(log_string):
                 continue
             parsed_outcome = _parse_outcome_token(token)
             if parsed_outcome is not None:
+                if replay_content:
+                    replay_outcomes.append(parsed_outcome)
                 # First outcome token wins; duplicates on the same line are ignored.
                 if not outcome_seen:
                     outcome = parsed_outcome
@@ -392,12 +414,29 @@ def parse_log(log_string):
                 _record(players[num], action, grade)
                 _record(team, action, grade)
                 rally_tokens.append(token)
+                if replay_content:
+                    replay_tokens.append(token)
             else:
                 m = _RE_TEAM.match(token)
                 if m:
                     action, grade = m.group(1), m.group(2)
                     _record(team, action, grade)
                     rally_tokens.append(token)
+                    if replay_content:
+                        replay_tokens.append(token)
+                elif replay_content:
+                    replay_set['diagnostics'].append(
+                        f'Contenido no reconocido: {token}. No se puede confirmar el registro completo.'
+                    )
+
+        if replay_tokens or replay_outcomes or replay_times:
+            replay_set['rallies'].append(
+                {
+                    'tokens': replay_tokens,
+                    'outcomes': replay_outcomes,
+                    'timestamps': replay_times,
+                }
+            )
 
         # Keep the rally when it has playable tokens OR carried an explicit
         # outcome (a touchless rally, e.g. an opponent serve fault '@won:se') OR
@@ -407,6 +446,8 @@ def parse_log(log_string):
             rally_outcomes.append(outcome)
             rally_timestamps.append(timestamp)
 
+    if any(replay_set.values()):
+        replay_sets.append(replay_set)
     points = calculate_earned_points(rally_outcomes)
     return {
         'players': players,
@@ -418,7 +459,177 @@ def parse_log(log_string):
         'youtube_urls': youtube_urls,
         'set_scores': set_scores,
         'match_date': match_date,
+        'replay': build_replay(replay_sets),
     }
+
+
+def _new_replay_set():
+    """Return an empty source block; exact separators alone delimit blocks."""
+    return {'rallies': [], 'videos': [], 'scores': [], 'diagnostics': []}
+
+
+def youtube_video_id(url):
+    """Return a supported YouTube URL's strict video ID, or None.
+
+    Args:
+        url (str): A source video URL.
+
+    Returns:
+        str | None: An eleven-character ID, never an arbitrary URL.
+    """
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ('https', 'http') or parsed.username or parsed.password:
+            return None
+        if parsed.netloc.lower() in ('youtu.be', 'www.youtu.be'):
+            video_id = parsed.path.removeprefix('/')
+        elif parsed.netloc.lower() in ('youtube.com', 'www.youtube.com'):
+            if parsed.path == '/watch':
+                values = parse_qs(parsed.query).get('v', [])
+                video_id = values[0] if len(values) == 1 else ''
+            elif parsed.path.startswith(('/embed/', '/shorts/')):
+                video_id = parsed.path.split('/')[-1]
+            else:
+                return None
+        else:
+            return None
+        return video_id if re.fullmatch(r'[A-Za-z0-9_-]{11}', video_id) else None
+    except ValueError:
+        return None
+
+
+def _replay_counts(stats):
+    """Return detached JSON-compatible counts using the existing formulas."""
+    return {
+        'touches': stats['total'],
+        'aces': stats['grade_count']['#']['S'],
+        'kills': stats['grade_count']['#']['A'],
+        'blocks': stats['grade_count']['#']['B'],
+        'errors': stats['grades']['-'],
+        'attack_efficiency': calculate_efficiency(stats)['attack_eff'],
+        'rating': calculate_rating(stats) if stats['total'] else None,
+    }
+
+
+def _replay_snapshots(rallies):
+    """Build zero and completed-prefix snapshots without mutating shared stats."""
+    team = _new_stats()
+    players = {
+        _RE_ANY.match(token).group(1): _new_stats()
+        for rally in rallies
+        for token in rally['tokens']
+        if _RE_ANY.match(token).group(1)
+    }
+    score = [0, 0]
+    longest = None
+
+    def snapshot():
+        return {
+            'score': list(score),
+            'team': _replay_counts(team),
+            'players': [
+                {'number': num, **_replay_counts(stats)}
+                for num, stats in sorted(players.items(), key=lambda item: int(item[0]))
+            ],
+            'longest': dict(longest) if longest is not None else None,
+        }
+
+    snapshots = [snapshot()]
+    for rally in rallies:
+        for token in rally['tokens']:
+            num, action, grade = _RE_ANY.match(token).groups()
+            _record(team, action, grade)
+            if num:
+                _record(players[num], action, grade)
+        score[0 if rally['outcome']['result'] == 'won' else 1] += 1
+        duration = rally['end'] - rally['start']
+        if longest is None or duration > longest['duration']:
+            longest = {'id': rally['id'], 'start': rally['start'], 'duration': duration}
+        snapshots.append(snapshot())
+    return snapshots
+
+
+def build_replay(source_sets):
+    """Certify source blocks and produce per-set replay payloads and diagnostics.
+
+    Args:
+        source_sets (list[dict]): Ordered blocks retained by the normal parser.
+
+    Returns:
+        dict: All source sets (including exclusions), with eligible timelines
+            and deterministic snapshots. No outcome or timing is inferred.
+    """
+    sets = []
+    for number, source in enumerate(source_sets, 1):
+        reasons = list(source['diagnostics'])
+        videos = source['videos']
+        video_id = youtube_video_id(videos[0]) if len(videos) == 1 else None
+        if not video_id:
+            reasons.append('Se requiere una única URL de YouTube válida con ID de 11 caracteres.')
+        scores = source['scores']
+        if scores and any(score != scores[0] for score in scores):
+            reasons.append('Hay marcadores finales contradictorios en el set.')
+        if not source['rallies']:
+            reasons.append('El set no contiene jugadas registradas.')
+        rallies = []
+        previous_end = None
+        for index, rally in enumerate(source['rallies'], 1):
+            prefix = f'Jugada {index}: '
+            outcomes = rally['outcomes']
+            times = rally['timestamps']
+            if len(outcomes) != 1:
+                reasons.append(prefix + 'se requiere exactamente un resultado explícito.')
+            if not rally['tokens'] and outcomes != [{'result': 'won', 'cause': 'se'}]:
+                reasons.append(prefix + 'faltan toques calificados; podría ser solo segmentación.')
+            valid_time = (
+                len(times) == 1
+                and times[0]['end'] is not None
+                and math.isfinite(times[0]['start'])
+                and math.isfinite(times[0]['end'])
+                and 0 <= times[0]['start'] <= times[0]['end']
+            )
+            if not valid_time:
+                reasons.append(
+                    prefix + 'se requiere un intervalo finito completo con 0 ≤ inicio ≤ fin.'
+                )
+            else:
+                start, end = times[0]['start'], times[0]['end']
+                if previous_end is not None and previous_end > start:
+                    reasons.append(prefix + 'el intervalo se superpone o retrocede en el video.')
+                previous_end = end
+                if len(outcomes) == 1:
+                    rallies.append(
+                        {
+                            'id': f's{number}-r{index}',
+                            'number': index,
+                            'start': start,
+                            'end': end,
+                            'tokens': rally['tokens'],
+                            'outcome': outcomes[0],
+                        }
+                    )
+        if scores and len(rallies) == len(source['rallies']):
+            actual = [
+                sum(r['outcome']['result'] == result for r in rallies) for result in ('won', 'lost')
+            ]
+            if actual != scores[0]:
+                reasons.append('Los resultados de las jugadas no coinciden con el marcador final.')
+        eligible = not reasons
+        sets.append(
+            {
+                'id': f's{number}',
+                'number': number,
+                'video_id': video_id,
+                'final_score': scores[0] if scores else None,
+                'reconciled': bool(scores) and eligible,
+                'diagnostics': list(dict.fromkeys(reasons)),
+                'eligible': eligible,
+                'rallies': rallies if eligible else [],
+                'snapshots': _replay_snapshots(rallies) if eligible else [],
+                'source': source,
+            }
+        )
+    return {'sets': sets}
 
 
 # ---------------------------------------------------------------------------
