@@ -353,6 +353,28 @@ class ReplayRenderingTests(unittest.TestCase):
         )
         self.assertTrue(any('.replay-viewer .replay-link' == s for s, _ in link_rules))
 
+    def test_replay_detail_link_styles_are_scoped(self):
+        css = (Path(__file__).resolve().parents[1] / 'styles.css').read_text(encoding='utf-8')
+        link_rules = {
+            selector.strip(): dict(re.findall(r'([\w-]+):\s*([^;]+);', declarations))
+            for selectors, declarations in re.findall(r'([^{}]+)\{([^{}]*)\}', css)
+            for selector in selectors.split(',')
+            if '.replay-detail-note a' in selector
+        }
+        self.assertEqual(
+            link_rules,
+            {
+                '.replay-viewer .replay-detail-note a': {
+                    'color': 'var(--primary)',
+                    'font-weight': '600',
+                    'text-decoration': 'none',
+                },
+                '.replay-viewer .replay-detail-note a:hover': {
+                    'text-decoration': 'underline',
+                },
+            },
+        )
+
     def test_start_score_initial_html(self):
         page = render_watch_page(
             'Test',

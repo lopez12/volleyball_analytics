@@ -208,6 +208,8 @@
 .replay-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 .replay-table-wrap .summary-table { min-width: 0; }
 .replay-detail-note { margin-top: 12px; }
+.replay-viewer .replay-detail-note a { color: var(--primary); font-weight: 600; text-decoration: none; }
+.replay-viewer .replay-detail-note a:hover { text-decoration: underline; }
 .replay-spotlight-control { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
 .replay-spotlight-control label { color: var(--text-main); font-weight: 600; }
 .replay-spotlight[hidden] { display: none; }
