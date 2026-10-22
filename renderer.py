@@ -838,7 +838,15 @@ def render_watch_page(match_title, replay, names, report_href):
     sets = [
         {
             key: item[key]
-            for key in ('id', 'number', 'video_id', 'reconciled', 'rallies', 'snapshots')
+            for key in (
+                'id',
+                'number',
+                'video_id',
+                'reconciled',
+                'start_score',
+                'rallies',
+                'snapshots',
+            )
         }
         for item in replay['sets']
         if item['eligible']
@@ -858,6 +866,17 @@ def render_watch_page(match_title, replay, names, report_href):
         f'<option value="{index}">Set {item["number"]}</option>' for index, item in enumerate(sets)
     )
     first_video = sets[0]['video_id'] if sets else ''
+    start_score = sets[0]['start_score'] if sets else [0, 0]
+    initial_score = ' - '.join(str(value) for value in start_score)
+    offset = start_score != [0, 0]
+    scope = (
+        'Estadísticas registradas en la grabación'
+        if offset
+        else 'Estadísticas del set hasta este momento'
+    )
+    start_note = (
+        f'La grabación inicia con el marcador {start_score[0]}–{start_score[1]}.' if offset else ''
+    )
     title = _html_escape(match_title)
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -874,7 +893,7 @@ def render_watch_page(match_title, replay, names, report_href):
 {_THEME_TOGGLE}
 <main class="container replay-viewer" id="replay-viewer">
   <h1>{title}</h1>
-  <p>Estadísticas del set hasta este momento</p>
+  <p id="replay-scope">{scope}</p>
   <p><a href="{_html_escape(report_href, quote=True)}">← Reporte completo (contiene resultados finales)</a></p>
   <label for="replay-set">Seleccionar set</label>
   <select id="replay-set">{options}</select>
@@ -894,7 +913,8 @@ def render_watch_page(match_title, replay, names, report_href):
       <p id="replay-longest">Sin jugadas completadas.</p>
     </section>
     <section aria-label="Estadísticas sincronizadas" id="replay-stats">
-      <h2>Marcador: <span id="replay-score" aria-live="polite">0 - 0</span></h2>
+      <h2>Marcador: <span id="replay-score" aria-live="polite">{initial_score}</span></h2>
+      <p id="replay-start-note"{'' if offset else ' hidden'}>{start_note}</p>
       <div class="replay-cards" id="replay-cards"></div>
       <h2>Jugadores</h2>
       <div class="replay-table-wrap">

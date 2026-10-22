@@ -37,6 +37,10 @@
             if (!set || typeof set.id !== 'string' ||
                     !/^[A-Za-z0-9_-]{11}$/.test(set.video_id) ||
                     !Number.isInteger(set.number) || set.number < 1 ||
+                    !Array.isArray(set.start_score) || set.start_score.length !== 2 ||
+                    !set.start_score.every(function (value) {
+                        return Number.isInteger(value) && value >= 0;
+                    }) ||
                     !Array.isArray(set.rallies) || !set.rallies.length ||
                     !Array.isArray(set.snapshots) ||
                     set.snapshots.length !== set.rallies.length + 1) return false;
@@ -55,7 +59,12 @@
                 if (!snapshot || !Array.isArray(snapshot.score) || snapshot.score.length !== 2 ||
                         !snapshot.score.every(function (value) {
                             return Number.isInteger(value) && value >= 0;
-                        }) || snapshot.score[0] + snapshot.score[1] !== index ||
+                        }) || snapshot.score[0] + snapshot.score[1] !==
+                            index + set.start_score[0] + set.start_score[1] ||
+                        snapshot.score.some(function (value, side) {
+                            return value < set.start_score[side] ||
+                                (index === 0 && value !== set.start_score[side]);
+                        }) ||
                         !snapshot.team || !Array.isArray(snapshot.players)) return false;
                 function counts(row) {
                     return ['touches', 'aces', 'kills', 'blocks', 'errors'].every(function (key) {
@@ -236,6 +245,12 @@
         text('status', message);
         var snapshot = set.snapshots[index];
         text('score', snapshot.score.join(' - '));
+        var offset = set.start_score.some(function (value) { return value !== 0; });
+        text('scope', offset ? 'Estadísticas registradas en la grabación' :
+            'Estadísticas del set hasta este momento');
+        text('start-note', offset ? 'La grabación inicia con el marcador ' +
+            set.start_score.join('–') + '.' : '');
+        el('start-note').hidden = !offset;
         el('stats').setAttribute('aria-label', available ?
             'Estadísticas sincronizadas' : 'Estadísticas no sincronizadas; valores iniciales');
         el('youtube').href = 'https://www.youtube.com/watch?v=' + set.video_id;

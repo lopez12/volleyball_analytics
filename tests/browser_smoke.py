@@ -36,7 +36,9 @@ def main():
         log = '@youtube: https://youtu.be/abcdefghijk\n7A# @won @t:10-15\n7A- @lost @t:30-38'
         payload = {'sets': parse_log(log)['replay']['sets'], 'names': {'7': 'Test'}}
         (tests / 'fixture.json').write_text(json.dumps(payload), encoding='utf-8')
-        mixed = parse_log(log + '\n---\n' + log.replace('abcdefghijk', 'ABCDEFGHIJK'))['replay']
+        mixed = parse_log(
+            log + '\n---\n' + '@start: 7-4\n' + log.replace('abcdefghijk', 'ABCDEFGHIJK')
+        )['replay']
         page = render_watch_page('Synthetic test', mixed, {'7': '<img src=x>'}, 'report.html')
         page = page.replace(
             '<script src="viewer.js" defer></script>',

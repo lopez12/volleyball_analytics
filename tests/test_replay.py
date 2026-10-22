@@ -262,6 +262,17 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertIn('data-replay="longest" disabled', page)
         self.assertIn('<ol id="replay-rallies"></ol>', page)
 
+    def test_start_score_initial_html(self):
+        page = render_watch_page(
+            'Test',
+            parse_log('@start: 7-4\n' + LOG.replace('1-1', '8-5'))['replay'],
+            {},
+            'report.html',
+        )
+        self.assertIn('aria-live="polite">7 - 4', page)
+        self.assertIn('La grabación inicia con el marcador 7–4.', page)
+        self.assertIn('Estadísticas registradas en la grabación', page)
+
     def test_mixed_exclusions_and_legacy_report(self):
         parsed = parse_log(LOG + '\n---\n' + VIDEO + '8S# @won @t:1')
         old = render_match_page('Test', parsed, '21/10/2026')

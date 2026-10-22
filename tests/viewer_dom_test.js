@@ -84,6 +84,10 @@
                     assert(!document.querySelector('#replay-players img'), 'Player name became HTML');
                     assert(!document.getElementById('replay-rallies').textContent.includes('Completada'),
                         'Future rally rows leak completion');
+                    assert(document.getElementById('replay-start-note').hidden,
+                        'Zero start should not show note');
+                    assert(document.getElementById('replay-scope').textContent ===
+                        'Estadísticas del set hasta este momento', 'Legacy scope changed');
                     clock = 15;
                     update();
                     assert(score() === '1 - 0', 'Exact end boundary did not count');
@@ -104,10 +108,21 @@
                     var selector = document.getElementById('replay-set');
                     selector.value = '1';
                     selector.dispatchEvent(new Event('change'));
-                    assert(score() === '0 - 0' && action('next').disabled, 'Set switch did not reset');
+                    assert(score() === '7 - 4' && action('next').disabled, 'Set switch did not reset');
+                    assert(document.getElementById('replay-start-note').textContent ===
+                        'La grabación inicia con el marcador 7–4.', 'Missing start note');
+                    assert(document.getElementById('replay-scope').textContent ===
+                        'Estadísticas registradas en la grabación', 'Wrong offset scope');
                     update();
                     assert(videoId === 'ABCDEFGHIJK' && clock === 0, 'Set video clock mapping incorrect');
-                    assert(score() === '0 - 0', 'Set switch retained old statistics');
+                    assert(score() === '7 - 4', 'Set switch retained old statistics');
+                    clock = 15;
+                    update();
+                    clock = 12;
+                    update();
+                    assert(score() === '7 - 4', 'Offset rewind did not restore start');
+                    assert(document.querySelector('#replay-cards strong').textContent === '0',
+                        'Offset added phantom touches');
                     // Back/forward cache: pagehide stops polling; pageshow must resume it
                     // and reconcile at once, without onReady and without duplicates.
                     lifecycle('pagehide');
@@ -115,7 +130,7 @@
                     clock = 38;
                     state = 1;
                     lifecycle('pageshow');
-                    assert(score() === '1 - 1', 'pageshow did not reconcile immediately');
+                    assert(score() === '8 - 5', 'pageshow did not reconcile immediately');
                     assert(pollers() === 1, 'pageshow did not restore exactly one poller');
                     lifecycle('pageshow');
                     lifecycle('pagehide');
@@ -126,7 +141,7 @@
                     clock = 15;
                     setTimeout(function () {
                         try {
-                            assert(score() === '1 - 0', 'Restored poller does not follow playback');
+                            assert(score() === '8 - 4', 'Restored poller does not follow playback');
                             var columns = getComputedStyle(document.querySelector('.replay-layout'))
                                 .gridTemplateColumns.trim().split(/\s+/).length;
                             assert(columns === (matchMedia('(max-width: 800px)').matches ? 1 : 2),
@@ -138,7 +153,7 @@
                             assert(before !== getComputedStyle(document.documentElement).getPropertyValue('--surface-2'),
                                 'Theme toggle did not change theme colors');
                             events.onError();
-                            assert(score() === '0 - 0', 'Failure left stale score visible');
+                            assert(score() === '7 - 4', 'Failure left stale score visible');
                             document.querySelectorAll('[data-replay]').forEach(function (button) {
                                 assert(button.disabled, 'Failure left an enabled synchronized control');
                             });
@@ -147,7 +162,7 @@
                             lifecycle('pagehide');
                             lifecycle('pageshow');
                             assert(pollers() === 0, 'Lifecycle restore revived a failed controller');
-                            assert(score() === '0 - 0', 'Lifecycle restore resynchronized after failure');
+                            assert(score() === '7 - 4', 'Lifecycle restore resynchronized after failure');
                             document.querySelectorAll('[data-replay]').forEach(function (button) {
                                 assert(button.disabled, 'Lifecycle restore re-enabled a failed control');
                             });
