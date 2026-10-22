@@ -31,6 +31,8 @@
   var STORE = 'drafts';
   var MANUAL_KEY = '__manual__';
   var RECENT_RALLY_LIMIT = 10;   // rallies shown before older ones collapse
+  // Seconds subtracted from an auto-captured reception start; tune against representative videos.
+  var RECEPTION_LEAD_IN_SECS = 4;
 
   // ---------------------------------------------------------------
   // Module state
@@ -382,7 +384,7 @@
   // straight to the canonical .txt grammar, so the log stays valid at
   // all times (validate_logs.py roster/@set/@youtube/outcome rules).
   // ---------------------------------------------------------------
-  function emptyEntry() { return { tokens: [], outcome: null, start: null, end: null }; }
+  function emptyEntry() { return { tokens: [], outcome: null, start: null, end: null, startAuto: false }; }
 
   function newAnalysis(s) {
     var sets = (s.sets || []).map(function (st) {
@@ -412,6 +414,7 @@
       analysis = newAnalysis(session);
     }
     if (!analysis.entry) analysis.entry = emptyEntry();
+    if (analysis.entry.startAuto !== true) analysis.entry.startAuto = false;
     if (typeof analysis.currentSet !== 'number') analysis.currentSet = 0;
     if (typeof analysis.cursor !== 'number') analysis.cursor = -1;
     if (draft) draft.analysis = analysis;
@@ -640,7 +643,10 @@
   function markStartIfNeeded() {
     if (!analysis || analysis.entry.start != null) return;
     var t = nowVideoTime();
-    if (t != null) analysis.entry.start = t;
+    if (t != null) {
+      analysis.entry.start = t;
+      analysis.entry.startAuto = true;
+    }
   }
 
   // One button drives the pre-analysis pass: the first press stamps the rally's
@@ -650,11 +656,29 @@
     if (!analysis) return;
     var t = nowVideoTime();
     if (t == null) return;
-    if (analysis.entry.start == null) analysis.entry.start = t;
-    else analysis.entry.end = t;
+    if (analysis.entry.start == null) {
+      analysis.entry.start = t;
+      analysis.entry.startAuto = false;
+    } else analysis.entry.end = t;
     renderCapture();
     updateSendState();
     saveDraftSoon();
+  }
+
+  // Resolve only auto-captured reception starts, bounded by known ends in this set.
+  function resolveStart(entry, set, excludeIdx) {
+    if (entry.startAuto !== true || entry.start == null) return entry.start;
+    var first = entry.tokens.length ? RE_PLAY.exec(entry.tokens[0]) : null;
+    if (!first || first[2].toUpperCase() !== 'R') return entry.start;
+    if (entry.end != null && entry.start > entry.end) return entry.start;
+    var raw = entry.start;
+    var prevEnd = null;
+    set.rallies.forEach(function (r, idx) {
+      if (idx !== excludeIdx && r.end != null && r.end <= raw) {
+        prevEnd = prevEnd == null ? r.end : Math.max(prevEnd, r.end);
+      }
+    });
+    return Math.max(raw - RECEPTION_LEAD_IN_SECS, 0, prevEnd == null ? 0 : prevEnd);
   }
 
   function renderCapture() {
@@ -815,7 +839,8 @@
     if (!set || analysis.cursor >= set.rallies.length) return;
     var e = analysis.entry;
     set.rallies[analysis.cursor] = {
-      tokens: e.tokens.slice(), outcome: e.outcome, start: e.start, end: e.end
+      tokens: e.tokens.slice(), outcome: e.outcome,
+      start: resolveStart(e, set, analysis.cursor), end: e.end
     };
   }
 
@@ -827,7 +852,7 @@
     var r = set.rallies[idx];
     analysis.entry = {
       tokens: r.tokens.slice(), outcome: r.outcome,
-      start: (r.start != null ? r.start : null), end: (r.end != null ? r.end : null)
+      start: (r.start != null ? r.start : null), end: (r.end != null ? r.end : null), startAuto: false
     };
     resetSelection();
     renderAnalysis();
@@ -932,9 +957,11 @@
     var e = analysis.entry;
     if (!e.tokens.length && !e.outcome && e.start == null) return;   // need plays, an outcome, or a marked segment
     var end = (e.end != null) ? e.end : nowVideoTime();   // keep an explicitly marked end
-    currentSet().rallies.push({
+    e.end = end;
+    var set = currentSet();
+    set.rallies.push({
       tokens: e.tokens.slice(), outcome: e.outcome,
-      start: e.start, end: end
+      start: resolveStart(e, set, -1), end: end
     });
     analysis.entry = emptyEntry();
     resetSelection();
@@ -960,12 +987,12 @@
     if (analysis.entry.tokens.length || analysis.entry.outcome) {
       set.rallies.push({
         tokens: analysis.entry.tokens.slice(), outcome: analysis.entry.outcome,
-        start: analysis.entry.start, end: analysis.entry.end
+        start: resolveStart(analysis.entry, set, -1), end: analysis.entry.end
       });
     }
     analysis.entry = {
       tokens: r.tokens.slice(), outcome: r.outcome,
-      start: (r.start != null ? r.start : null), end: (r.end != null ? r.end : null)
+      start: (r.start != null ? r.start : null), end: (r.end != null ? r.end : null), startAuto: false
     };
     resetSelection();
     renderAnalysis();
