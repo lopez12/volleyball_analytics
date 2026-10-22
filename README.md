@@ -390,12 +390,30 @@ Theming is pure CSS custom properties plus a tiny inline script — no build ste
 
 Published match reports offer **Ver con estadísticas** when at least one set
 has a complete, unambiguous replay timeline. The separate `<match>_watch.html`
-page embeds YouTube alongside **Estadísticas del set hasta este momento**.
-It starts at 0–0 unless `@start: V-R` records a late recording start: a rally's score and touches appear only when playback reaches
-its recorded end. Rewinding restores the corresponding earlier snapshot.
-Future rally rows reveal only their set/rally identity and a seek button.
-The full-report backlink contains final results. This is spoiler-safe
-presentation, not secrecy: the embedded public JSON contains all snapshots.
+page uses the same dashboard components and theme as the match report. Its
+stacked layout puts the scoreboard (team and opponent labels, live score, set,
+and current-rally status) directly below the title, followed by a full-width
+16:9 video and its set selector, replay/next controls, and YouTube link. Set
+statistics, the player table, and the collapsed rally-chip list follow below
+the video. The start-score note appears inside the scoreboard when recording
+began after play started.
+
+Choose **Destacar jugador** above the player table to keep one player's live
+spotlight visible while the match plays. The spotlight shows touches, kills,
+aces, blocks, and rating; the selected player's table row moves to the top and
+is marked with a star. Players with no touches in the current set show zeros
+and a no-touches note, without being added to the table. The selection is saved
+in `localStorage` (`va-replay-player`) and persists across sets and reloads.
+The rally chips show only rally numbers, highlight the active (or latest
+completed) rally, and seek to its start when clicked; future results are never
+shown. The longest completed rally appears only as a set-stat value, not as a
+separate replay control.
+
+Playback starts at 0-0 unless `@start: V-R` records a late recording start: a
+rally's score and touches appear only when playback reaches its recorded end.
+Rewinding restores the corresponding earlier snapshot. The full-report backlink
+contains final results. This is spoiler-safe presentation, not secrecy: the
+embedded public JSON contains all snapshots.
 
 Eligibility is strict and **per set**, not a new log-validation requirement:
 
@@ -404,7 +422,7 @@ Eligibility is strict and **per set**, not a new log-validation requirement:
 - Every rally needs exactly one explicit outcome and one complete, finite
   `@t:start-end` interval with `0 ≤ start ≤ end`. Intervals must already be in
   chronological, non-overlapping order; equal boundaries and zero-duration
-  events are supported. Nothing is inferred, sorted, or corrected.
+events are supported. Nothing is inferred, sorted, or corrected.
 - Every rally needs graded touches, except touchless `@won:se` opponent serve
   faults. Outcome/timestamp-only segmentation is not evidence of full grading.
 - If `@set: V-R` exists, its score must equal the starting score plus all explicit outcomes. Conflicting
@@ -434,10 +452,11 @@ or use it to conceal a mid-set recording gap. Without `@set:`, a valid start is
 accepted but the result is not independently reconciled.
 
 A nonzero start shows **La grabación inicia con el marcador V–R.** and changes
-the viewer scope to **Estadísticas registradas en la grabación**. Rewinding before
-the first rally ends restores the starting score. Only the scoreboard is offset:
-ratings, touches, points, phases, longest rally and rally numbering still describe
-recorded rallies only. Existing static report scores and season totals do not change.
+the viewer scope to **Estadísticas registradas en la grabación**. Rewinding
+before the first rally ends restores the starting score. Only the scoreboard is
+offset: ratings, touches, points, phases, longest rally and rally numbering
+still describe recorded rallies only. Existing static report scores and season
+totals do not change.
 
 In the Match Logger, each set offers optional **Marcador inicial** fields beside
 the final score, using the same nonnegative-integer V-R check and inline errors.
@@ -447,18 +466,18 @@ old logs and drafts without it continue to work unchanged.
 
 Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks
 and all `-` touches (**Toques con error**, not points lost). Attack efficiency
-is the existing `(A# − A-) / A_total`; player ratings use the existing weighted
+is the existing `(A# ? A-) / A_total`; player ratings use the existing weighted
 rating formula. Unattributed touches affect team totals only. Undefined
-efficiency and no-touch player ratings display `—`. The longest *completed*
+efficiency and no-touch player ratings display `?`. The longest *completed*
 rally uses the timestamp interval, with the first winning ties; this is not a
 measurement of exact ball-in-play time.
 
 **Siguiente jugada** seeks to the earliest start strictly after the video's
 actual current time. **Repetir jugada** replays the active interval or latest
-completed rally during a gap. List and longest-rally buttons seek to their
-starts, preserving playing/paused intent subject to YouTube restrictions.
-Selecting a set resets its statistics and cues its own video at zero. There is
-no automatic skipping or cross-set advancement.
+completed rally during a gap. Rally chips seek to their rally starts while
+preserving playing/paused intent subject to YouTube restrictions. Selecting a
+set resets its statistics and cues its own video at zero. There is no automatic
+skipping or cross-set advancement.
 
 Playback requires JavaScript, HTTP(S), access to the YouTube IFrame API and
 permission to embed the selected video. `file://`, API failures, blocked
