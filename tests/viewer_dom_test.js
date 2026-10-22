@@ -10,6 +10,11 @@
     result.id = 'browser-smoke-result';
     function assert(value, message) { if (!value) throw new Error(message); }
     function score() { return document.getElementById('replay-score').textContent; }
+    function values(selector) {
+        return Array.from(document.querySelectorAll(selector), function (node) {
+            return node.textContent;
+        });
+    }
     function action(name) { return document.querySelector('[data-replay="' + name + '"]'); }
     function update() { events.onStateChange(); }
     // Track live pollers so lifecycle tests can detect leaked or duplicate timers.
@@ -92,6 +97,10 @@
                         'Sin toques registrados en este set', 'Absent player should show zero spotlight');
                     assert(!document.querySelector('#replay-players [data-player="8"]'),
                         'Absent player was added to the table');
+                    assert(getComputedStyle(document.querySelector('.replay-spotlight-values'))
+                        .gridTemplateColumns.trim().split(/\s+/).length ===
+                        (matchMedia('(max-width: 600px)').matches ? 2 : 4),
+                        'Spotlight grid has wrong column count');
                     spotlightSelect.value = '7';
                     spotlightSelect.dispatchEvent(new Event('change'));
                     assert(localStorage.getItem('va-replay-player') === '7',
@@ -103,8 +112,17 @@
                         'Zero start should not show note');
                     assert(document.getElementById('replay-scope').textContent ===
                         'Estadísticas del set hasta este momento', 'Legacy scope changed');
+                    assert(values('.replay-spotlight-value span').join('|') ===
+                        'Toques|Puntos|Errores|Rating', 'Spotlight must show exactly four values');
+                    assert(values('#replay-cards .stat-label').join('|') ===
+                        'Puntos directos|Kills|Aces|Toques con error|Eficiencia de ataque|Rally m\u00e1s largo',
+                        'Wrong team cards or order');
                     clock = 15;
                     update();
+                    assert(values('#replay-players tr td').slice(1).join('|') === '1|1|0|10',
+                        'Boundary table points/errors incorrect');
+                    assert(values('.replay-spotlight-value strong').join('|') === '1|1|0|10',
+                        'Boundary spotlight values incorrect');
                     assert(score() === '1 – 0', 'Exact end boundary did not count');
                     assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '1',
                         'Completed kills incorrect');
@@ -125,14 +143,24 @@
                         'Changed rating did not trigger a pulse');
                     // Simulate the finished animation, then reconcile the same paused snapshot.
                     ratingPill.classList.remove('replay-value-pulse');
+                    var valueItems = document.querySelectorAll('.replay-spotlight-value');
+                    valueItems.forEach(function (item) { item.classList.remove('replay-value-pulse'); });
                     var previousRating = ratingPill.textContent;
                     assert(state === 2, 'Unchanged snapshot regression must run while paused');
                     update();
                     assert(ratingPill.textContent === previousRating &&
                         !ratingPill.classList.contains('replay-value-pulse'),
                         'Unchanged rating re-triggered the pulse while paused');
+                    assert(!Array.from(valueItems).some(function (item) {
+                        return item.classList.contains('replay-value-pulse');
+                    }), 'Unchanged spotlight values pulsed');
                     clock = 12;
                     update();
+                    assert(valueItems[0].classList.contains('replay-value-pulse') &&
+                        valueItems[1].classList.contains('replay-value-pulse') &&
+                        !valueItems[2].classList.contains('replay-value-pulse') &&
+                        valueItems[3].classList.contains('replay-value-pulse'),
+                        'Only changed spotlight values should pulse on rewind');
                     assert(ratingPill.textContent !== previousRating &&
                         ratingPill.classList.contains('replay-value-pulse'),
                         'Rewinding to a changed rating did not trigger a pulse');
@@ -156,6 +184,16 @@
                     clock = 38;
                     update();
                     assert(score() === '1 – 1' && action('next').disabled, 'Final boundary incorrect');
+                    assert(values('#replay-players tr td').slice(1, 4).join('|') === '2|1|1',
+                        'Error boundary table points/errors incorrect');
+                    clock = 16;
+                    update();
+                    assert(values('#replay-players tr td').slice(1, 4).join('|') === '1|1|0',
+                        'Rewind did not restore table points/errors');
+                    assert(values('.replay-spotlight-value strong').slice(0, 3).join('|') === '1|1|0',
+                        'Rewind did not restore spotlight points/errors');
+                    clock = 38;
+                    update();
                     var selector = document.getElementById('replay-set');
                     selector.value = '1';
                     selector.dispatchEvent(new Event('change'));
@@ -226,6 +264,9 @@
                             }
                             assert(document.documentElement.scrollWidth <= window.innerWidth,
                                 'Page overflows horizontally');
+                            var tableWrap = document.querySelector('.replay-table-wrap');
+                            assert(tableWrap.scrollWidth <= tableWrap.clientWidth,
+                                'Player table overflows horizontally');
                             var before = getComputedStyle(document.documentElement).getPropertyValue('--surface-2');
                             document.getElementById('themeToggle').click();
                             assert(before !== getComputedStyle(document.documentElement).getPropertyValue('--surface-2'),

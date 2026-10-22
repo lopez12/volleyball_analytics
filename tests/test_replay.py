@@ -305,8 +305,21 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertLess(page.index('report-header'), page.index('replay-scoreboard'))
         self.assertLess(page.index('replay-scoreboard'), page.index('replay-video'))
         self.assertLess(page.index('replay-video'), page.index('replay-controls'))
-        self.assertLess(page.index('Estadísticas del set'), page.index('Jugadores'))
-        self.assertLess(page.index('Jugadores'), page.index('Jugadas del set'))
+        self.assertLess(page.index('replay-controls'), page.index('Jugadores'))
+        self.assertLess(page.index('Jugadores'), page.index('Estadísticas del set'))
+        self.assertLess(page.index('Estadísticas del set'), page.index('Jugadas del set'))
+        self.assertEqual(
+            re.findall(r'<th scope="col">(.*?)</th>', page),
+            ['Jugador', 'Toques', 'Puntos', 'Errores', 'Rating'],
+        )
+        self.assertNotIn('Bloqueos', page)
+        self.assertIn('Toques registrados, no estadísticas del rival</p>', page)
+        self.assertIn(
+            '<a href="a&quot;.html" title="Contiene resultados finales">Reporte completo</a>',
+            page,
+        )
+        self.assertLess(page.index('</table>'), page.index('Detalle por acción'))
+        self.assertLess(page.index('Detalle por acción'), page.index('Estadísticas del set'))
         self.assertIn('data-replay="next" disabled', page)
         self.assertNotIn('data-replay="longest"', page)
         self.assertNotIn('replay-longest', page)

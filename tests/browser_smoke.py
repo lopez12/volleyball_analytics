@@ -65,6 +65,66 @@ window.addEventListener('message', function (event) {
 </body></html>""",
             encoding='utf-8',
         )
+        # Exercise the real roster at the screenshot's mid-set snapshot too.
+        dataset = repo / 'teams' / 'nova' / 'atlas-chapalita-cup-2026'
+        real_replay = parse_log(
+            (dataset / 'matches' / '04_cuervas.txt').read_text(encoding='utf-8')
+        )['replay']
+        roster = json.loads((dataset / 'team.json').read_text(encoding='utf-8'))['roster']
+        real_page = render_watch_page(
+            'Nova vs Cuervas',
+            real_replay,
+            {number: player['name'] for number, player in roster.items()},
+            '04_cuervas.html',
+            'Nova',
+            'Cuervas',
+        )
+        real_test = """<script>
+localStorage.setItem('va-replay-player', '5');
+var append = document.head.append.bind(document.head);
+document.head.append = function (node) {
+  if (node.src === 'https://www.youtube.com/iframe_api') {
+    setTimeout(function () { window.onYouTubeIframeAPIReady(); }, 0);
+  } else append(node);
+};
+window.YT = {Player: function (id, options) {
+  var payload = JSON.parse(document.getElementById('replay-data').textContent);
+  var player = {
+    getCurrentTime: function () { return 447; },
+    getPlayerState: function () { return 2; },
+    getVideoData: function () { return {video_id: payload.sets[0].video_id}; }
+  };
+  setTimeout(function () {
+    options.events.onReady();
+    var wrap = document.querySelector('.replay-table-wrap');
+    var pinned = document.querySelector('#replay-players tr[aria-current="true"]');
+    var pass = wrap.scrollWidth <= wrap.clientWidth && pinned && pinned.dataset.player === '5'
+      && document.getElementById('replay-current').textContent.includes('23');
+    var result = document.createElement('p');
+    result.id = 'browser-smoke-result';
+    result.textContent = pass ? 'PASS' : 'FAIL: real roster table overflow or wrong snapshot';
+    document.body.append(result);
+    document.body.dataset.testViewport = String(window.innerWidth);
+    window.parent.postMessage({type: 'replay-smoke', message: result.textContent,
+      viewport: window.innerWidth}, location.origin);
+    window.dispatchEvent(new Event('pagehide'));
+  }, 0);
+  return player;
+}};
+</script>"""
+        (root / 'real-watch.html').write_text(
+            real_page.replace(
+                '<script src="viewer.js" defer></script>',
+                real_test + '<script src="viewer.js" defer></script>',
+            ),
+            encoding='utf-8',
+        )
+        (root / 'real-mobile.html').write_text(
+            (root / 'mobile.html')
+            .read_text(encoding='utf-8')
+            .replace('src="watch.html"', 'src="real-watch.html"'),
+            encoding='utf-8',
+        )
         shutil.copytree(repo / 'logger', root / 'logger')
         shutil.copy(repo / 'tests' / 'logger_dom_test.js', root / 'logger' / 'logger_dom_test.js')
         logger_page = (root / 'logger' / 'index.html').read_text(encoding='utf-8')
@@ -102,6 +162,7 @@ window.addEventListener('message', function (event) {
             for path, width, marker in (
                 ('tests/browser_test.html', 1440, '<p id="result">PASS</p>'),
                 ('mobile.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
+                ('real-mobile.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
                 ('watch.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
                 ('logger/index.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
                 ('logger-mobile.html', 1440, '<p id="browser-smoke-result">PASS</p>'),

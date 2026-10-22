@@ -903,12 +903,16 @@ def render_watch_page(
         '<select id="replay-spotlight-select"><option value="">Ninguno</option></select>'
         '</div><div id="replay-spotlight" class="stat-card replay-spotlight" hidden></div>'
         '<p id="replay-table-note" class="replay-muted replay-table-note">'
+        'Toques registrados, no estad\u00edsticas del rival</p>'
         '<div class="replay-table-wrap">'
         '<table class="summary-table" aria-describedby="replay-table-note">'
         '<thead><tr><th scope="col">Jugador</th><th scope="col">Toques</th>'
-        '<th scope="col">Kills</th><th scope="col">Aces</th><th scope="col">Bloqueos</th>'
+        '<th scope="col">Puntos</th><th scope="col">Errores</th>'
         '<th scope="col">Rating</th></tr></thead><tbody id="replay-players"></tbody>'
-        '</table></div>',
+        '</table></div>'
+        '<p class="replay-muted replay-detail-note">'
+        'Detalle por acci\u00f3n (remates, bloqueos, recepci\u00f3n\u2026) en el '
+        f'<a href="{safe_report_href}" title="Contiene resultados finales">Reporte completo</a></p>',
     )
     rally_section = _section(
         'Jugadas del set',
@@ -958,8 +962,8 @@ def render_watch_page(
         target="_blank" rel="noopener noreferrer">Abrir en YouTube \u2197</a>
   </nav>
   <p id="replay-status" class="replay-status" role="status" aria-live="polite">Esperando al reproductor; estad\u00edsticas en cero.</p>
-  {stats_section}
   {players_section}
+  {stats_section}
   {rally_section}
   {exclusions}
   {bottom_back}

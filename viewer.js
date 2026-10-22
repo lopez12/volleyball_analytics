@@ -67,7 +67,7 @@
                         }) ||
                         !snapshot.team || !Array.isArray(snapshot.players)) return false;
                 function counts(row) {
-                    return ['touches', 'aces', 'kills', 'blocks', 'errors'].every(function (key) {
+                    return ['touches', 'points', 'aces', 'kills', 'blocks', 'errors'].every(function (key) {
                         return Number.isInteger(row[key]) && row[key] >= 0;
                     }) && (row.rating === null || (finite(row.rating) &&
                         row.rating >= 1 && row.rating <= 10)) &&
@@ -276,8 +276,8 @@
     spotlightValues.className = 'replay-spotlight-values';
     var spotlightValueNodes = {};
     [
-        ['touches', 'Toques'], ['kills', 'Kills'], ['aces', 'Aces'],
-        ['blocks', 'Bloqueos'], ['rating', 'Rating']
+        ['touches', 'Toques'], ['points', 'Puntos'],
+        ['errors', 'Errores'], ['rating', 'Rating']
     ].forEach(function (pair) {
         var item = element('div');
         item.className = 'replay-spotlight-value';
@@ -307,7 +307,7 @@
         });
         var hasTouches = Boolean(player && player.touches > 0);
         var values = hasTouches ? player : {
-            touches: 0, kills: 0, aces: 0, blocks: 0, rating: null
+            touches: 0, points: 0, errors: 0, rating: null
         };
         var name = Object.prototype.hasOwnProperty.call(payload.names, selectedPlayer) ?
             payload.names[selectedPlayer] : '';
@@ -315,9 +315,8 @@
             '#' + selectedPlayer;
         var displayValues = {
             touches: values.touches,
-            kills: values.kills,
-            aces: values.aces,
-            blocks: values.blocks,
+            points: values.points,
+            errors: values.errors,
             rating: values.rating === null ? '—' : values.rating
         };
         if (previousSpotlightPlayer !== selectedPlayer) previousSpotlightValues = null;
@@ -370,9 +369,9 @@
             var cards = el('cards');
             cards.replaceChildren();
             [
-                ['Aces', snapshot.team.aces],
+                ['Puntos directos', snapshot.team.points],
                 ['Kills', snapshot.team.kills],
-                ['Bloqueos', snapshot.team.blocks],
+                ['Aces', snapshot.team.aces],
                 ['Toques con error', snapshot.team.errors],
                 ['Eficiencia de ataque', snapshot.team.attack_efficiency === null ? '—' :
                     (snapshot.team.attack_efficiency * 100).toFixed(1) + '%'],
@@ -408,7 +407,7 @@
                 }
                 nameCell.append(element('span', String(name) + ' (#' + player.number + ')'));
                 row.append(nameCell);
-                [player.touches, player.kills, player.aces, player.blocks,
+                [player.touches, player.points, player.errors,
                     player.rating === null ? '—' : player.rating
                 ].forEach(function (value) { row.append(element('td', String(value))); });
                 row.dataset.player = player.number;
