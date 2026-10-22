@@ -25,6 +25,7 @@
   var RE_OUTCOME = /^@(won|lost)(?::(re|se))?$/i;    // mirrors analytics._parse_outcome_token
   var RE_PLAY = /^(\d*)([SREADB])([#+!\-])$/i;       // mirrors analytics._RE_ANY
   var RE_TS = /^@t:(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?$/i;   // mirrors analytics._RE_TIMESTAMP
+  var RE_START = /^@start:\s*(\d+)-(\d+)$/i;   // source: analytics.py _RE_START
   var DATASET_CANDIDATES = ['../datasets.json', 'datasets.json'];
   var DB_NAME = 'registro-partido';
   var DB_VERSION = 1;
@@ -133,7 +134,7 @@
   // ---------------------------------------------------------------
   // Draft model
   // ---------------------------------------------------------------
-  function emptySet() { return { v: '', r: '', video: '' }; }
+  function emptySet() { return { v: '', r: '', sv: '', sr: '', video: '' }; }
 
   function newDraft() {
     return {
@@ -321,8 +322,8 @@
   function resolveSets(d) {
     var sets = [], rows = [], ok = true, summary = [];
     (d.sets || []).forEach(function (s, i) {
-      var no = i + 1, score = null, videoUrl = null;
-      var scoreError = '', videoError = '';
+      var no = i + 1, score = null, startScore = null, videoUrl = null;
+      var scoreError = '', startError = '', videoError = '';
       var v = String(s.v == null ? '' : s.v).trim();
       var r = String(s.r == null ? '' : s.r).trim();
       if (v || r) {
@@ -332,15 +333,25 @@
           score = parseInt(v, 10) + '-' + parseInt(r, 10);   // R3: V-R
         }
       }
+      var sv = String(s.sv == null ? '' : s.sv).trim();
+      var sr = String(s.sr == null ? '' : s.sr).trim();
+      if (sv || sr) {
+        if (!sv || !sr || !/^\d+$/.test(sv) || !/^\d+$/.test(sr)) {
+          startError = 'Set ' + no + ': marcador inicial incompleto (usa formato V-R, ej. 7-4).';
+        } else {
+          startScore = parseInt(sv, 10) + '-' + parseInt(sr, 10);
+        }
+      }
       var video = (s.video || '').trim();
       if (video) {
         if (RE_YT.test(video)) { videoUrl = video; }          // R6
         else { videoError = 'URL de YouTube inválida.'; }
       }
       if (scoreError) { ok = false; summary.push(scoreError); }
+      if (startError) { ok = false; summary.push(startError); }
       if (videoError) { ok = false; }
-      sets.push({ score: score, video_url: videoUrl });
-      rows.push({ scoreError: scoreError, videoError: videoError });
+      sets.push({ score: score, start_score: startScore, video_url: videoUrl });
+      rows.push({ scoreError: scoreError, startError: startError, videoError: videoError });
     });
     return { ok: ok, sets: sets, rows: rows, errors: summary };
   }
@@ -386,9 +397,9 @@
 
   function newAnalysis(s) {
     var sets = (s.sets || []).map(function (st) {
-      return { score: st.score || null, video_url: st.video_url || null, rallies: [] };
+      return { score: st.score || null, start_score: st.start_score || null, video_url: st.video_url || null, rallies: [] };
     });
-    if (!sets.length) sets.push({ score: null, video_url: null, rallies: [] });
+    if (!sets.length) sets.push({ score: null, start_score: null, video_url: null, rallies: [] });
     return { sets: sets, currentSet: 0, entry: emptyEntry(), date: s.date || null, cursor: -1 };
   }
 
@@ -399,9 +410,10 @@
     (s.sets || []).forEach(function (st, i) {
       if (analysis.sets[i]) {
         analysis.sets[i].score = st.score || null;
+        analysis.sets[i].start_score = st.start_score || null;
         analysis.sets[i].video_url = st.video_url || null;
       } else {
-        analysis.sets.push({ score: st.score || null, video_url: st.video_url || null, rallies: [] });
+        analysis.sets.push({ score: st.score || null, start_score: st.start_score || null, video_url: st.video_url || null, rallies: [] });
       }
     });
   }
@@ -974,7 +986,7 @@
 
   function addSet() {
     if (!analysis) return;
-    analysis.sets.push({ score: null, video_url: null, rallies: [] });
+    analysis.sets.push({ score: null, start_score: null, video_url: null, rallies: [] });
     analysis.currentSet = analysis.sets.length - 1;
     renderAnalysis();
     saveDraftNow();
@@ -1014,6 +1026,7 @@
     var body = a.sets.map(function (set) {
       var lines = [];
       if (set.score) lines.push('@set: ' + set.score);
+      if (set.start_score && set.start_score !== '0-0') lines.push('@start: ' + set.start_score);
       if (set.video_url) lines.push('@youtube: ' + set.video_url);
       set.rallies.forEach(function (r) {
         var parts = r.tokens.slice();
@@ -1056,10 +1069,10 @@
 
   function parseLogToSets(text) {
     var sets = [];
-    var cur = { score: null, video_url: null, rallies: [] };
+    var cur = { score: null, start_score: null, video_url: null, rallies: [] };
     String(text || '').replace(/\r/g, '').split('\n').forEach(function (raw) {
       var line = raw.trim();
-      if (line === '---') { sets.push(cur); cur = { score: null, video_url: null, rallies: [] }; return; }
+      if (line === '---') { sets.push(cur); cur = { score: null, start_score: null, video_url: null, rallies: [] }; return; }
       if (!line) return;
       if (line.toLowerCase().indexOf('@youtube:') === 0) {
         var url = line.slice(9).trim();
@@ -1068,6 +1081,8 @@
       }
       var ms = /^@set:\s*(\d+)-(\d+)$/i.exec(line);
       if (ms) { cur.score = parseInt(ms[1], 10) + '-' + parseInt(ms[2], 10); return; }
+      var initial = RE_START.exec(line);
+      if (initial) { cur.start_score = parseInt(initial[1], 10) + '-' + parseInt(initial[2], 10); return; }
       var plays = [], outcome = null, start = null, end = null;
       line.split(/\s+/).forEach(function (tok) {
         var mt = RE_TS.exec(tok);
@@ -1103,7 +1118,16 @@
       analysis.entry = emptyEntry();
       analysis.cursor = -1;
       resetSelection();
-      if (draft) draft.analysis = analysis;
+      if (draft) {
+        draft.analysis = analysis;
+        // Keep setup metadata aligned with imported sets, including on reload.
+        draft.sets = analysis.sets.map(function (set) {
+          var final = (set.score || '-').split('-');
+          var initial = (set.start_score || '-').split('-');
+          return { v: final[0], r: final[1], sv: initial[0], sr: initial[1], video: set.video_url || '' };
+        });
+        draftToForm();
+      }
       saveDraftNow();
       renderAnalysis();
       renderReview();
@@ -1177,6 +1201,15 @@
               '<input type="number" class="lg-set__score-r" min="0" inputmode="numeric" placeholder="20" aria-label="Puntos del rival set ' + no + '">' +
             '</div>' +
           '</div>' +
+          '<div class="lg-field">' +
+            '<span class="lg-field__label">Marcador inicial (opcional)</span>' +
+            '<div class="lg-score">' +
+              '<input type="number" class="lg-set__start-v" data-start-score="v" min="0" inputmode="numeric" placeholder="0" aria-label="Puntos iniciales a favor set ' + no + '">' +
+              '<span class="lg-score__sep" aria-hidden="true">–</span>' +
+              '<input type="number" class="lg-set__start-r" data-start-score="r" min="0" inputmode="numeric" placeholder="0" aria-label="Puntos iniciales del rival set ' + no + '">' +
+            '</div>' +
+            '<p class="lg-error lg-set__start-error" role="alert"></p>' +
+          '</div>' +
           '<div class="lg-field lg-field--grow">' +
             '<label>Video YouTube (opcional)</label>' +
             '<input type="url" class="lg-set__video" placeholder="https://youtu.be/…" aria-label="Video set ' + no + '">' +
@@ -1185,6 +1218,8 @@
         '</div>';
       row.querySelector('.lg-set__score-v').value = s.v || '';
       row.querySelector('.lg-set__score-r').value = s.r || '';
+      row.querySelector('.lg-set__start-v').value = s.sv || '';
+      row.querySelector('.lg-set__start-r').value = s.sr || '';
       row.querySelector('.lg-set__video').value = s.video || '';
       host.appendChild(row);
     });
@@ -1224,6 +1259,8 @@
       draft.sets.push({
         v: rows[i].querySelector('.lg-set__score-v').value,
         r: rows[i].querySelector('.lg-set__score-r').value,
+        sv: rows[i].querySelector('.lg-set__start-v').value,
+        sr: rows[i].querySelector('.lg-set__start-r').value,
         video: rows[i].querySelector('.lg-set__video').value
       });
     }
@@ -1255,6 +1292,10 @@
       var msg = setsResult.rows[i] ? setsResult.rows[i].videoError : '';
       el.textContent = msg || '';
       el.style.display = msg ? 'block' : 'none';
+      var initial = rows[i].querySelector('.lg-set__start-error');
+      var startError = setsResult.rows[i] ? setsResult.rows[i].startError : '';
+      initial.textContent = startError || '';
+      initial.style.display = startError ? 'block' : 'none';
     }
   }
 

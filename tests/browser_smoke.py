@@ -62,6 +62,35 @@ window.addEventListener('message', function (event) {
 </body></html>""",
             encoding='utf-8',
         )
+        shutil.copytree(repo / 'logger', root / 'logger')
+        shutil.copy(repo / 'tests' / 'logger_dom_test.js', root / 'logger' / 'logger_dom_test.js')
+        logger_page = (root / 'logger' / 'index.html').read_text(encoding='utf-8')
+        logger_page = logger_page.replace(
+            '</body>', '<script src="logger_dom_test.js"></script></body>'
+        )
+        (root / 'logger' / 'index.html').write_text(logger_page, encoding='utf-8')
+        (root / 'logger' / 'datasets.js').write_text(
+            'window.LOGGER_DATASETS = '
+            + json.dumps(
+                [
+                    {
+                        'team_slug': 'test',
+                        'tournament_slug': 'test',
+                        'team': 'Test',
+                        'tournament': 'Test',
+                        'roster': {'7': {'name': 'Test'}},
+                    }
+                ]
+            )
+            + ';',
+            encoding='utf-8',
+        )
+        (root / 'logger-mobile.html').write_text(
+            (root / 'mobile.html')
+            .read_text(encoding='utf-8')
+            .replace('src="watch.html"', 'src="logger/index.html"'),
+            encoding='utf-8',
+        )
         handler = functools.partial(SimpleHTTPRequestHandler, directory=directory)
         server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -71,6 +100,8 @@ window.addEventListener('message', function (event) {
                 ('tests/browser_test.html', 1440, '<p id="result">PASS</p>'),
                 ('mobile.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
                 ('watch.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
+                ('logger/index.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
+                ('logger-mobile.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
             ):
                 url = f'http://127.0.0.1:{server.server_port}/{path}'
                 result = subprocess.run(
