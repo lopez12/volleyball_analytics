@@ -393,21 +393,27 @@ has a complete, unambiguous replay timeline. The separate `<match>_watch.html`
 page uses the same dashboard components and theme as the match report. Its
 stacked layout puts the scoreboard (team and opponent labels, live score, set,
 and current-rally status) directly below the title, followed by a full-width
-16:9 video and its set selector, replay/next controls, and YouTube link. Set
-statistics, the player table, and the collapsed rally-chip list follow below
-the video. The start-score note appears inside the scoreboard when recording
-began after play started.
+16:9 video and its set selector, replay/next controls, and YouTube link. The
+players section (spotlight and table), set statistics, and the collapsed
+rally-chip list follow below the video, in that order. The start-score note
+appears inside the scoreboard when recording began after play started.
 
 Choose **Destacar jugador** above the player table to keep one player's live
-spotlight visible while the match plays. The spotlight shows touches, kills,
-aces, blocks, and rating; the selected player's table row moves to the top and
-is marked with a star. Players with no touches in the current set show zeros
+spotlight visible while the match plays. The spotlight and compact player table
+show touches, points, errors, and rating. Points are direct scoring touches
+(aces + kills + blocks); errors are touches graded `-`. The spotlight uses four
+columns on desktop and a 2×2 grid on mobile, and the table fits a 375px screen
+without sideways scrolling. The selected player's table row moves to the top
+and is marked with a star. Players with no touches in the current set show zeros
 and a no-touches note, without being added to the table. The selection is saved
 in `localStorage` (`va-replay-player`) and persists across sets and reloads.
 The rally chips show only rally numbers, highlight the active (or latest
 completed) rally, and seek to its start when clicked; future results are never
 shown. The longest completed rally appears only as a set-stat value, not as a
-separate replay control.
+separate replay control. Set cards show direct points, kills, aces, touches with
+errors, attack efficiency, and the longest completed rally. For the per-action
+breakdown (including blocks and reception), use **Reporte completo** below the
+player table; its spoiler warning notes that it contains final results.
 
 Playback starts at 0–0 unless `@start: V-R` records a late recording start: a
 rally's score and touches appear only when playback reaches its recorded end.
