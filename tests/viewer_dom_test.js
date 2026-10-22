@@ -1,6 +1,7 @@
 /* Browser-only DOM checks using a deterministic fake IFrame API, never YouTube. */
 (function () {
     'use strict';
+    try { localStorage.setItem('va-replay-player', '8'); } catch (error) {}
     var clock = 0;
     var state = 2;
     var videoId = 'abcdefghijk';
@@ -81,6 +82,20 @@
                     action('next').focus();
                     assert(document.activeElement === action('next'), 'Navigation button cannot receive focus');
                     assert(action('repeat').disabled, 'Repeat available before first rally');
+                    var spotlightSelect = document.getElementById('replay-spotlight-select');
+                    assert(spotlightSelect.options.length === 3, 'Spotlight options omit eligible players');
+                    assert(spotlightSelect.options[1].textContent === '#7 · <img src=x>' &&
+                        spotlightSelect.options[2].textContent === '#8', 'Spotlight options are not sorted/named');
+                    assert(spotlightSelect.value === '8', 'Stored spotlight selection was not restored');
+                    assert(!document.getElementById('replay-spotlight').hidden &&
+                        document.querySelector('.replay-spotlight-empty').textContent ===
+                        'Sin toques registrados en este set', 'Absent player should show zero spotlight');
+                    assert(!document.querySelector('#replay-players [data-player="8"]'),
+                        'Absent player was added to the table');
+                    spotlightSelect.value = '7';
+                    spotlightSelect.dispatchEvent(new Event('change'));
+                    assert(localStorage.getItem('va-replay-player') === '7',
+                        'Spotlight selection was not persisted');
                     assert(!document.querySelector('#replay-players img'), 'Player name became HTML');
                     assert(!document.getElementById('replay-rallies').textContent.includes('Completada'),
                         'Future rally rows leak completion');
@@ -99,11 +114,21 @@
                         'Rally chips were not rendered');
                     assert(document.querySelector('#replay-rallies button[aria-current="true"]').textContent === '1',
                         'Active rally chip is not highlighted');
+                    var pinned = document.querySelector('#replay-players tr[aria-current="true"]');
+                    assert(pinned && pinned.dataset.player === '7', 'Selected row was not pinned');
+                    assert(pinned.querySelector('[aria-hidden="true"]').textContent === '★ ',
+                        'Pinned row has no non-color marker');
+                    assert(document.querySelector('.replay-spotlight .replay-spotlight-value strong').textContent === '1',
+                        'Spotlight did not update live at the rally boundary');
                     clock = 12;
                     update();
                     assert(score() === '0 – 0', 'Rewind did not restore score');
                     assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '0',
                         'Rewind did not restore kills');
+                    assert(document.querySelector('.replay-spotlight .replay-spotlight-value strong').textContent === '0',
+                        'Spotlight did not rewind to zero');
+                    assert(!document.querySelector('#replay-players tr[aria-current="true"]'),
+                        'Player with no touches was kept in the table');
                     clock = 16;
                     update();
                     assert(document.querySelector('#replay-rallies button[aria-current="true"]').textContent === '1',
@@ -135,6 +160,26 @@
                     assert(score() === '7 – 4', 'Offset rewind did not restore start');
                     assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '0',
                         'Offset added phantom kills');
+                    spotlightSelect.value = '8';
+                    spotlightSelect.dispatchEvent(new Event('change'));
+                    clock = 15;
+                    update();
+                    assert(document.querySelector('#replay-players tr[aria-current="true"]').dataset.player === '8',
+                        'Player spotlight did not follow set switching');
+                    clock = 38;
+                    update();
+                    var tableRows = document.querySelectorAll('#replay-players tr');
+                    assert(tableRows.length === 2 && tableRows[0].dataset.player === '8',
+                        'Pinned row was not moved ahead of the sorted table');
+                    spotlightSelect.value = '';
+                    spotlightSelect.dispatchEvent(new Event('change'));
+                    tableRows = document.querySelectorAll('#replay-players tr');
+                    assert(document.getElementById('replay-spotlight').hidden &&
+                        !document.querySelector('#replay-players tr[aria-current="true"]') &&
+                        tableRows[0].dataset.player === '7' && tableRows[1].dataset.player === '8',
+                        'Ninguno did not restore normal player ordering');
+                    assert(localStorage.getItem('va-replay-player') === null,
+                        'Ninguno was not persisted');
                     // Back/forward cache: pagehide stops polling; pageshow must resume it
                     // and reconcile at once, without onReady and without duplicates.
                     lifecycle('pagehide');
@@ -161,6 +206,9 @@
                             if (mobileControls) {
                                 assert(getComputedStyle(controls).gridTemplateColumns.trim().split(/\s+/).length === 2,
                                     'Mobile control bar does not use two columns');
+                                assert(getComputedStyle(document.querySelector('.replay-control-set')).gridColumnEnd === '-1' &&
+                                    getComputedStyle(document.getElementById('replay-youtube')).gridColumnEnd === '-1',
+                                    'Set selector and YouTube link must occupy full rows');
                             }
                             assert(document.documentElement.scrollWidth <= window.innerWidth,
                                 'Page overflows horizontally');

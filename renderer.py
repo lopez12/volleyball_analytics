@@ -898,6 +898,10 @@ def render_watch_page(
     )
     players_section = _section(
         'Jugadores',
+        '<div class="replay-spotlight-control">'
+        '<label for="replay-spotlight-select">Destacar jugador</label>'
+        '<select id="replay-spotlight-select"><option value="">Ninguno</option></select>'
+        '</div><div id="replay-spotlight" class="stat-card replay-spotlight" hidden></div>'
         '<div class="replay-table-wrap"><table class="summary-table">'
         '<caption>Toques registrados, no estad\u00edsticas del rival</caption>'
         '<thead><tr><th scope="col">Jugador</th><th scope="col">Toques</th>'

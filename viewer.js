@@ -235,6 +235,114 @@
     var loadTimeout = null;
     var failed = false;
     var controller;
+    var spotlightSelect = el('spotlight-select');
+    var playerNumbers = {};
+    payload.sets.forEach(function (set) {
+        set.snapshots.forEach(function (snapshot) {
+            snapshot.players.forEach(function (player) { playerNumbers[player.number] = true; });
+        });
+    });
+    var sortedPlayerNumbers = Object.keys(playerNumbers).sort(function (left, right) {
+        return Number(left) - Number(right);
+    });
+    sortedPlayerNumbers.forEach(function (number) {
+        var option = element('option');
+        option.value = number;
+        var name = Object.prototype.hasOwnProperty.call(payload.names, number) ?
+            payload.names[number] : '';
+        option.textContent = name ? '#' + number + ' · ' + name : '#' + number;
+        spotlightSelect.append(option);
+    });
+    var selectedPlayer = '';
+    try {
+        var storedPlayer = window.localStorage.getItem('va-replay-player');
+        if (storedPlayer && Object.prototype.hasOwnProperty.call(playerNumbers, storedPlayer)) {
+            selectedPlayer = storedPlayer;
+        }
+    } catch (error) {}
+    spotlightSelect.value = selectedPlayer;
+
+    var spotlightCard = el('spotlight');
+    var spotlightHeader = element('div');
+    spotlightHeader.className = 'card-header';
+    var spotlightName = element('span');
+    spotlightName.className = 'player-number';
+    var spotlightRatingPill = element('span');
+    spotlightRatingPill.className = 'player-rating';
+    spotlightHeader.append(spotlightName, spotlightRatingPill);
+    var spotlightBody = element('div');
+    spotlightBody.className = 'card-body';
+    var spotlightValues = element('div');
+    spotlightValues.className = 'replay-spotlight-values';
+    var spotlightValueNodes = {};
+    [
+        ['touches', 'Toques'], ['kills', 'Kills'], ['aces', 'Aces'],
+        ['blocks', 'Bloqueos'], ['rating', 'Rating']
+    ].forEach(function (pair) {
+        var item = element('div');
+        item.className = 'replay-spotlight-value';
+        var value = element('strong', '0');
+        var label = element('span', pair[1]);
+        item.append(value, label);
+        spotlightValues.append(item);
+        spotlightValueNodes[pair[0]] = item;
+    });
+    var spotlightEmpty = element('p', 'Sin toques registrados en este set');
+    spotlightEmpty.className = 'replay-spotlight-empty';
+    spotlightEmpty.hidden = true;
+    spotlightBody.append(spotlightValues, spotlightEmpty);
+    spotlightCard.append(spotlightHeader, spotlightBody);
+    var previousSpotlightPlayer = '';
+    var previousSpotlightValues = null;
+
+    function updateSpotlight(snapshot) {
+        if (!selectedPlayer) {
+            spotlightCard.hidden = true;
+            previousSpotlightPlayer = '';
+            previousSpotlightValues = null;
+            return;
+        }
+        var player = snapshot.players.find(function (row) {
+            return row.number === selectedPlayer;
+        });
+        var hasTouches = Boolean(player && player.touches > 0);
+        var values = hasTouches ? player : {
+            touches: 0, kills: 0, aces: 0, blocks: 0, rating: null
+        };
+        var name = Object.prototype.hasOwnProperty.call(payload.names, selectedPlayer) ?
+            payload.names[selectedPlayer] : '';
+        spotlightName.textContent = name ? '#' + selectedPlayer + ' · ' + name :
+            '#' + selectedPlayer;
+        var displayValues = {
+            touches: values.touches,
+            kills: values.kills,
+            aces: values.aces,
+            blocks: values.blocks,
+            rating: values.rating === null ? '—' : values.rating
+        };
+        if (previousSpotlightPlayer !== selectedPlayer) previousSpotlightValues = null;
+        Object.keys(displayValues).forEach(function (key) {
+            var node = spotlightValueNodes[key];
+            var value = String(displayValues[key]);
+            if (previousSpotlightValues && String(previousSpotlightValues[key]) !== value) {
+                node.classList.remove('replay-value-pulse');
+                void node.offsetWidth;
+                node.classList.add('replay-value-pulse');
+            }
+            node.firstElementChild.textContent = value;
+        });
+        var rating = displayValues.rating;
+        if (previousSpotlightValues && String(previousSpotlightValues.rating) !== rating) {
+            spotlightRatingPill.classList.remove('replay-value-pulse');
+            void spotlightRatingPill.offsetWidth;
+            spotlightRatingPill.classList.add('replay-value-pulse');
+        }
+        spotlightRatingPill.textContent = rating;
+        spotlightEmpty.hidden = hasTouches;
+        spotlightCard.hidden = false;
+        previousSpotlightPlayer = selectedPlayer;
+        previousSpotlightValues = displayValues;
+    }
 
     function draw(set, index, time, available, message) {
         if (available) clearTimeout(loadTimeout);
@@ -279,16 +387,33 @@
             });
             var rows = el('players');
             rows.replaceChildren();
-            snapshot.players.filter(function (player) { return player.touches > 0; })
-                .forEach(function (player) {
-                    var row = element('tr');
-                    var name = Object.prototype.hasOwnProperty.call(payload.names, player.number) ?
-                        payload.names[player.number] : '#' + player.number;
-                    [String(name) + ' (#' + player.number + ')', player.touches, player.kills,
-                        player.aces, player.blocks, player.rating === null ? '—' : player.rating
-                    ].forEach(function (value) { row.append(element('td', String(value))); });
-                    rows.append(row);
-                });
+            var tablePlayers = snapshot.players.filter(function (player) {
+                return player.touches > 0;
+            });
+            tablePlayers.sort(function (left, right) {
+                if (left.number === selectedPlayer) return -1;
+                if (right.number === selectedPlayer) return 1;
+                return Number(left.number) - Number(right.number);
+            });
+            tablePlayers.forEach(function (player) {
+                var row = element('tr');
+                var name = Object.prototype.hasOwnProperty.call(payload.names, player.number) ?
+                    payload.names[player.number] : '#' + player.number;
+                var nameCell = element('td');
+                if (player.number === selectedPlayer) {
+                    row.setAttribute('aria-current', 'true');
+                    var marker = element('span', '★ ');
+                    marker.setAttribute('aria-hidden', 'true');
+                    nameCell.append(marker);
+                }
+                nameCell.append(element('span', String(name) + ' (#' + player.number + ')'));
+                row.append(nameCell);
+                [player.touches, player.kills, player.aces, player.blocks,
+                    player.rating === null ? '—' : player.rating
+                ].forEach(function (value) { row.append(element('td', String(value))); });
+                row.dataset.player = player.number;
+                rows.append(row);
+            });
             var list = el('rallies');
             list.replaceChildren();
             set.rallies.forEach(function (rally) {
@@ -301,6 +426,7 @@
                 list.append(button);
             });
         }
+        updateSpotlight(snapshot);
         el('rallies').querySelectorAll('[data-replay="rally"]').forEach(function (button) {
             var current = active && button.dataset.rally === active.id;
             if (current) button.setAttribute('aria-current', 'true');
@@ -334,6 +460,16 @@
     }
     controller = new Controller(payload, draw, failure);
     draw(controller.set(), 0, 0, false, 'Esperando al reproductor; estadísticas en cero.');
+    spotlightSelect.addEventListener('change', function () {
+        selectedPlayer = spotlightSelect.value;
+        try {
+            if (selectedPlayer) window.localStorage.setItem('va-replay-player', selectedPlayer);
+            else window.localStorage.removeItem('va-replay-player');
+        } catch (error) {}
+        renderedKey = '';
+        if (controller.failed) draw(controller.set(), 0, 0, false, el('status').textContent);
+        else controller.reconcile();
+    });
 
     function waitForVideo() {
         clearTimeout(loadTimeout);

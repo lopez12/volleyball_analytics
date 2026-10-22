@@ -37,7 +37,10 @@ def main():
         payload = {'sets': parse_log(log)['replay']['sets'], 'names': {'7': 'Test'}}
         (tests / 'fixture.json').write_text(json.dumps(payload), encoding='utf-8')
         mixed = parse_log(
-            log + '\n---\n' + '@start: 7-4\n' + log.replace('abcdefghijk', 'ABCDEFGHIJK')
+            log
+            + '\n---\n'
+            + '@start: 7-4\n'
+            + log.replace('7A#', '8A#').replace('abcdefghijk', 'ABCDEFGHIJK')
         )['replay']
         page = render_watch_page('Synthetic test', mixed, {'7': '<img src=x>'}, 'report.html')
         page = page.replace(
@@ -111,7 +114,7 @@ window.addEventListener('message', function (event) {
                         '--disable-gpu',
                         '--no-first-run',
                         '--no-default-browser-check',
-                        f'--user-data-dir={root / "profile"}',
+                        f'--user-data-dir={root / ("profile-" + path.replace("/", "-"))}',
                         f'--window-size={width},1000',
                         '--dump-dom',
                         '--virtual-time-budget=5000',
