@@ -958,10 +958,10 @@ def render_watch_page(
     <div class="replay-control-set"><label for="replay-set">Set</label><select id="replay-set">{options}</select></div>
     <button type="button" data-replay="repeat" disabled>\u25c0 Repetir jugada</button>
     <button type="button" data-replay="next" disabled>Siguiente jugada \u25b6</button>
-    <a id="replay-youtube" class="replay-link" href="https://www.youtube.com/watch?v={_html_escape(first_video, quote=True)}"
-        target="_blank" rel="noopener noreferrer">Abrir en YouTube \u2197</a>
   </nav>
   <p id="replay-status" class="replay-status" role="status" aria-live="polite">Esperando al reproductor; estad\u00edsticas en cero.</p>
+  <a id="replay-youtube" class="replay-link" hidden href="https://www.youtube.com/watch?v={_html_escape(first_video, quote=True)}"
+      target="_blank" rel="noopener noreferrer">Abrir el video en YouTube \u2197</a>
   {players_section}
   {stats_section}
   {rally_section}

@@ -98,7 +98,10 @@ window.YT = {Player: function (id, options) {
     options.events.onReady();
     var wrap = document.querySelector('.replay-table-wrap');
     var pinned = document.querySelector('#replay-players tr[aria-current="true"]');
-    var pass = wrap.scrollWidth <= wrap.clientWidth && pinned && pinned.dataset.player === '5'
+    var controls = document.querySelector('.replay-controls');
+    var fallback = document.getElementById('replay-youtube');
+    var pass = fallback.hidden && !controls.contains(fallback) && controls.children.length === 3
+      && wrap.scrollWidth <= wrap.clientWidth && pinned && pinned.dataset.player === '5'
       && document.getElementById('replay-current').textContent.includes('23');
     var result = document.createElement('p');
     result.id = 'browser-smoke-result';

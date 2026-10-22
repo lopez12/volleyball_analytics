@@ -52,6 +52,8 @@
                 try {
                     assert(score() === '0 – 0', 'Initial score leaks results');
                     assert(action('next').disabled, 'Controls enabled before readiness');
+                    assert(document.getElementById('replay-youtube').hidden,
+                        'YouTube fallback visible before readiness');
                     lifecycle('pagehide');
                     lifecycle('pageshow');
                     lifecycle('pageshow');
@@ -82,6 +84,9 @@
                 try {
                     events.onReady();
                     assert(pollers() === 1, 'Ready player did not start exactly one poller');
+                    var youtube = document.getElementById('replay-youtube');
+                    assert(youtube.hidden && youtube.href === 'https://www.youtube.com/watch?v=abcdefghijk',
+                        'Normal playback must hide the fallback and keep its target');
                     assert(score() === '0 – 0', 'Ready state leaks results');
                     assert(!action('next').disabled, 'Next unavailable with a ready player');
                     action('next').focus();
@@ -204,6 +209,8 @@
                         'Estadísticas registradas en la grabación', 'Wrong offset scope');
                     update();
                     assert(videoId === 'ABCDEFGHIJK' && clock === 0, 'Set video clock mapping incorrect');
+                    assert(youtube.hidden && youtube.href === 'https://www.youtube.com/watch?v=ABCDEFGHIJK',
+                        'Hidden fallback did not follow set switching');
                     assert(score() === '7 – 4', 'Set switch retained old statistics');
                     clock = 15;
                     update();
@@ -255,12 +262,21 @@
                             var mobileControls = matchMedia('(max-width: 600px)').matches;
                             assert(getComputedStyle(controls).display === (mobileControls ? 'grid' : 'flex'),
                                 'Control bar does not match the responsive layout');
+                            assert(controls.children.length === 3 && !controls.contains(youtube) && youtube.hidden,
+                                'Control bar must contain only set/repeat/next, with fallback hidden');
+                            var setBox = document.querySelector('.replay-control-set').getBoundingClientRect();
+                            var repeatBox = action('repeat').getBoundingClientRect();
+                            var nextBox = action('next').getBoundingClientRect();
+                            assert(repeatBox.top === nextBox.top && repeatBox.right <= nextBox.left,
+                                'Replay buttons must share a row');
+                            assert(mobileControls ? setBox.bottom <= repeatBox.top :
+                                setBox.left < repeatBox.left && setBox.top < repeatBox.bottom &&
+                                repeatBox.top < setBox.bottom, 'Set selector is on the wrong row');
                             if (mobileControls) {
                                 assert(getComputedStyle(controls).gridTemplateColumns.trim().split(/\s+/).length === 2,
                                     'Mobile control bar does not use two columns');
-                                assert(getComputedStyle(document.querySelector('.replay-control-set')).gridColumnEnd === '-1' &&
-                                    getComputedStyle(document.getElementById('replay-youtube')).gridColumnEnd === '-1',
-                                    'Set selector and YouTube link must occupy full rows');
+                                assert(getComputedStyle(document.querySelector('.replay-control-set')).gridColumnEnd === '-1',
+                                    'Set selector must occupy the first full row');
                             }
                             assert(document.documentElement.scrollWidth <= window.innerWidth,
                                 'Page overflows horizontally');
@@ -272,6 +288,9 @@
                             assert(before !== getComputedStyle(document.documentElement).getPropertyValue('--surface-2'),
                                 'Theme toggle did not change theme colors');
                             events.onError();
+                            assert(!youtube.hidden && getComputedStyle(youtube).display !== 'none' &&
+                                youtube.href === 'https://www.youtube.com/watch?v=ABCDEFGHIJK',
+                                'Failure must reveal the selected set fallback');
                             assert(score() === '7 – 4', 'Failure left stale score visible');
                             document.querySelectorAll('[data-replay]').forEach(function (button) {
                                 assert(button.disabled, 'Failure left an enabled synchronized control');
@@ -285,6 +304,10 @@
                             document.querySelectorAll('[data-replay]').forEach(function (button) {
                                 assert(button.disabled, 'Lifecycle restore re-enabled a failed control');
                             });
+                            selector.value = '0';
+                            selector.dispatchEvent(new Event('change'));
+                            assert(!youtube.hidden && youtube.href === 'https://www.youtube.com/watch?v=abcdefghijk',
+                                'Visible fallback did not follow set change after failure');
                             finish('PASS');
                         } catch (error) { finish('FAIL: ' + error.message); }
                     }, 1000);

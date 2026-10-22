@@ -393,7 +393,7 @@ has a complete, unambiguous replay timeline. The separate `<match>_watch.html`
 page uses the same dashboard components and theme as the match report. Its
 stacked layout puts the scoreboard (team and opponent labels, live score, set,
 and current-rally status) directly below the title, followed by a full-width
-16:9 video and its set selector, replay/next controls, and YouTube link. The
+16:9 video and its set selector and replay/next controls. The
 players section (spotlight and table), set statistics, and the collapsed
 rally-chip list follow below the video, in that order. The start-score note
 appears inside the scoreboard when recording began after play started.
@@ -488,7 +488,9 @@ skipping or cross-set advancement.
 Playback requires JavaScript, HTTP(S), access to the YouTube IFrame API and
 permission to embed the selected video. `file://`, API failures, blocked
 embeds and invalid payloads disable synchronized controls with an explanation
-and a YouTube fallback link. The static final reports still work without JS.
+and show **Abrir el video en YouTube ↗** below the status line only as a
+fallback when the player cannot load. This link follows the selected set and
+stays hidden during normal playback. The static final reports still work without JS.
 For local playback, run `python -m http.server` and open the generated `docs/`
 page through localhost, not directly from disk.
 

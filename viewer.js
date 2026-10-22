@@ -227,6 +227,7 @@
     if (!validatePayload(payload)) {
         text('status', 'Datos de sincronización no válidos. Usa el enlace a YouTube o el reporte.');
         disable();
+        el('youtube').hidden = false;
         el('set').disabled = true;
         return;
     }
@@ -441,6 +442,7 @@
 
     function failure(message) {
         failed = true;
+        el('youtube').hidden = false;
         stopSync();
         clearTimeout(loadTimeout);
         draw(controller.set(), 0, 0, false, message + ' Estadísticas no sincronizadas.');

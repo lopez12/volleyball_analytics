@@ -185,7 +185,7 @@
 }
 .replay-viewer button:not(:disabled), .replay-viewer select, .replay-viewer .replay-link { cursor: pointer; }
 .replay-viewer button:disabled { opacity: 0.55; cursor: not-allowed; }
-.replay-viewer .replay-link { color: var(--primary); border-color: var(--primary); margin-left: auto; }
+.replay-viewer .replay-link { color: var(--primary); border-color: var(--primary); }
 .replay-viewer :focus-visible, .replay-notice :focus-visible {
     outline: 3px solid var(--primary);
     outline-offset: 3px;
@@ -249,10 +249,9 @@
     .replay-side-label { font-size: 1rem; }
     .replay-score { font-size: 1.8rem; }
     .replay-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .replay-control-set, .replay-viewer .replay-link { grid-column: 1 / -1; }
+    .replay-viewer .replay-control-set { grid-column: 1 / -1; }
     .replay-control-set select { flex: 1; min-width: 0; }
     .replay-controls > button { width: 100%; padding: 9px 5px; }
-    .replay-viewer .replay-link { margin-left: 0; text-align: center; }
     .general-stats.replay-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .replay-table-wrap .summary-table th, .replay-table-wrap .summary-table td { padding: 8px 5px; }
     .replay-table-wrap .summary-table th { font-size: 0.68rem; letter-spacing: 0; }
