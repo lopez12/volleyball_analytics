@@ -183,6 +183,7 @@ The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much eac
 - `---` — set separator (resets rally context)
 - `@youtube: https://youtu.be/...` — links a YouTube video to this set
 - `@set: V-R` — final set score (team score first, rival second), e.g. `@set: 25-18`
+- `@start: V-R` — optional score when recording begins, team first (e.g. `@start: 7-4`); before the first rally in its `---`-delimited set block.
 - `@date: YYYY-MM-DD` — optional match play date, e.g. `@date: 2026-05-17`; shown on match and season pages (distinct from the report build date)
 - `@won` / `@lost` / `@won:re` / `@won:se` — **rally outcome** (see below)
 - `@t:<start>[-<end>]` — optional per-rally **video timestamp** in seconds into that set's video, e.g. `@t:3-9` or `@t:12` (see [Video timestamps](#video-timestamps--two-pass-tagging) below)
@@ -270,8 +271,10 @@ python validate_logs.py teams/nova # validate a subset (file or folder)
 
 It reports two severities:
 
-- **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`, a player number missing from the roster, or a malformed `@set: V-R` line. These are genuinely broken data the engine would drop.
+- **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`, a player number missing from the roster, or a malformed `@set: V-R` / `@start: V-R` line. These are genuinely broken data the engine would drop.
 - **WARN** (does not fail) — an outcome token that isn't last / is duplicated, a rally with no `@won`/`@lost` in a file that otherwise uses outcome tokens, an invalid `@youtube:` URL, a malformed `@t:` video timestamp, or a line/token the parser ignores such as `(Sin registro)` or `--- SEGUNDO SET ---`.
+
+**R10 (`@start:`):** malformed syntax is an **ERROR**. Duplicate declarations, a declaration after the block's first rally, or either starting component exceeding the matching final component are **WARN**. The validator imports the pattern from `analytics.py`; header order relative to `@set:` and `@youtube:` does not matter.
 
 The _outcome-completeness_ check is intentionally advisory: legacy logs without outcome tokens still work via the heuristic fallback, so they are exempt. Use `--strict` if you want warnings to fail too.
 
@@ -388,7 +391,7 @@ Theming is pure CSS custom properties plus a tiny inline script — no build ste
 Published match reports offer **Ver con estadísticas** when at least one set
 has a complete, unambiguous replay timeline. The separate `<match>_watch.html`
 page embeds YouTube alongside **Estadísticas del set hasta este momento**.
-It starts at 0–0: a rally's score and touches appear only when playback reaches
+It starts at 0–0 unless `@start: V-R` records a late recording start: a rally's score and touches appear only when playback reaches
 its recorded end. Rewinding restores the corresponding earlier snapshot.
 Future rally rows reveal only their set/rally identity and a seek button.
 The full-report backlink contains final results. This is spoiler-safe
@@ -404,11 +407,43 @@ Eligibility is strict and **per set**, not a new log-validation requirement:
   events are supported. Nothing is inferred, sorted, or corrected.
 - Every rally needs graded touches, except touchless `@won:se` opponent serve
   faults. Outcome/timestamp-only segmentation is not evidence of full grading.
-- If `@set: V-R` exists, its score must match all explicit outcomes. Conflicting
+- If `@set: V-R` exists, its score must equal the starting score plus all explicit outcomes. Conflicting
   final scores, repeated video declarations and unrecognized content exclude
   that set. Without a final score, the viewer explicitly disclaims independent
   score reconciliation. Reports explain exclusions in Spanish; mixed matches
   still offer their eligible sets.
+
+### Late recording starts (`@start:`)
+
+Place the optional initial score before the first recorded rally of its set.
+It may come before or after the final-score and video headers:
+
+```text
+@set: 23-25
+@start: 7-4
+@youtube: https://youtu.be/abcdefghijk
+7A# @won @t:10-15
+```
+
+With 16 recorded wins and 21 recorded losses, that start reconciles to 23-25.
+Missing `@start:` and explicit `@start: 0-0` are equivalent. Duplicate, misplaced,
+or over-final starts exclude that set from replay. A non-reconciling score keeps
+its exclusion message and, when neither count is excessive, suggests the missing
+wins/losses as an `@start:` hint. This is only a hint: never auto-fill an offset
+or use it to conceal a mid-set recording gap. Without `@set:`, a valid start is
+accepted but the result is not independently reconciled.
+
+A nonzero start shows **La grabación inicia con el marcador V–R.** and changes
+the viewer scope to **Estadísticas registradas en la grabación**. Rewinding before
+the first rally ends restores the starting score. Only the scoreboard is offset:
+ratings, touches, points, phases, longest rally and rally numbering still describe
+recorded rallies only. Existing static report scores and season totals do not change.
+
+In the Match Logger, each set offers optional **Marcador inicial** fields beside
+the final score, using the same nonnegative-integer V-R check and inline errors.
+Export puts `@start: V-R` immediately after `@set:` (or first when no final exists),
+but omits blank and 0-0 starts. Import and IndexedDB drafts preserve the value;
+old logs and drafts without it continue to work unchanged.
 
 Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks
 and all `-` touches (**Toques con error**, not points lost). Attack efficiency
