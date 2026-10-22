@@ -186,10 +186,6 @@
         if (action === 'rally') {
             rally = set.rallies.find(function (item) { return item.id === id; });
         }
-        if (action === 'longest') {
-            var longest = set.snapshots[snapshotIndex(set, time)].longest;
-            if (longest) rally = set.rallies.find(function (item) { return item.id === longest.id; });
-        }
         if (!rally) return;
         try {
             var state = this.player.getPlayerState();
@@ -244,77 +240,77 @@
         if (available) clearTimeout(loadTimeout);
         text('status', message);
         var snapshot = set.snapshots[index];
-        text('score', snapshot.score.join(' - '));
+        text('score', snapshot.score.join(' \u2013 '));
         var offset = set.start_score.some(function (value) { return value !== 0; });
-        text('scope', offset ? 'Estadísticas registradas en la grabación' :
-            'Estadísticas del set hasta este momento');
-        text('start-note', offset ? 'La grabación inicia con el marcador ' +
-            set.start_score.join('–') + '.' : '');
+        text('scope', offset ? 'Estad\u00edsticas registradas en la grabaci\u00f3n' :
+            'Estad\u00edsticas del set hasta este momento');
+        text('start-note', offset ? 'La grabaci\u00f3n inicia con el marcador ' +
+            set.start_score.join('\u2013') + '.' : '');
         el('start-note').hidden = !offset;
         el('stats').setAttribute('aria-label', available ?
-            'Estadísticas sincronizadas' : 'Estadísticas no sincronizadas; valores iniciales');
+            'Estad\u00edsticas sincronizadas' : 'Estad\u00edsticas no sincronizadas; valores iniciales');
         el('youtube').href = 'https://www.youtube.com/watch?v=' + set.video_id;
         text('reconciliation', set.reconciled ?
             'Set verificado contra el marcador registrado (oculto hasta completar las jugadas).' :
-            'Sin marcador final registrado; no hay reconciliación independiente del resultado.');
+            'Sin marcador final registrado; no hay reconciliaci\u00f3n independiente del resultado.');
         var active = repeatRally(set, time);
-        text('current', active ? 'Set ' + set.number + ', jugada ' + active.number +
+        text('current', active ? 'Set ' + set.number + ' \u00b7 Jugada ' + active.number +
             (time < active.end ? ' en curso' : ' completada') : 'Antes de la primera jugada');
-        text('longest', snapshot.longest ? 'Jugada más larga completada: ' +
-            snapshot.longest.duration + ' s' : 'Sin jugadas completadas.');
         var key = set.id + ':' + index;
         if (renderedKey !== key) {
             renderedKey = key;
             var cards = el('cards');
             cards.replaceChildren();
             [
-                ['Toques registrados', snapshot.team.touches],
                 ['Aces', snapshot.team.aces],
-                ['Kills de ataque', snapshot.team.kills],
-                ['Bloqueos ganadores', snapshot.team.blocks],
+                ['Kills', snapshot.team.kills],
+                ['Bloqueos', snapshot.team.blocks],
                 ['Toques con error', snapshot.team.errors],
                 ['Eficiencia de ataque', snapshot.team.attack_efficiency === null ? '—' :
-                    (snapshot.team.attack_efficiency * 100).toFixed(1) + '%']
+                    (snapshot.team.attack_efficiency * 100).toFixed(1) + '%'],
+                ['Rally m\u00e1s largo', snapshot.longest ? snapshot.longest.duration + ' s' : '—']
             ].forEach(function (pair) {
                 var card = element('div');
                 card.className = 'stat-card';
-                card.append(element('strong', String(pair[1])), element('div', pair[0]));
+                card.append(element('div', String(pair[1])), element('div', pair[0]));
+                card.firstElementChild.className = 'stat-value';
+                card.lastElementChild.className = 'stat-label';
                 cards.append(card);
             });
             var rows = el('players');
             rows.replaceChildren();
-            snapshot.players.forEach(function (player) {
-                var row = element('tr');
-                var name = Object.prototype.hasOwnProperty.call(payload.names, player.number) ?
-                    payload.names[player.number] : '#' + player.number;
-                [String(name) + ' (#' + player.number + ')', player.touches, player.kills,
-                    player.aces, player.blocks, player.rating === null ? '—' : player.rating
-                ].forEach(function (value) { row.append(element('td', String(value))); });
-                rows.append(row);
-            });
+            snapshot.players.filter(function (player) { return player.touches > 0; })
+                .forEach(function (player) {
+                    var row = element('tr');
+                    var name = Object.prototype.hasOwnProperty.call(payload.names, player.number) ?
+                        payload.names[player.number] : '#' + player.number;
+                    [String(name) + ' (#' + player.number + ')', player.touches, player.kills,
+                        player.aces, player.blocks, player.rating === null ? '—' : player.rating
+                    ].forEach(function (value) { row.append(element('td', String(value))); });
+                    rows.append(row);
+                });
             var list = el('rallies');
             list.replaceChildren();
-            set.rallies.forEach(function (rally, position) {
-                var item = element('li');
-                var button = element('button', 'Set ' + set.number + ' · Jugada ' + rally.number);
+            set.rallies.forEach(function (rally) {
+                var button = element('button', String(rally.number));
                 button.type = 'button';
+                button.className = 'action-pill';
+                button.setAttribute('aria-label', 'Jugada ' + rally.number);
                 button.dataset.replay = 'rally';
                 button.dataset.rally = rally.id;
-                item.append(button);
-                // Future rows never show outcome, score, duration or touch details.
-                if (position < index) {
-                    var result = set.snapshots[position + 1].score;
-                    item.append(element('span', ' Completada · ' + result.join(' - ')));
-                }
-                list.append(item);
+                list.append(button);
             });
         }
+        el('rallies').querySelectorAll('[data-replay="rally"]').forEach(function (button) {
+            var current = active && button.dataset.rally === active.id;
+            if (current) button.setAttribute('aria-current', 'true');
+            else button.removeAttribute('aria-current');
+        });
         root.querySelectorAll('[data-replay]').forEach(function (button) {
             var action = button.dataset.replay;
             button.disabled = !available ||
                 (action === 'next' && !nextRally(set, time)) ||
-                (action === 'repeat' && !active) ||
-                (action === 'longest' && !snapshot.longest);
+                (action === 'repeat' && !active);
         });
     }
 
@@ -338,6 +334,7 @@
     }
     controller = new Controller(payload, draw, failure);
     draw(controller.set(), 0, 0, false, 'Esperando al reproductor; estadísticas en cero.');
+
     function waitForVideo() {
         clearTimeout(loadTimeout);
         loadTimeout = setTimeout(function () {

@@ -272,7 +272,12 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
         watch_href = None
         if replay and any(item['eligible'] for item in replay['sets']):
             watch_href = f'{stem}_watch.html'
-            watch_html = render_watch_page(meta['title'], replay, names, meta['file'])
+            opponent_name = (
+                meta['title'].split(' vs ', 1)[1] if ' vs ' in meta['title'] else 'Rival'
+            )
+            watch_html = render_watch_page(
+                meta['title'], replay, names, meta['file'], team_name, opponent_name
+            )
             (out_dir / watch_href).write_text(watch_html, encoding='utf-8')
             print(f'  Generated: docs/{team_slug}/{tournament_slug}/{watch_href}')
         html = render_match_page(meta['title'], parsed, today, replay, watch_href)

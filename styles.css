@@ -136,41 +136,80 @@
     background: var(--regular-bg);
     border-radius: 6px;
 }
-/* Additive spectator viewer; all colors follow the shared theme tokens. */
-.replay-layout {
+/* Spoiler-safe spectator viewer, composed from the shared dashboard components. */
+.replay-viewer .report-header { margin-bottom: 16px; }
+.replay-viewer .report-header h1 { overflow-wrap: anywhere; }
+.replay-subtitle { color: var(--text-muted); margin: 5px 0 0; }
+.replay-scoreboard { margin: 0 0 18px; padding: 16px; }
+.replay-scoreboard-row {
     display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-    gap: 24px;
-    margin: 20px 0;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
 }
-.replay-layout > section { min-width: 0; }
-.replay-video { aspect-ratio: 16 / 9; background: var(--surface-3); }
-.replay-video > * { width: 100%; height: 100%; border: 0; }
-.replay-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-.replay-cards .stat-card { padding: 12px; margin: 0; width: auto; }
-.replay-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.replay-side-label { color: var(--text-main); font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+.replay-side-label:last-child { text-align: right; }
+.replay-score { white-space: nowrap; font-size: 2rem; }
+.replay-current { margin: 10px 0 0; }
+.replay-start-note { color: var(--text-muted); font-size: 0.8rem; margin: 8px 0 0; }
+.replay-video {
+    aspect-ratio: 16 / 9;
+    background: var(--surface-3);
+    border-radius: 12px;
+    margin: 0 0 14px;
+    overflow: hidden;
+    padding: 0;
+}
+.replay-video > *, .replay-video iframe { width: 100%; height: 100%; border: 0; }
+.replay-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.replay-control-set { display: flex; align-items: center; gap: 8px; }
 .replay-viewer button, .replay-viewer select, .replay-link {
     background: var(--surface-2);
     color: var(--text-main);
-    border: 1px solid var(--primary);
-    border-radius: 6px;
-    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
     font: inherit;
+    text-decoration: none;
 }
-.replay-viewer button:not(:disabled), .replay-viewer select { cursor: pointer; }
-.replay-viewer button:disabled { opacity: .55; cursor: not-allowed; }
+.replay-viewer button:not(:disabled), .replay-viewer select, .replay-link { cursor: pointer; }
+.replay-viewer button:disabled { opacity: 0.55; cursor: not-allowed; }
+.replay-viewer .replay-link { color: var(--primary); border-color: var(--primary); margin-left: auto; }
 .replay-viewer :focus-visible, .replay-notice :focus-visible {
     outline: 3px solid var(--primary);
     outline-offset: 3px;
 }
+.replay-status, .replay-muted { color: var(--text-muted); font-size: 0.82rem; }
+.replay-status { margin: 7px 0 16px; min-height: 1.3em; }
+.replay-muted { margin: 0 0 10px; }
+.general-stats.replay-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.replay-cards .stat-card { margin: 0; width: auto; }
+.replay-cards .stat-value { overflow-wrap: anywhere; }
 .replay-table-wrap { overflow-x: auto; }
+.replay-table-wrap .summary-table { min-width: 620px; }
+.replay-rallies { gap: 8px; padding: 0; margin: 0; }
+.replay-rallies button { min-width: 36px; justify-content: center; padding: 5px 11px; }
+.replay-rallies button[aria-current="true"] { background: var(--primary); border-color: var(--primary); color: var(--card-bg); font-weight: 800; }
 .replay-notice { margin: 20px 0; padding: 16px; background: var(--surface-2); border-radius: 8px; }
 .replay-notice details { margin-top: 14px; }
-#replay-rallies { display: flex; flex-wrap: wrap; gap: 12px; padding-left: 24px; }
-#replay-rallies li { margin: 5px 15px; }
-#replay-status { min-height: 3em; }
-@media (max-width: 800px) {
-    .replay-layout { grid-template-columns: minmax(0, 1fr); }
+.replay-viewer .section-title { margin-top: 18px; }
+    100% { background: transparent; }
+}
+    100% { background: var(--surface-2); }
+}
+@media (max-width: 600px) {
+    .replay-scoreboard { padding: 12px 8px; }
+    .replay-scoreboard-row { gap: 4px; }
+    .replay-side-label { font-size: 0.82rem; }
+    .replay-score { font-size: 1.8rem; }
+    .replay-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .replay-control-set, .replay-viewer .replay-link { grid-column: 1 / -1; }
+    .replay-control-set select { flex: 1; min-width: 0; }
+    .replay-controls > button { width: 100%; padding: 9px 5px; }
+    .replay-viewer .replay-link { margin-left: 0; text-align: center; }
+    .general-stats.replay-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
 }
 /* Volleyball Analytics Dashboard Styles */
 :root {

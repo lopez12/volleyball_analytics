@@ -78,11 +78,6 @@ state = 3;
 controller.reconcile();
 assert.strictEqual(updates.at(-1).index, 0);
 assert(updates.at(-1).message.includes('Cargando'));
-controller.seek('longest');
-assert.strictEqual(clock, 12); // unavailable before any completion
-clock = 38;
-controller.seek('longest');
-assert.strictEqual(clock, 30);
 controller.switchSet(1);
 assert.strictEqual(updates.at(-1).index, 0);
 assert.strictEqual(updates.at(-1).available, false);

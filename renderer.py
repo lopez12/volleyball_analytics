@@ -104,11 +104,12 @@ def _date_span(isos):
     return lo if lo == hi else f'{lo} – {hi}'
 
 
-def _back_link(href='index.html', label='← Inicio'):
-    """Return a top-of-page back-link div."""
+def _back_link(href='index.html', label='\u2190 Inicio', title=None):
+    """Return a top-of-page back-link div, optionally with an accessible title."""
+    title_attr = f' title="{_html_escape(title, quote=True)}"' if title else ''
     return (
         f'<div style="margin-bottom:12px;">'
-        f'<a href="{href}" style="color:var(--primary);text-decoration:none;'
+        f'<a href="{href}"{title_attr} style="color:var(--primary);text-decoration:none;'
         f'font-weight:600;font-size:0.88rem;">{label}</a>'
         f'</div>'
     )
@@ -823,7 +824,9 @@ def _replay_notice(replay, watch_href=None, viewer=False):
     return f'<aside class="replay-notice">{link}{exclusions}</aside>'
 
 
-def render_watch_page(match_title, replay, names, report_href):
+def render_watch_page(
+    match_title, replay, names, report_href, team_name='Equipo', opponent_name='Rival'
+):
     """Render a spoiler-safe, read-only viewer with source-derived snapshots.
 
     Args:
@@ -831,6 +834,8 @@ def render_watch_page(match_title, replay, names, report_href):
         replay (dict): Analytics replay model; only eligible sets reach the player.
         names (dict): Dataset player numbers to display names.
         report_href (str): Relative full-report backlink (contains final results).
+        team_name (str): Display name for the left side of the scoreboard.
+        opponent_name (str): Display name for the right side of the scoreboard.
 
     Returns:
         str: A static HTML document; synchronized playback requires HTTP(S).
@@ -867,70 +872,93 @@ def render_watch_page(match_title, replay, names, report_href):
     )
     first_video = sets[0]['video_id'] if sets else ''
     start_score = sets[0]['start_score'] if sets else [0, 0]
-    initial_score = ' - '.join(str(value) for value in start_score)
+    initial_score = ' \u2013 '.join(str(value) for value in start_score)
     offset = start_score != [0, 0]
     scope = (
-        'Estadísticas registradas en la grabación'
+        'Estad\u00edsticas registradas en la grabaci\u00f3n'
         if offset
-        else 'Estadísticas del set hasta este momento'
+        else 'Estad\u00edsticas del set hasta este momento'
     )
     start_note = (
-        f'La grabación inicia con el marcador {start_score[0]}–{start_score[1]}.' if offset else ''
+        f'La grabaci\u00f3n inicia con el marcador {start_score[0]}\u2013{start_score[1]}.'
+        if offset
+        else ''
     )
     title = _html_escape(match_title)
+    safe_report_href = _html_escape(report_href, quote=True)
+    top_back = _back_link(
+        safe_report_href, '\u2190 Reporte completo', 'Contiene resultados finales'
+    )
+    bottom_back = _back_nav(safe_report_href, '\u2190 Reporte completo')
+    stats_section = _section(
+        'Estad\u00edsticas del set',
+        f'<p id="replay-scope" class="replay-muted">{scope}</p>'
+        '<p id="replay-reconciliation" class="replay-muted"></p>'
+        '<div id="replay-stats"><div class="general-stats replay-cards" id="replay-cards"></div></div>',
+    )
+    players_section = _section(
+        'Jugadores',
+        '<div class="replay-table-wrap"><table class="summary-table">'
+        '<caption>Toques registrados, no estad\u00edsticas del rival</caption>'
+        '<thead><tr><th scope="col">Jugador</th><th scope="col">Toques</th>'
+        '<th scope="col">Kills</th><th scope="col">Aces</th><th scope="col">Bloqueos</th>'
+        '<th scope="col">Rating</th></tr></thead><tbody id="replay-players"></tbody>'
+        '</table></div>',
+    )
+    rally_section = _section(
+        'Jugadas del set',
+        '<div class="replay-rallies action-grid" id="replay-rallies"></div>',
+        collapsed=True,
+    )
+    exclusions = (
+        _replay_notice(replay, viewer=True)
+        if any(not item['eligible'] for item in replay['sets'])
+        else ''
+    )
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{title} — Ver con estadísticas</title>
+  <title>{title} \u2014 Ver con estad\u00edsticas</title>
   <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
+  {_COLLAPSIBLE_JS}
   <script src="viewer.js" defer></script>
 </head>
 <body>
 {_THEME_TOGGLE}
 <main class="container replay-viewer" id="replay-viewer">
-  <h1>{title}</h1>
-  <p id="replay-scope">{scope}</p>
-  <p><a href="{_html_escape(report_href, quote=True)}">← Reporte completo (contiene resultados finales)</a></p>
-  <label for="replay-set">Seleccionar set</label>
-  <select id="replay-set">{options}</select>
-  <p id="replay-reconciliation"></p>
-  <div class="replay-layout">
-    <section aria-label="Video y navegación">
-      <div class="replay-video"><div id="replay-player"></div></div>
-      <p id="replay-status" role="status" aria-live="polite">Esperando al reproductor; estadísticas en cero.</p>
-      <p><a id="replay-youtube" href="https://www.youtube.com/watch?v={_html_escape(first_video)}"
-          target="_blank" rel="noopener noreferrer">Abrir video en YouTube</a></p>
-      <div class="replay-controls">
-        <button type="button" data-replay="repeat" disabled>Repetir jugada</button>
-        <button type="button" data-replay="next" disabled>Siguiente jugada</button>
-        <button type="button" data-replay="longest" disabled>Repetir jugada más larga completada</button>
-      </div>
-      <p id="replay-current">Antes de la primera jugada</p>
-      <p id="replay-longest">Sin jugadas completadas.</p>
-    </section>
-    <section aria-label="Estadísticas sincronizadas" id="replay-stats">
-      <h2>Marcador: <span id="replay-score" aria-live="polite">{initial_score}</span></h2>
-      <p id="replay-start-note"{'' if offset else ' hidden'}>{start_note}</p>
-      <div class="replay-cards" id="replay-cards"></div>
-      <h2>Jugadores</h2>
-      <div class="replay-table-wrap">
-        <table class="summary-table">
-          <caption>Toques registrados, no estadísticas del rival</caption>
-          <thead><tr><th scope="col">Jugador</th><th scope="col">Toques</th>
-          <th scope="col">Kills</th><th scope="col">Aces</th><th scope="col">Bloqueos</th>
-          <th scope="col">Rating</th></tr></thead>
-          <tbody id="replay-players"></tbody>
-        </table>
-      </div>
-    </section>
+  {top_back}
+  <header class="report-header">
+    <h1>{title}</h1>
+    <p class="replay-subtitle">Ver con estad\u00edsticas</p>
+  </header>
+  <div class="stat-card replay-scoreboard" aria-label="Marcador del set">
+    <div class="replay-scoreboard-row">
+      <span class="replay-side-label">{_html_escape(team_name)}</span>
+      <span id="replay-score" class="stat-value replay-score" aria-live="polite">{initial_score}</span>
+      <span class="replay-side-label">{_html_escape(opponent_name)}</span>
+    </div>
+    <p id="replay-current" class="stat-label replay-current">Antes de la primera jugada</p>
+    <p id="replay-start-note" class="replay-start-note"{' ' if offset else ' hidden'}>{start_note}</p>
   </div>
-  <section><h2>Jugadas del set</h2><ol id="replay-rallies"></ol></section>
-  {_replay_notice(replay, viewer=True) if any(not s['eligible'] for s in replay['sets']) else ''}
-  <noscript>La sincronización requiere JavaScript y una conexión a YouTube. Los controles no están disponibles.</noscript>
+  <div class="replay-video stat-card"><div id="replay-player"></div></div>
+  <nav class="replay-controls" aria-label="Controles de reproducci\u00f3n">
+    <div class="replay-control-set"><label for="replay-set">Set</label><select id="replay-set">{options}</select></div>
+    <button type="button" data-replay="repeat" disabled>\u25c0 Repetir jugada</button>
+    <button type="button" data-replay="next" disabled>Siguiente jugada \u25b6</button>
+    <a id="replay-youtube" class="replay-link" href="https://www.youtube.com/watch?v={_html_escape(first_video, quote=True)}"
+        target="_blank" rel="noopener noreferrer">Abrir en YouTube \u2197</a>
+  </nav>
+  <p id="replay-status" class="replay-status" role="status" aria-live="polite">Esperando al reproductor; estad\u00edsticas en cero.</p>
+  {stats_section}
+  {players_section}
+  {rally_section}
+  {exclusions}
+  {bottom_back}
+  <noscript>La sincronizaci\u00f3n requiere JavaScript y una conexi\u00f3n a YouTube. Los controles no est\u00e1n disponibles.</noscript>
 </main>
 <script id="replay-data" type="application/json">{payload}</script>
 </body>

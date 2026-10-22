@@ -256,7 +256,14 @@ class ReplayAnalyticsTests(unittest.TestCase):
 class ReplayRenderingTests(unittest.TestCase):
     def test_safe_payload_and_initial_html(self):
         name = '</script><img src=x onerror=alert(1)>&\u2028'
-        page = render_watch_page('<Test & Match>', parse_log(LOG)['replay'], {'7': name}, 'a".html')
+        page = render_watch_page(
+            '<Test & Match>',
+            parse_log(LOG)['replay'],
+            {'7': name},
+            'a".html',
+            'Test & Team',
+            'Opponent <One>',
+        )
         self.assertIn('&lt;Test &amp; Match&gt;', page)
         self.assertIn('href="a&quot;.html"', page)
         self.assertNotIn(name, page)
@@ -266,10 +273,20 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertEqual(json.loads(data.group(1))['names']['7'], name)
         self.assertNotIn('final_score', data.group(1))
         self.assertNotIn('"source"', data.group(1))
-        self.assertIn('aria-live="polite">0 - 0', page)
+        self.assertIn('Contiene resultados finales', page)
+        self.assertIn('Test &amp; Team', page)
+        self.assertIn('Opponent &lt;One&gt;', page)
+        self.assertIn('aria-live="polite">0 ' + chr(0x2013) + ' 0', page)
+        self.assertLess(page.index('report-header'), page.index('replay-scoreboard'))
+        self.assertLess(page.index('replay-scoreboard'), page.index('replay-video'))
+        self.assertLess(page.index('replay-video'), page.index('replay-controls'))
+        self.assertLess(page.index('Estadísticas del set'), page.index('Jugadores'))
+        self.assertLess(page.index('Jugadores'), page.index('Jugadas del set'))
         self.assertIn('data-replay="next" disabled', page)
-        self.assertIn('data-replay="longest" disabled', page)
-        self.assertIn('<ol id="replay-rallies"></ol>', page)
+        self.assertNotIn('data-replay="longest"', page)
+        self.assertNotIn('replay-longest', page)
+        self.assertIn('id="replay-rallies"', page)
+        self.assertIn('class="section-title collapsed"', page)
 
     def test_start_score_initial_html(self):
         page = render_watch_page(
@@ -278,9 +295,16 @@ class ReplayRenderingTests(unittest.TestCase):
             {},
             'report.html',
         )
-        self.assertIn('aria-live="polite">7 - 4', page)
+        self.assertIn('aria-live="polite">7 ' + chr(0x2013) + ' 4', page)
         self.assertIn('La grabación inicia con el marcador 7–4.', page)
         self.assertIn('Estadísticas registradas en la grabación', page)
+
+    def test_scoreboard_opponent_fallback(self):
+        page = render_watch_page(
+            'Title without separator', parse_log(LOG)['replay'], {}, 'report.html'
+        )
+        self.assertIn('class="replay-side-label">Equipo</span>', page)
+        self.assertIn('class="replay-side-label">Rival</span>', page)
 
     def test_mixed_exclusions_and_legacy_report(self):
         parsed = parse_log(LOG + '\n---\n' + VIDEO + '8S# @won @t:1')

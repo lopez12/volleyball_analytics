@@ -44,7 +44,7 @@
         if (node.src === 'https://www.youtube.com/iframe_api') {
             setTimeout(function () {
                 try {
-                    assert(score() === '0 - 0', 'Initial score leaks results');
+                    assert(score() === '0 – 0', 'Initial score leaks results');
                     assert(action('next').disabled, 'Controls enabled before readiness');
                     lifecycle('pagehide');
                     lifecycle('pageshow');
@@ -76,7 +76,7 @@
                 try {
                     events.onReady();
                     assert(pollers() === 1, 'Ready player did not start exactly one poller');
-                    assert(score() === '0 - 0', 'Ready state leaks results');
+                    assert(score() === '0 – 0', 'Ready state leaks results');
                     assert(!action('next').disabled, 'Next unavailable with a ready player');
                     action('next').focus();
                     assert(document.activeElement === action('next'), 'Navigation button cannot receive focus');
@@ -90,39 +90,51 @@
                         'Estadísticas del set hasta este momento', 'Legacy scope changed');
                     clock = 15;
                     update();
-                    assert(score() === '1 - 0', 'Exact end boundary did not count');
-                    assert(document.querySelector('#replay-cards strong').textContent === '1',
-                        'Completed touches incorrect');
+                    assert(score() === '1 – 0', 'Exact end boundary did not count');
+                    assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '1',
+                        'Completed kills incorrect');
+                    assert(document.querySelector('#replay-cards .stat-card:last-child .stat-label').textContent ===
+                        'Rally más largo', 'Longest rally is not a stat card');
+                    assert(document.querySelectorAll('#replay-rallies button').length === 2,
+                        'Rally chips were not rendered');
+                    assert(document.querySelector('#replay-rallies button[aria-current="true"]').textContent === '1',
+                        'Active rally chip is not highlighted');
                     clock = 12;
                     update();
-                    assert(score() === '0 - 0', 'Rewind did not restore score');
-                    assert(document.querySelector('#replay-cards strong').textContent === '0',
-                        'Rewind did not restore touches');
+                    assert(score() === '0 – 0', 'Rewind did not restore score');
+                    assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '0',
+                        'Rewind did not restore kills');
+                    clock = 16;
+                    update();
+                    assert(document.querySelector('#replay-rallies button[aria-current="true"]').textContent === '1',
+                        'Completed rally chip is not highlighted during gap');
+                    document.querySelector('#replay-rallies button').click();
+                    assert(clock === 10, 'Rally chip did not seek to its start');
                     clock = 16;
                     update();
                     action('next').click();
                     assert(clock === 30 && state === 2, 'Next did not preserve paused intent');
                     clock = 38;
                     update();
-                    assert(score() === '1 - 1' && action('next').disabled, 'Final boundary incorrect');
+                    assert(score() === '1 – 1' && action('next').disabled, 'Final boundary incorrect');
                     var selector = document.getElementById('replay-set');
                     selector.value = '1';
                     selector.dispatchEvent(new Event('change'));
-                    assert(score() === '7 - 4' && action('next').disabled, 'Set switch did not reset');
+                    assert(score() === '7 – 4' && action('next').disabled, 'Set switch did not reset');
                     assert(document.getElementById('replay-start-note').textContent ===
                         'La grabación inicia con el marcador 7–4.', 'Missing start note');
                     assert(document.getElementById('replay-scope').textContent ===
                         'Estadísticas registradas en la grabación', 'Wrong offset scope');
                     update();
                     assert(videoId === 'ABCDEFGHIJK' && clock === 0, 'Set video clock mapping incorrect');
-                    assert(score() === '7 - 4', 'Set switch retained old statistics');
+                    assert(score() === '7 – 4', 'Set switch retained old statistics');
                     clock = 15;
                     update();
                     clock = 12;
                     update();
-                    assert(score() === '7 - 4', 'Offset rewind did not restore start');
-                    assert(document.querySelector('#replay-cards strong').textContent === '0',
-                        'Offset added phantom touches');
+                    assert(score() === '7 – 4', 'Offset rewind did not restore start');
+                    assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '0',
+                        'Offset added phantom kills');
                     // Back/forward cache: pagehide stops polling; pageshow must resume it
                     // and reconcile at once, without onReady and without duplicates.
                     lifecycle('pagehide');
@@ -130,7 +142,7 @@
                     clock = 38;
                     state = 1;
                     lifecycle('pageshow');
-                    assert(score() === '8 - 5', 'pageshow did not reconcile immediately');
+                    assert(score() === '8 – 5', 'pageshow did not reconcile immediately');
                     assert(pollers() === 1, 'pageshow did not restore exactly one poller');
                     lifecycle('pageshow');
                     lifecycle('pagehide');
@@ -141,11 +153,15 @@
                     clock = 15;
                     setTimeout(function () {
                         try {
-                            assert(score() === '8 - 4', 'Restored poller does not follow playback');
-                            var columns = getComputedStyle(document.querySelector('.replay-layout'))
-                                .gridTemplateColumns.trim().split(/\s+/).length;
-                            assert(columns === (matchMedia('(max-width: 800px)').matches ? 1 : 2),
-                                'Responsive grid has the wrong column count');
+                            assert(score() === '8 – 4', 'Restored poller does not follow playback');
+                            var controls = document.querySelector('.replay-controls');
+                            var mobileControls = matchMedia('(max-width: 600px)').matches;
+                            assert(getComputedStyle(controls).display === (mobileControls ? 'grid' : 'flex'),
+                                'Control bar does not match the responsive layout');
+                            if (mobileControls) {
+                                assert(getComputedStyle(controls).gridTemplateColumns.trim().split(/\s+/).length === 2,
+                                    'Mobile control bar does not use two columns');
+                            }
                             assert(document.documentElement.scrollWidth <= window.innerWidth,
                                 'Page overflows horizontally');
                             var before = getComputedStyle(document.documentElement).getPropertyValue('--surface-2');
@@ -153,7 +169,7 @@
                             assert(before !== getComputedStyle(document.documentElement).getPropertyValue('--surface-2'),
                                 'Theme toggle did not change theme colors');
                             events.onError();
-                            assert(score() === '7 - 4', 'Failure left stale score visible');
+                            assert(score() === '7 – 4', 'Failure left stale score visible');
                             document.querySelectorAll('[data-replay]').forEach(function (button) {
                                 assert(button.disabled, 'Failure left an enabled synchronized control');
                             });
@@ -162,7 +178,7 @@
                             lifecycle('pagehide');
                             lifecycle('pageshow');
                             assert(pollers() === 0, 'Lifecycle restore revived a failed controller');
-                            assert(score() === '7 - 4', 'Lifecycle restore resynchronized after failure');
+                            assert(score() === '7 – 4', 'Lifecycle restore resynchronized after failure');
                             document.querySelectorAll('[data-replay]').forEach(function (button) {
                                 assert(button.disabled, 'Lifecycle restore re-enabled a failed control');
                             });
