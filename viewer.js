@@ -331,7 +331,7 @@
             }
             node.firstElementChild.textContent = value;
         });
-        var rating = displayValues.rating;
+        var rating = String(displayValues.rating);
         if (previousSpotlightValues && String(previousSpotlightValues.rating) !== rating) {
             spotlightRatingPill.classList.remove('replay-value-pulse');
             void spotlightRatingPill.offsetWidth;

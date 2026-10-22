@@ -409,7 +409,7 @@ completed) rally, and seek to its start when clicked; future results are never
 shown. The longest completed rally appears only as a set-stat value, not as a
 separate replay control.
 
-Playback starts at 0-0 unless `@start: V-R` records a late recording start: a
+Playback starts at 0–0 unless `@start: V-R` records a late recording start: a
 rally's score and touches appear only when playback reaches its recorded end.
 Rewinding restores the corresponding earlier snapshot. The full-report backlink
 contains final results. This is spoiler-safe presentation, not secrecy: the
@@ -422,7 +422,7 @@ Eligibility is strict and **per set**, not a new log-validation requirement:
 - Every rally needs exactly one explicit outcome and one complete, finite
   `@t:start-end` interval with `0 ≤ start ≤ end`. Intervals must already be in
   chronological, non-overlapping order; equal boundaries and zero-duration
-events are supported. Nothing is inferred, sorted, or corrected.
+  events are supported. Nothing is inferred, sorted, or corrected.
 - Every rally needs graded touches, except touchless `@won:se` opponent serve
   faults. Outcome/timestamp-only segmentation is not evidence of full grading.
 - If `@set: V-R` exists, its score must equal the starting score plus all explicit outcomes. Conflicting
@@ -466,9 +466,9 @@ old logs and drafts without it continue to work unchanged.
 
 Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks
 and all `-` touches (**Toques con error**, not points lost). Attack efficiency
-is the existing `(A# ? A-) / A_total`; player ratings use the existing weighted
+is the existing `(A# − A-) / A_total`; player ratings use the existing weighted
 rating formula. Unattributed touches affect team totals only. Undefined
-efficiency and no-touch player ratings display `?`. The longest *completed*
+efficiency and no-touch player ratings display `—`. The longest *completed*
 rally uses the timestamp interval, with the first winning ties; this is not a
 measurement of exact ball-in-play time.
 

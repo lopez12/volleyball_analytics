@@ -136,6 +136,15 @@
     background: var(--regular-bg);
     border-radius: 6px;
 }
+/* Preserve the match report's replay link appearance. */
+.replay-link {
+    background: var(--surface-2);
+    color: var(--text-main);
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    padding: 10px;
+    font: inherit;
+}
 /* Spoiler-safe spectator viewer, composed from the shared dashboard components. */
 .replay-viewer .report-header { margin-bottom: 16px; }
 .replay-viewer .report-header h1 { overflow-wrap: anywhere; }
@@ -165,7 +174,7 @@
 .replay-video-frame > *, .replay-video-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
 .replay-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .replay-control-set { display: flex; align-items: center; gap: 8px; }
-.replay-viewer button, .replay-viewer select, .replay-link {
+.replay-viewer button, .replay-viewer select, .replay-viewer .replay-link {
     background: var(--surface-2);
     color: var(--text-main);
     border: 1px solid var(--border);
@@ -174,7 +183,7 @@
     font: inherit;
     text-decoration: none;
 }
-.replay-viewer button:not(:disabled), .replay-viewer select, .replay-link { cursor: pointer; }
+.replay-viewer button:not(:disabled), .replay-viewer select, .replay-viewer .replay-link { cursor: pointer; }
 .replay-viewer button:disabled { opacity: 0.55; cursor: not-allowed; }
 .replay-viewer .replay-link { color: var(--primary); border-color: var(--primary); margin-left: auto; }
 .replay-viewer :focus-visible, .replay-notice :focus-visible {

@@ -288,6 +288,33 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertIn('id="replay-rallies"', page)
         self.assertIn('class="section-title collapsed"', page)
 
+    def test_replay_link_styles_are_scoped(self):
+        css = (Path(__file__).resolve().parents[1] / 'styles.css').read_text(encoding='utf-8')
+        link_rules = [
+            (selector.strip(), declarations)
+            for selectors, declarations in re.findall(r'([^{}]+)\{([^{}]*)\}', css)
+            for selector in selectors.split(',')
+            if '.replay-link' in selector
+        ]
+        report_rules = [
+            declarations
+            for selector, declarations in link_rules
+            if '.replay-viewer' not in selector
+        ]
+        self.assertEqual(len(report_rules), 1)
+        self.assertEqual(
+            dict(re.findall(r'([\w-]+):\s*([^;]+);', report_rules[0])),
+            {
+                'background': 'var(--surface-2)',
+                'color': 'var(--text-main)',
+                'border': '1px solid var(--primary)',
+                'border-radius': '6px',
+                'padding': '10px',
+                'font': 'inherit',
+            },
+        )
+        self.assertTrue(any('.replay-viewer .replay-link' == s for s, _ in link_rules))
+
     def test_start_score_initial_html(self):
         page = render_watch_page(
             'Test',

@@ -120,8 +120,22 @@
                         'Pinned row has no non-color marker');
                     assert(document.querySelector('.replay-spotlight .replay-spotlight-value strong').textContent === '1',
                         'Spotlight did not update live at the rally boundary');
+                    var ratingPill = document.querySelector('#replay-spotlight .player-rating');
+                    assert(ratingPill.classList.contains('replay-value-pulse'),
+                        'Changed rating did not trigger a pulse');
+                    // Simulate the finished animation, then reconcile the same paused snapshot.
+                    ratingPill.classList.remove('replay-value-pulse');
+                    var previousRating = ratingPill.textContent;
+                    assert(state === 2, 'Unchanged snapshot regression must run while paused');
+                    update();
+                    assert(ratingPill.textContent === previousRating &&
+                        !ratingPill.classList.contains('replay-value-pulse'),
+                        'Unchanged rating re-triggered the pulse while paused');
                     clock = 12;
                     update();
+                    assert(ratingPill.textContent !== previousRating &&
+                        ratingPill.classList.contains('replay-value-pulse'),
+                        'Rewinding to a changed rating did not trigger a pulse');
                     assert(score() === '0 – 0', 'Rewind did not restore score');
                     assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '0',
                         'Rewind did not restore kills');
