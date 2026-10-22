@@ -520,6 +520,7 @@ def _replay_counts(stats):
         'aces': stats['grade_count']['#']['S'],
         'kills': stats['grade_count']['#']['A'],
         'blocks': stats['grade_count']['#']['B'],
+        'points': sum(stats['grade_count']['#'][action] for action in ('S', 'A', 'B')),
         'errors': stats['grades']['-'],
         'attack_efficiency': calculate_efficiency(stats)['attack_eff'],
         'rating': calculate_rating(stats) if stats['total'] else None,

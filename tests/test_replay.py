@@ -172,6 +172,31 @@ class ReplayAnalyticsTests(unittest.TestCase):
         self.assertEqual(final['team']['touches'], 7)
         self.assertEqual(final['longest']['id'], 's1-r1')  # first duration tie
 
+    def test_points_in_every_team_and_player_snapshot(self):
+        item = replay(VIDEO + '7S# @won @t:1-2\n7A# @won @t:3-4\n8B# @won @t:5-6')
+        self.assertTrue(item['eligible'])
+        for snapshot in item['snapshots']:
+            for counts in [snapshot['team'], *snapshot['players']]:
+                self.assertEqual(
+                    counts['points'], counts['aces'] + counts['kills'] + counts['blocks']
+                )
+                self.assertEqual(
+                    set(counts) - {'number'},
+                    {
+                        'touches',
+                        'aces',
+                        'kills',
+                        'blocks',
+                        'points',
+                        'errors',
+                        'attack_efficiency',
+                        'rating',
+                    },
+                )
+        final = item['snapshots'][-1]
+        self.assertEqual(final['team']['points'], 3)
+        self.assertEqual([p['points'] for p in final['players']], [2, 1])
+
     def test_missing_final_score_is_not_reconciled(self):
         item = replay(VIDEO + 'S# @won @t:0-0')
         self.assertTrue(item['eligible'])
