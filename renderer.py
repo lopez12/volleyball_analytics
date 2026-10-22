@@ -903,7 +903,6 @@ def render_watch_page(
         '<select id="replay-spotlight-select"><option value="">Ninguno</option></select>'
         '</div><div id="replay-spotlight" class="stat-card replay-spotlight" hidden></div>'
         '<p id="replay-table-note" class="replay-muted replay-table-note">'
-        'Toques registrados, no estad\u00edsticas del rival</p>'
         '<div class="replay-table-wrap">'
         '<table class="summary-table" aria-describedby="replay-table-note">'
         '<thead><tr><th scope="col">Jugador</th><th scope="col">Toques</th>'
