@@ -103,14 +103,23 @@
         if (!this.ready || this.failed || !this.player) return null;
         try {
             var data = this.player.getVideoData();
-            if (!data || data.video_id !== this.set().video_id) return null;
+            if (!data || data.video_id !== this.set().video_id) {
+                if (!this.pending) {
+                    this.fail('El video activo no corresponde al set seleccionado.');
+                }
+                return null;
+            }
             var time = this.player.getCurrentTime();
             if (this.pending && time !== 0) return null;
             return finite(time) && time >= 0 ? time : null;
-        } catch (error) { return null; }
+        } catch (error) {
+            this.fail('Se perdió la conexión con el reproductor. Abre el video en YouTube.');
+            return null;
+        }
     };
     Controller.prototype.reconcile = function () {
         var time = this.time();
+        if (this.failed) return;
         if (time === null) {
             this.update(this.set(), 0, 0, false, 'Esperando al video seleccionado; sin sincronización.');
             return;
@@ -223,6 +232,7 @@
     var controller;
 
     function draw(set, index, time, available, message) {
+        if (available) clearTimeout(loadTimeout);
         text('status', message);
         var snapshot = set.snapshots[index];
         text('score', snapshot.score.join(' - '));
@@ -302,11 +312,18 @@
     }
     controller = new Controller(payload, draw, failure);
     draw(controller.set(), 0, 0, false, 'Esperando al reproductor; estadísticas en cero.');
+    function waitForVideo() {
+        clearTimeout(loadTimeout);
+        loadTimeout = setTimeout(function () {
+            controller.fail('YouTube no respondió. El acceso o la inserción pueden estar bloqueados.');
+        }, 20000);
+    }
     root.addEventListener('click', function (event) {
         var button = event.target.closest('[data-replay]');
         if (button && !button.disabled) controller.seek(button.dataset.replay, button.dataset.rally);
     });
     el('set').addEventListener('change', function () {
+        if (!failed) waitForVideo();
         controller.switchSet(Number(el('set').value));
         if (failed) failure('El reproductor no está disponible. Abre el video en YouTube.');
     });
@@ -314,9 +331,7 @@
         controller.fail('YouTube no permite sincronizar desde file://. Sirve el sitio por HTTP(S).');
         return;
     }
-    loadTimeout = setTimeout(function () {
-        controller.fail('YouTube no respondió. El acceso o la inserción pueden estar bloqueados.');
-    }, 20000);
+    waitForVideo();
     window.onYouTubeIframeAPIReady = function () {
         if (failed) return;
         try {
@@ -326,7 +341,6 @@
                 events: {
                     onReady: function () {
                         if (failed) return;
-                        clearTimeout(loadTimeout);
                         controller.attach(player);
                         // Also poll while paused: the native scrubber need not emit a new state.
                         timer = setInterval(function () { controller.reconcile(); }, 250);

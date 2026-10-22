@@ -437,6 +437,8 @@ Dependency-free replay tests:
 ```bash
 python -m unittest discover -s tests
 node tests/viewer_test.js           # optional local Node, no npm dependencies
+# Or use an installed Chromium browser (controller + mocked-player DOM checks):
+python tests/browser_smoke.py "C:\path\to\msedge.exe"
 python validate_logs.py
 # PowerShell: $env:CI = '1'; python generate.py
 CI=1 python generate.py             # POSIX shells
@@ -448,6 +450,10 @@ Before merging, check real YouTube playback and seeking, native paused scrubbing
 set switching, blocked embeds, keyboard controls, light/dark themes, mobile
 (~375px) and desktop (~1440px), and the browser console/CSP on an HTTP(S) preview.
 Synthetic integration fixtures cover eligible sets without changing real logs.
+The optional browser harness tests computed responsive layout (including an
+actual 375 CSS-pixel iframe viewport), theme tokens, safe player-name rendering,
+readiness, failure states and navigation with a **fake** IFrame API. It neither
+loads real YouTube media nor verifies deployment response headers.
 
 ## Troubleshooting
 

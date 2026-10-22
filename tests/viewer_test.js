@@ -122,4 +122,16 @@ early.reconcile();
 early.seek('next');
 assert.strictEqual(clock, 30);
 assert.strictEqual(state, 1); // buffering keeps previously playing intent
+videoId = 'wrongwrong0';
+early.reconcile();
+assert.strictEqual(early.failed, true); // never show stats for an unrelated video
+var broken = new viewer.Controller(payload, function () {}, function () {});
+broken.attach({getVideoData: function () { throw new Error('API disconnected'); }});
+assert.strictEqual(broken.failed, true);
+videoId = set.video_id;
+var disconnected = new viewer.Controller(payload, function () {}, function () {});
+disconnected.attach(Object.assign({}, player, {
+    getCurrentTime: function () { throw new Error('No current time'); }
+}));
+assert.strictEqual(disconnected.failed, true);
 console.log('Viewer tests passed: boundaries, rewind, zero-duration, navigation, readiness, buffering, set resets, validation and failure.');

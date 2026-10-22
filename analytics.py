@@ -332,6 +332,9 @@ def parse_log(log_string):
             'match_date' (str | None): The match play date as an ISO
                 'YYYY-MM-DD' string from the first valid '@date:' line, or None
                 when absent or malformed. Distinct from the report build date.
+            'replay' (dict): Additive ordered source-set model, exclusion
+                diagnostics, certified timelines and completed-prefix snapshots.
+                Stricter replay eligibility does not change legacy outputs.
     """
     lines = log_string.strip().splitlines()
     rallies = []
