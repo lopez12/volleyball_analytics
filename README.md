@@ -292,16 +292,9 @@ python -m pytest -q                         # all engine tests
 python -m pytest -q tests/test_parse_log.py  # a single module
 ```
 
-Pytest is pinned in `requirements-dev.txt` and is **dev-only**. Generation,
-deployment, and log validation still need only the Python standard library.
-Use `python -m pytest` so imports resolve the local engine without path changes.
+Pytest is pinned in `requirements-dev.txt` and is **dev-only**. Generation, deployment, and log validation still need only the Python standard library. Use `python -m pytest` so imports resolve the local engine without path changes.
 
-The suite covers parsing and metadata alignment, player/team aggregation, roster
-configuration, leverage-weighted ratings and clamps, per-action grades, efficiency,
-phase sequences, explicit outcomes, legacy win inference, and earned/gifted points.
-Tests use synthetic inputs and temporary files, not production match logs or
-generated output. The existing log validator and smoke build remain separate QA
-checks; unit tests do not replace them.
+The suite covers parsing and metadata alignment, player/team aggregation, roster configuration, leverage-weighted ratings and clamps, per-action grades, efficiency, phase sequences, explicit outcomes, legacy win inference, and earned/gifted points. Tests use synthetic inputs and temporary files, not production match logs or generated output. The existing log validator and smoke build remain separate QA checks; unit tests do not replace them.
 
 ## Linting & formatting (ruff)
 
