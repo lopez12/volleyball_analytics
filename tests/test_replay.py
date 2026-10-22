@@ -2,6 +2,7 @@
 
 import json
 import re
+import subprocess
 import tempfile
 import unittest
 from contextlib import redirect_stdout
@@ -12,6 +13,7 @@ from unittest.mock import patch
 import generate
 from analytics import calculate_efficiency, calculate_rating, parse_log, youtube_video_id
 from renderer import render_match_page, render_watch_page
+from validate_logs import validate_file
 
 VIDEO = '@youtube: https://youtu.be/abcdefghijk\n'
 LOG = VIDEO + '7A# @won @t:10-15\n7A- @lost @t:30-38\n@set: 1-1'
@@ -32,6 +34,90 @@ class ReplayAnalyticsTests(unittest.TestCase):
         self.assertEqual(parsed['rally_timestamps'], [None, None, None])
         self.assertEqual(parsed['rally_outcomes'][0], {'result': None, 'cause': None})
         self.assertFalse(parsed['replay']['sets'][0]['eligible'])
+
+    def test_all_logs_legacy_parity(self):
+        source = subprocess.check_output(
+            ['git', 'show', '05667c40d4f4afd9bbf011df72d02f4c372e6950:analytics.py'],
+            encoding='utf-8',
+        )
+        legacy = {'__name__': 'legacy_analytics'}
+        exec(compile(source, 'legacy_analytics.py', 'exec'), legacy)
+        paths = sorted(Path('teams').glob('**/matches/*.txt'))
+        self.assertEqual(len(paths), 17)
+        for path in paths:
+            text = path.read_text(encoding='utf-8')
+            old = legacy['parse_log'](text)
+            for variant in (text, text.replace('@start: 7-4\n', '')):
+                parsed = parse_log(variant)
+                for key in old.keys() - {'replay'}:
+                    with self.subTest(path=path, key=key):
+                        self.assertEqual(
+                            json.dumps(parsed[key], ensure_ascii=False),
+                            json.dumps(old[key], ensure_ascii=False),
+                        )
+
+    def test_start_score_offsets_only_score(self):
+        item = replay('@start: 7-4\n' + LOG.replace('1-1', '8-5'))
+        self.assertTrue(item['eligible'])
+        self.assertEqual(item['start_score'], [7, 4])
+        self.assertEqual([s['score'] for s in item['snapshots']], [[7, 4], [8, 4], [8, 5]])
+        original = replay(LOG)
+        for offset, normal in zip(item['snapshots'], original['snapshots'], strict=True):
+            for key in ('team', 'players', 'longest'):
+                self.assertEqual(offset[key], normal[key])
+        self.assertEqual(item['rallies'], original['rallies'])
+        zero = replay('@start: 0-0\n' + LOG)
+        self.assertEqual(
+            {k: v for k, v in zero.items() if k != 'source'},
+            {k: v for k, v in original.items() if k != 'source'},
+        )
+        json.dumps(item, allow_nan=False)
+
+    def test_start_without_final_and_header_order(self):
+        item = replay(VIDEO + '@START: 7-4\n7A# @won @t:1-2')
+        self.assertTrue(item['eligible'])
+        self.assertFalse(item['reconciled'])
+        self.assertEqual(item['snapshots'][-1]['score'], [8, 4])
+        self.assertTrue(
+            replay('@set: 8-5\n@start: 7-4\n' + LOG.replace('@set: 1-1', ''))['eligible']
+        )
+
+    def test_start_misuse_and_hint(self):
+        for text, reason in [
+            ('@start: 0-0\n@start: 0-0\n' + LOG, 'más de un'),
+            (LOG + '\n@start: 0-0', 'antes de la primera'),
+            ('@start: 2-0\n' + LOG, 'supera'),
+            ('@start: broken\n' + LOG, 'Formato'),
+        ]:
+            with self.subTest(text=text):
+                item = replay(text)
+                self.assertFalse(item['eligible'])
+                self.assertTrue(any(reason in d for d in item['diagnostics']))
+        item = replay(LOG.replace('1-1', '8-5'))
+        self.assertIn(
+            'Faltan 7 ganados y 4 perdidos; si la grabación empezó tarde, agrega `@start: 7-4`.',
+            item['diagnostics'],
+        )
+        self.assertFalse(
+            any('Faltan' in d for d in replay(LOG.replace('1-1', '0-1'))['diagnostics'])
+        )
+
+    def test_validator_r10(self):
+        cases = [
+            ('@start: bad\n' + LOG, ['ERROR']),
+            ('@start: 0-0\n@start: 0-0\n' + LOG, ['WARN']),
+            (LOG + '\n@start: 0-0', ['WARN']),
+            ('@start: 2-0\n' + LOG, ['WARN']),
+            ('@start: 0-0\n' + LOG, []),
+            ('@start: 7-4\n7A# @won', []),
+            (LOG + '\n---\n@start: 0-0\n' + LOG, []),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'match.txt'
+            for text, expected in cases:
+                path.write_text(text, encoding='utf-8')
+                issues = validate_file(path, {'7'})
+                self.assertEqual([i[1] for i in issues if i[2] == 'R10'], expected)
 
     def test_eligible_and_snapshot_boundaries(self):
         item = replay(LOG)

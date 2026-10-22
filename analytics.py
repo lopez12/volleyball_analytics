@@ -111,6 +111,7 @@ _RE_ANY = re.compile(r'^(\d*)([SREADB])([#+!\-])$')
 _RE_PHASE = re.compile(r'^(\d+)([SREADB])([#+!\-])$|^([SREADB])([#+!\-])$')
 _RE_YT = re.compile(r'^https?://(www\.)?(youtube\.com|youtu\.be)/')
 _RE_SET = re.compile(r'^@set:\s*(\d+)-(\d+)$', re.IGNORECASE)
+_RE_START = re.compile(r'^@start:\s*(\d+)-(\d+)$', re.IGNORECASE)
 # Optional, match-level play date. ISO 8601 only; validity is confirmed against
 # the calendar in _parse_date_token (e.g. '2026-13-40' matches the shape but is
 # rejected). Absence is never an error.
@@ -370,6 +371,17 @@ def parse_log(log_string):
                 if iso is not None:
                     match_date = iso
             continue
+        if trimmed.lower().startswith('@start:'):
+            m_start = _RE_START.match(trimmed)
+            if m_start:
+                replay_set['starts'].append([int(m_start[1]), int(m_start[2])])
+                if replay_set['rallies']:
+                    replay_set['diagnostics'].append(
+                        'El marcador inicial debe aparecer antes de la primera jugada.'
+                    )
+            else:
+                replay_set['diagnostics'].append('Formato de @start: no válido; usa @start: V-R.')
+            continue
         m_set = _RE_SET.match(trimmed)
         if m_set:
             set_scores.append((int(m_set.group(1)), int(m_set.group(2))))
@@ -468,7 +480,7 @@ def parse_log(log_string):
 
 def _new_replay_set():
     """Return an empty source block; exact separators alone delimit blocks."""
-    return {'rallies': [], 'videos': [], 'scores': [], 'diagnostics': []}
+    return {'rallies': [], 'videos': [], 'scores': [], 'starts': [], 'diagnostics': []}
 
 
 def youtube_video_id(url):
@@ -514,7 +526,7 @@ def _replay_counts(stats):
     }
 
 
-def _replay_snapshots(rallies):
+def _replay_snapshots(rallies, start_score):
     """Build zero and completed-prefix snapshots without mutating shared stats."""
     team = _new_stats()
     players = {
@@ -523,7 +535,7 @@ def _replay_snapshots(rallies):
         for token in rally['tokens']
         if _RE_ANY.match(token).group(1)
     }
-    score = [0, 0]
+    score = list(start_score)
     longest = None
 
     def snapshot():
@@ -570,6 +582,14 @@ def build_replay(source_sets):
         if not video_id:
             reasons.append('Se requiere una única URL de YouTube válida con ID de 11 caracteres.')
         scores = source['scores']
+        starts = source['starts']
+        start_score = starts[0] if starts else [0, 0]
+        if len(starts) > 1:
+            reasons.append('Hay más de un marcador inicial en el set.')
+        if scores and any(
+            start > final for start, final in zip(start_score, scores[0], strict=True)
+        ):
+            reasons.append('El marcador inicial supera el marcador final del set.')
         if scores and any(score != scores[0] for score in scores):
             reasons.append('Hay marcadores finales contradictorios en el set.')
         if not source['rallies']:
@@ -611,12 +631,21 @@ def build_replay(source_sets):
                             'outcome': outcomes[0],
                         }
                     )
-        if scores and len(rallies) == len(source['rallies']):
+        if scores and all(len(r['outcomes']) == 1 for r in source['rallies']):
             actual = [
-                sum(r['outcome']['result'] == result for r in rallies) for result in ('won', 'lost')
+                sum(r['outcomes'][0]['result'] == result for r in source['rallies'])
+                for result in ('won', 'lost')
             ]
+            actual = [start + count for start, count in zip(start_score, actual, strict=True)]
             if actual != scores[0]:
                 reasons.append('Los resultados de las jugadas no coinciden con el marcador final.')
+                missing = [final - count for final, count in zip(scores[0], actual, strict=True)]
+                if all(count >= 0 for count in missing):
+                    won, lost = missing
+                    reasons.append(
+                        f'Faltan {won} ganados y {lost} perdidos; si la grabación empezó tarde, '
+                        f'agrega `@start: {won}-{lost}`.'
+                    )
         eligible = not reasons
         sets.append(
             {
@@ -624,11 +653,12 @@ def build_replay(source_sets):
                 'number': number,
                 'video_id': video_id,
                 'final_score': scores[0] if scores else None,
+                'start_score': list(start_score),
                 'reconciled': bool(scores) and eligible,
                 'diagnostics': list(dict.fromkeys(reasons)),
                 'eligible': eligible,
                 'rallies': rallies if eligible else [],
-                'snapshots': _replay_snapshots(rallies) if eligible else [],
+                'snapshots': _replay_snapshots(rallies, start_score) if eligible else [],
                 'source': source,
             }
         )

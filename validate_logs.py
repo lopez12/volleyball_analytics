@@ -24,6 +24,7 @@ Rules:
                                            (dropped; expected ``YYYY-MM-DD``).    R9 (WARN)  ``@t:`` timestamp format    - a malformed per-rally video
                                            timestamp (expected
                                            ``@t:<start>[-<end>]`` in seconds).
+    R10 (ERROR/WARN) ``@start:`` format / placement / score bounds.
 Grammar is imported from ``analytics.py`` (single source of truth); it is never
 re-hard-coded here.
 
@@ -42,6 +43,7 @@ from pathlib import Path
 
 from analytics import (
     _RE_SET,
+    _RE_START,
     _RE_YT,
     ACTIONS,
     GRADES,
@@ -124,12 +126,56 @@ def validate_file(txt_path, roster):
         _parse_outcome_token(tok) for line in lines for tok in line.strip().split()
     )
 
+    # Retain whole blocks so a final score may precede or follow the start.
+    block = []
+    blocks = [block]
+    for line_no, raw in enumerate(lines, start=1):
+        if raw.strip() == '---':
+            block = []
+            blocks.append(block)
+        else:
+            block.append((line_no, raw.strip()))
+    for block in blocks:
+        starts = [
+            (n, line, _RE_START.match(line))
+            for n, line in block
+            if line.lower().startswith('@start:')
+        ]
+        finals = [_RE_SET.match(line) for _, line in block if _RE_SET.match(line)]
+        first_rally = next(
+            (
+                n
+                for n, line in block
+                if any(
+                    PLAY_RE.match(token)
+                    or _parse_outcome_token(token)
+                    or _parse_timestamp_token(token)
+                    for token in line.split()
+                )
+            ),
+            None,
+        )
+        for index, (n, line, match) in enumerate(starts):
+            if not match:
+                issues.append(
+                    (n, ERROR, 'R10', 'malformed @start: line (expected "@start: V-R")', line)
+                )
+                continue
+            if index:
+                issues.append((n, WARN, 'R10', 'duplicate @start: in set block', line))
+            if first_rally is not None and n > first_rally:
+                issues.append((n, WARN, 'R10', '@start: must precede the first rally', line))
+            if finals and any(int(match[i]) > int(finals[0][i]) for i in (1, 2)):
+                issues.append((n, WARN, 'R10', '@start: exceeds the final score', line))
+
     for line_no, raw in enumerate(lines, start=1):
         trimmed = raw.strip()
         if not trimmed or trimmed == '---':
             continue
 
         low = trimmed.lower()
+        if low.startswith('@start:'):
+            continue
         if low.startswith('@youtube:'):
             url = trimmed[9:].strip()
             if not _RE_YT.match(url):
