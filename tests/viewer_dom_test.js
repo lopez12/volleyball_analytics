@@ -11,6 +11,21 @@
     function score() { return document.getElementById('replay-score').textContent; }
     function action(name) { return document.querySelector('[data-replay="' + name + '"]'); }
     function update() { events.onStateChange(); }
+    // Track live pollers so lifecycle tests can detect leaked or duplicate timers.
+    var intervals = {};
+    var nativeSetInterval = window.setInterval.bind(window);
+    var nativeClearInterval = window.clearInterval.bind(window);
+    window.setInterval = function (callback, delay) {
+        var id = nativeSetInterval(callback, delay);
+        intervals[id] = true;
+        return id;
+    };
+    window.clearInterval = function (id) {
+        delete intervals[id];
+        nativeClearInterval(id);
+    };
+    function pollers() { return Object.keys(intervals).length; }
+    function lifecycle(name) { window.dispatchEvent(new Event(name)); }
     function finish(message) {
         result.textContent = message;
         document.body.dataset.testViewport = String(window.innerWidth);
@@ -31,6 +46,11 @@
                 try {
                     assert(score() === '0 - 0', 'Initial score leaks results');
                     assert(action('next').disabled, 'Controls enabled before readiness');
+                    lifecycle('pagehide');
+                    lifecycle('pageshow');
+                    lifecycle('pageshow');
+                    assert(pollers() === 0 && action('next').disabled,
+                        'Lifecycle restore revived an unready controller');
                     window.onYouTubeIframeAPIReady();
                 } catch (error) { finish('FAIL: ' + error.message); }
             }, 0);
@@ -55,6 +75,7 @@
             setTimeout(function () {
                 try {
                     events.onReady();
+                    assert(pollers() === 1, 'Ready player did not start exactly one poller');
                     assert(score() === '0 - 0', 'Ready state leaks results');
                     assert(!action('next').disabled, 'Next unavailable with a ready player');
                     action('next').focus();
@@ -87,24 +108,52 @@
                     update();
                     assert(videoId === 'ABCDEFGHIJK' && clock === 0, 'Set video clock mapping incorrect');
                     assert(score() === '0 - 0', 'Set switch retained old statistics');
-                    var columns = getComputedStyle(document.querySelector('.replay-layout'))
-                        .gridTemplateColumns.trim().split(/\s+/).length;
-                    assert(columns === (matchMedia('(max-width: 800px)').matches ? 1 : 2),
-                        'Responsive grid has the wrong column count');
-                    assert(document.documentElement.scrollWidth <= window.innerWidth,
-                        'Page overflows horizontally');
-                    var before = getComputedStyle(document.documentElement).getPropertyValue('--surface-2');
-                    document.getElementById('themeToggle').click();
-                    assert(before !== getComputedStyle(document.documentElement).getPropertyValue('--surface-2'),
-                        'Theme toggle did not change theme colors');
-                    events.onError();
-                    assert(score() === '0 - 0', 'Failure left stale score visible');
-                    document.querySelectorAll('[data-replay]').forEach(function (button) {
-                        assert(button.disabled, 'Failure left an enabled synchronized control');
-                    });
-                    assert(document.getElementById('replay-status').textContent.includes('no sincronizadas'),
-                        'Failure did not explain unavailable statistics');
-                    finish('PASS');
+                    // Back/forward cache: pagehide stops polling; pageshow must resume it
+                    // and reconcile at once, without onReady and without duplicates.
+                    lifecycle('pagehide');
+                    assert(pollers() === 0, 'pagehide left a poller running');
+                    clock = 38;
+                    state = 1;
+                    lifecycle('pageshow');
+                    assert(score() === '1 - 1', 'pageshow did not reconcile immediately');
+                    assert(pollers() === 1, 'pageshow did not restore exactly one poller');
+                    lifecycle('pageshow');
+                    lifecycle('pagehide');
+                    lifecycle('pagehide');
+                    lifecycle('pageshow');
+                    lifecycle('pageshow');
+                    assert(pollers() === 1, 'Repeated lifecycle events duplicated pollers');
+                    clock = 15;
+                    setTimeout(function () {
+                        try {
+                            assert(score() === '1 - 0', 'Restored poller does not follow playback');
+                            var columns = getComputedStyle(document.querySelector('.replay-layout'))
+                                .gridTemplateColumns.trim().split(/\s+/).length;
+                            assert(columns === (matchMedia('(max-width: 800px)').matches ? 1 : 2),
+                                'Responsive grid has the wrong column count');
+                            assert(document.documentElement.scrollWidth <= window.innerWidth,
+                                'Page overflows horizontally');
+                            var before = getComputedStyle(document.documentElement).getPropertyValue('--surface-2');
+                            document.getElementById('themeToggle').click();
+                            assert(before !== getComputedStyle(document.documentElement).getPropertyValue('--surface-2'),
+                                'Theme toggle did not change theme colors');
+                            events.onError();
+                            assert(score() === '0 - 0', 'Failure left stale score visible');
+                            document.querySelectorAll('[data-replay]').forEach(function (button) {
+                                assert(button.disabled, 'Failure left an enabled synchronized control');
+                            });
+                            assert(document.getElementById('replay-status').textContent.includes('no sincronizadas'),
+                                'Failure did not explain unavailable statistics');
+                            lifecycle('pagehide');
+                            lifecycle('pageshow');
+                            assert(pollers() === 0, 'Lifecycle restore revived a failed controller');
+                            assert(score() === '0 - 0', 'Lifecycle restore resynchronized after failure');
+                            document.querySelectorAll('[data-replay]').forEach(function (button) {
+                                assert(button.disabled, 'Lifecycle restore re-enabled a failed control');
+                            });
+                            finish('PASS');
+                        } catch (error) { finish('FAIL: ' + error.message); }
+                    }, 1000);
                 } catch (error) { finish('FAIL: ' + error.message); }
             }, 0);
             return player;

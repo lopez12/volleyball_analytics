@@ -305,10 +305,21 @@
 
     function failure(message) {
         failed = true;
-        clearInterval(timer);
+        stopSync();
         clearTimeout(loadTimeout);
         draw(controller.set(), 0, 0, false, message + ' Estadísticas no sincronizadas.');
         disable();
+    }
+    function stopSync() {
+        clearInterval(timer);
+        timer = null;
+    }
+    function startSync() {
+        // Never more than one poller, and never for a failed or unready controller.
+        stopSync();
+        if (failed || !controller.ready) return;
+        // Also poll while paused: the native scrubber need not emit a new state.
+        timer = setInterval(function () { controller.reconcile(); }, 250);
     }
     controller = new Controller(payload, draw, failure);
     draw(controller.set(), 0, 0, false, 'Esperando al reproductor; estadísticas en cero.');
@@ -342,8 +353,7 @@
                     onReady: function () {
                         if (failed) return;
                         controller.attach(player);
-                        // Also poll while paused: the native scrubber need not emit a new state.
-                        timer = setInterval(function () { controller.reconcile(); }, 250);
+                        startSync();
                     },
                     onStateChange: function () { if (controller.ready) controller.reconcile(); },
                     onError: function () {
@@ -359,8 +369,23 @@
     script.src = 'https://www.youtube.com/iframe_api';
     script.onerror = function () { controller.fail('No se pudo cargar la API de YouTube.'); };
     document.head.append(script);
+    var suspended = false;
     window.addEventListener('pagehide', function () {
-        clearInterval(timer);
+        suspended = true;
+        stopSync();
         clearTimeout(loadTimeout);
+    });
+    // A back/forward cache restore keeps this page and the player alive but
+    // fires no new onReady, so polling and the load watchdog are resumed here.
+    window.addEventListener('pageshow', function () {
+        if (!suspended) return;
+        suspended = false;
+        if (failed) return;
+        if (!controller.ready) {
+            waitForVideo();
+            return;
+        }
+        controller.reconcile();
+        startSync();
     });
 }());
