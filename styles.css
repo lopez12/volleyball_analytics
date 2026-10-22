@@ -136,6 +136,42 @@
     background: var(--regular-bg);
     border-radius: 6px;
 }
+/* Additive spectator viewer; all colors follow the shared theme tokens. */
+.replay-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    gap: 24px;
+    margin: 20px 0;
+}
+.replay-layout > section { min-width: 0; }
+.replay-video { aspect-ratio: 16 / 9; background: var(--surface-3); }
+.replay-video > * { width: 100%; height: 100%; border: 0; }
+.replay-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.replay-cards .stat-card { padding: 12px; margin: 0; width: auto; }
+.replay-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.replay-viewer button, .replay-viewer select, .replay-link {
+    background: var(--surface-2);
+    color: var(--text-main);
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    padding: 10px;
+    font: inherit;
+}
+.replay-viewer button:not(:disabled), .replay-viewer select { cursor: pointer; }
+.replay-viewer button:disabled { opacity: .55; cursor: not-allowed; }
+.replay-viewer :focus-visible, .replay-notice :focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 3px;
+}
+.replay-table-wrap { overflow-x: auto; }
+.replay-notice { margin: 20px 0; padding: 16px; background: var(--surface-2); border-radius: 8px; }
+.replay-notice details { margin-top: 14px; }
+#replay-rallies { display: flex; flex-wrap: wrap; gap: 12px; padding-left: 24px; }
+#replay-rallies li { margin: 5px 15px; }
+#replay-status { min-height: 3em; }
+@media (max-width: 800px) {
+    .replay-layout { grid-template-columns: minmax(0, 1fr); }
+}
 /* Volleyball Analytics Dashboard Styles */
 :root {
     --primary: #2563eb;
