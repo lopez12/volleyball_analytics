@@ -50,7 +50,7 @@
 22R# 12E# 22A+ 11D# 12E! 22A# @won @t:1135-1150.2
 ---
 @set: 23-25
-@start: 7-4
+@start: 7-5
 @youtube: https://youtu.be/pqznEBjC8mo
 7R# 12E! 2A- @lost @t:18.6-23.7
 7R! 12E+ 2A+ 22A+ 7D! 13E+ 22A# @won @t:36.3-52.8
