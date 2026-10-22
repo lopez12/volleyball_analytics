@@ -39,8 +39,8 @@ volleyball_analytics/
 │       ├── team.json     # roster + team/tournament metadata (+ optional season objectives)
 │       └── matches/      # NN_<opponent>.txt - one match per file; NN controls order
 ├── logger/               # Match Logger app (app.js IIFE, logger.css, index.html, datasets.js)
-├── briefs/               # Archived architect briefs (decision history)
-├── ARCHITECT-BRIEF.md    # The brief currently in flight
+├── briefs/               # LOCAL (git-ignored): archived architect briefs (decision history)
+├── ARCHITECT-BRIEF.md    # LOCAL (git-ignored): the brief currently in flight
 ├── data/                 # GENERATED (git-ignored): volleyball.db + *.csv per dataset
 ├── docs/                 # GENERATED: static site for GitHub Pages (includes a build copy of logger/)
 └── README.md             # User-facing documentation

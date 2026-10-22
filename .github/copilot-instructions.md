@@ -58,4 +58,4 @@ Work flows through three agents in `.github/agents/`:
 - **developer** - implements the brief.
 - **reviewer** - checks the diff against the brief and runs the QA gate. Does not write feature code.
 
-The current brief lives at `ARCHITECT-BRIEF.md`; completed briefs are archived under `briefs/` as the project's decision history. The `/new-brief` prompt scaffolds a brief. When planning, read the current brief and the `briefs/` archive before contradicting past decisions.
+The current brief lives at `ARCHITECT-BRIEF.md`; completed briefs are archived under `briefs/` as the project's decision history. Both are local, git-ignored planning documents - never commit them. The `/new-brief` prompt scaffolds a brief. When planning, read the current brief and the `briefs/` archive before contradicting past decisions.
