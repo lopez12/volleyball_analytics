@@ -129,4 +129,76 @@ disconnected.attach(Object.assign({}, player, {
     getCurrentTime: function () { throw new Error('No current time'); }
 }));
 assert.strictEqual(disconnected.failed, true);
-console.log('Viewer tests passed: boundaries, rewind, zero-duration, navigation, readiness, buffering, set resets, validation and failure.');
+// First-play seeks must not interrupt the first load with pauseVideo().
+function navigationCase(initialState, initialClock, action, expectedStart, intent, asynchronous) {
+    var calls = [];
+    var mockState = initialState;
+    var mockClock = initialClock;
+    var mockId = set.video_id;
+    var navigation = new viewer.Controller(payload, function () {}, function () {});
+    navigation.attach({
+        getCurrentTime: function () { return mockClock; },
+        getVideoData: function () { return {video_id: mockId}; },
+        getPlayerState: function () { return mockState; },
+        seekTo: function (time, allowSeekAhead) {
+            calls.push(['seek', time, allowSeekAhead]);
+            if (!asynchronous) mockClock = time;
+        },
+        playVideo: function () { calls.push(['play']); if (!asynchronous) mockState = 1; },
+        pauseVideo: function () { calls.push(['pause']); mockState = 2; },
+        cueVideoById: function () {}
+    });
+    navigation.playingIntent = !!intent;
+    navigation.seek(action, set.rallies[1].id);
+    var shouldPlay = initialState === -1 || initialState === 5 ||
+        initialState === 1 || (initialState === 3 && intent);
+    assert.deepStrictEqual(calls, [
+        ['seek', expectedStart, true], [shouldPlay ? 'play' : 'pause']
+    ]);
+    if (initialState === -1 || initialState === 5) {
+        assert.strictEqual(navigation.playingIntent, true);
+        // Emulate an asynchronous first load whose clock is still unavailable.
+        mockState = initialState;
+        mockClock = initialClock;
+        navigation.seek('rally', set.rallies[0].id);
+        assert.deepStrictEqual(calls.slice(2), [['seek', 10, true], ['play']]);
+    }
+    calls.length = 0;
+    navigation.pending = true;
+    mockClock = null;
+    mockState = -1;
+    navigation.seek('next');
+    assert.deepStrictEqual(calls, []); // set switches still guard all navigation
+    navigation.pending = false;
+    mockId = 'wrongwrong0';
+    navigation.seek('rally', set.rallies[0].id);
+    assert.deepStrictEqual(calls, []); // never seek an unrelated loaded video
+    assert.strictEqual(navigation.failed, true);
+}
+[-1, 5, 2, 1, 0].forEach(function (initialState) {
+    navigationCase(initialState, 0, 'rally', 30);
+});
+navigationCase(3, 0, 'rally', 30, true);
+navigationCase(3, 0, 'rally', 30, false);
+[-1, 5].forEach(function (initialState) {
+    [null, undefined, NaN].forEach(function (initialClock) {
+        navigationCase(initialState, initialClock, 'next', 10);
+        navigationCase(initialState, initialClock, 'repeat', 10);
+        navigationCase(initialState, initialClock, 'rally', 30);
+        navigationCase(initialState, initialClock, 'rally', 30, false, true);
+    });
+});
+// An unavailable clock is not enough to bypass readiness for started players.
+[1, 2, 3, 0].forEach(function (initialState) {
+    var guarded = new viewer.Controller(payload, function () {}, function () {});
+    var calls = [];
+    guarded.attach({
+        getCurrentTime: function () { return null; },
+        getVideoData: function () { return {video_id: set.video_id}; },
+        getPlayerState: function () { return initialState; },
+        seekTo: function () { calls.push('seek'); }
+    });
+    guarded.seek('next');
+    assert.deepStrictEqual(calls, []);
+});
+console.log('Viewer tests passed: boundaries, rewind, zero-duration, navigation, first-play seeks, unavailable clocks, readiness, buffering, set resets, validation and failure.');

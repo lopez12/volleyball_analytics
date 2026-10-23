@@ -482,7 +482,7 @@ measurement of exact ball-in-play time.
 **Siguiente jugada** seeks to the earliest start strictly after the video's
 actual current time. **Repetir jugada** replays the active interval or latest
 completed rally during a gap. Rally chips seek to their rally starts while
-preserving playing/paused intent subject to YouTube restrictions. Selecting a
+preserving playing/paused intent subject to YouTube restrictions; clicking a rally before first play starts playback from that rally. Selecting a
 set resets its statistics and cues its own video at zero. There is no automatic
 skipping or cross-set advancement.
 

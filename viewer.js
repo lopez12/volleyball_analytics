@@ -178,23 +178,38 @@
     };
     Controller.prototype.seek = function (action, id) {
         var time = this.time();
-        if (time === null || this.pending) return;
-        var set = this.set();
-        var rally = null;
-        if (action === 'next') rally = nextRally(set, time);
-        if (action === 'repeat') rally = repeatRally(set, time);
-        if (action === 'rally') {
-            rally = set.rallies.find(function (item) { return item.id === id; });
-        }
-        if (!rally) return;
+        if (!this.ready || this.failed || this.pending) return;
         try {
             var state = this.player.getPlayerState();
-            var playing = state === 1 || (state === 3 && this.playingIntent);
+            var neverStarted = state === -1 || state === 5;
+            var missingTime = time === null;
+            if (missingTime) {
+                if (!neverStarted) return;
+                var data = this.player.getVideoData();
+                if (!data || data.video_id !== this.set().video_id) return;
+                time = 0;
+            }
+            var set = this.set();
+            var rally = null;
+            if (missingTime && (action === 'next' || action === 'repeat')) {
+                // First-load clocks may be unavailable, even for a rally at zero.
+                rally = set.rallies[0];
+            } else {
+                if (action === 'next') rally = nextRally(set, time);
+                if (action === 'repeat') rally = repeatRally(set, time);
+            }
+            if (action === 'rally') {
+                rally = set.rallies.find(function (item) { return item.id === id; });
+            }
+            if (!rally) return;
+            var playing = neverStarted || state === 1 || (state === 3 && this.playingIntent);
             this.player.seekTo(rally.start, true);
             if (playing) this.player.playVideo();
             else this.player.pauseVideo();
             // seekTo is asynchronous: display only what the actual clock confirms.
             this.reconcile();
+            // The first play request can still report cued until the API responds.
+            if (neverStarted && !this.failed) this.playingIntent = true;
         } catch (error) {
             this.fail('No se pudo navegar por el video. Abre el video en YouTube.');
         }
