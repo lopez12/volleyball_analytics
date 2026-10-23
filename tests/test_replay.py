@@ -403,13 +403,43 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertIn('class="replay-side-label">Equipo</span>', page)
         self.assertIn('class="replay-side-label">Rival</span>', page)
 
+    def test_report_stats_pill_is_first_and_escaped(self):
+        parsed = parse_log(LOG)
+        page = render_match_page(
+            'Test', parsed, '22/10/2026', parsed['replay'], 'match_watch.html?a="1"&b=2'
+        )
+        links = re.search(r'<div class="youtube-banner__links">(.*?)</div>', page).group(1)
+        pill = re.search(r'<a\b[^>]*>Ver con estadísticas</a>', links).group(0)
+        self.assertTrue(links.startswith(pill))
+        self.assertIn('class="youtube-set-link youtube-set-link--stats"', pill)
+        self.assertIn('href="match_watch.html?a=&quot;1&quot;&amp;b=2"', pill)
+        self.assertNotIn('target=', pill)
+        self.assertNotIn('rel=', pill)
+        self.assertLess(links.index(pill), links.index('>Set 1</a>'))
+        self.assertEqual(page.count('Ver con estadísticas'), 1)
+        self.assertNotIn('<aside class="replay-notice">', page)
+
+    def test_report_stats_pill_without_video_urls(self):
+        parsed = parse_log(LOG)
+        parsed['youtube_urls'] = []
+        page = render_match_page('Test', parsed, '22/10/2026', parsed['replay'], 'watch.html')
+        links = re.search(r'<div class="youtube-banner__links">(.*?)</div>', page).group(1)
+        self.assertIn('youtube-set-link--stats', links)
+        self.assertIn('href="watch.html"', links)
+        self.assertNotIn('>Set ', links)
+        self.assertEqual(links.count('<a '), 1)
+        self.assertNotIn('<aside class="replay-notice">', page)
+
     def test_mixed_exclusions_and_legacy_report(self):
         parsed = parse_log(LOG + '\n---\n' + VIDEO + '8S# @won @t:1')
         old = render_match_page('Test', parsed, '21/10/2026')
         self.assertNotIn('Ver con estadísticas', old)
         page = render_match_page('Test', parsed, '21/10/2026', parsed['replay'], 'match_watch.html')
         self.assertIn('Ver con estadísticas', page)
-        self.assertIn('Set 2:', page)
+        notice = re.search(r'<aside class="replay-notice">(.*?)</aside>', page).group(1)
+        self.assertTrue(notice.startswith('<details>'))
+        self.assertIn('Set 2:', notice)
+        self.assertNotIn('Ver con estadísticas', notice)
         viewer = render_watch_page('Test', parsed['replay'], {}, 'match.html')
         self.assertIn('Set 2:', viewer)
         self.assertNotIn('Reproducción sincronizada no disponible.', viewer)
@@ -418,6 +448,7 @@ class ReplayRenderingTests(unittest.TestCase):
         bad = parse_log(VIDEO + '7A#')
         report = render_match_page('Test', bad, '21/10/2026', bad['replay'])
         self.assertNotIn('Ver con estadísticas', report)
+        self.assertNotIn('youtube-set-link--stats', report)
         self.assertIn('Reproducción sincronizada no disponible.', report)
 
 

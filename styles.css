@@ -602,6 +602,18 @@ button:active { transform: translateY(0); }
     font-size: 0.65rem;
 }
 
+.youtube-set-link--stats {
+    background: var(--primary);
+    box-shadow: none;
+}
+
+/* The primary-hover token is lighter in dark mode; darken consistently instead. */
+.youtube-set-link--stats:hover {
+    background: var(--primary);
+    filter: brightness(0.92);
+    box-shadow: none;
+}
+
 .general-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

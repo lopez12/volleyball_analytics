@@ -388,8 +388,9 @@ Theming is pure CSS custom properties plus a tiny inline script — no build ste
 
 ## Spectator replay: Ver con estadísticas
 
-Published match reports offer **Ver con estadísticas** when at least one set
-has a complete, unambiguous replay timeline. The separate `<match>_watch.html`
+Published match reports offer **Ver con estadísticas** as the first pill in the
+**Ver partido** banner, before the YouTube set links, when at least one set has a
+complete, unambiguous replay timeline. The separate `<match>_watch.html`
 page uses the same dashboard components and theme as the match report. Its
 stacked layout puts the scoreboard (team and opponent labels, live score, set,
 and current-rally status) directly below the title, followed by a full-width

@@ -651,7 +651,7 @@ def render_match_page(match_title, parsed, generated_date, replay=None, watch_hr
 
     Assembles the full HTML document with the following sections:
         1. Report header: match title, generation date, and an optional YouTube
-           banner with per-set links when 'youtube_urls' is non-empty.
+           banner with stats and per-set links when a watch page or video exists.
         2. Global summary: three stat cards showing team rating, total actions,
            and perfect-efficiency percentage.
         3. Team actions: team card, phase-efficiency card, and scoring card.
@@ -693,8 +693,14 @@ def render_match_page(match_title, parsed, generated_date, replay=None, watch_hr
 
     # YouTube banner
     yt_html = ''
-    if youtube_urls:
-        links = ''.join(
+    if youtube_urls or watch_href:
+        stats_link = (
+            '<a class="youtube-set-link youtube-set-link--stats" '
+            f'href="{_html_escape(watch_href, quote=True)}">Ver con estadísticas</a>'
+            if watch_href
+            else ''
+        )
+        links = stats_link + ''.join(
             f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="youtube-set-link">Set {i + 1}</a>'
             for i, url in enumerate(youtube_urls)
         )
@@ -807,12 +813,9 @@ def _replay_notice(replay, watch_href=None, viewer=False):
         if not item['eligible']:
             reasons = '; '.join(item['diagnostics'])
             items.append(f'<li>Set {item["number"]}: {_html_escape(reasons)}</li>')
-    link = (
-        f'<a class="replay-link" href="{_html_escape(watch_href, quote=True)}">'
-        'Ver con estadísticas</a>'
-        if watch_href
-        else ('' if viewer else '<p>Reproducción sincronizada no disponible.</p>')
-    )
+    if watch_href and not viewer and not items:
+        return ''
+    link = '' if watch_href or viewer else '<p>Reproducción sincronizada no disponible.</p>'
     exclusions = (
         '<details><summary>Sets no disponibles para reproducción sincronizada</summary>'
         f'<ul>{"".join(items)}</ul></details>'
