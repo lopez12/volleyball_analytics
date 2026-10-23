@@ -7,6 +7,10 @@ data/**/*.csv
 data/*.db
 data/*.csv
 
+# Architect briefs (local planning documents, not committed)
+ARCHITECT-BRIEF.md
+briefs/
+
 # Python
 .pytest_cache/
 __pycache__/

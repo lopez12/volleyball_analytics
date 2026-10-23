@@ -104,11 +104,12 @@ def _date_span(isos):
     return lo if lo == hi else f'{lo} – {hi}'
 
 
-def _back_link(href='index.html', label='← Inicio'):
-    """Return a top-of-page back-link div."""
+def _back_link(href='index.html', label='\u2190 Inicio', title=None):
+    """Return a top-of-page back-link div, optionally with an accessible title."""
+    title_attr = f' title="{_html_escape(title, quote=True)}"' if title else ''
     return (
         f'<div style="margin-bottom:12px;">'
-        f'<a href="{href}" style="color:var(--primary);text-decoration:none;'
+        f'<a href="{href}"{title_attr} style="color:var(--primary);text-decoration:none;'
         f'font-weight:600;font-size:0.88rem;">{label}</a>'
         f'</div>'
     )
@@ -645,12 +646,12 @@ def format_title(stem, team_name):
     return f'{team_name} vs {opponent}'
 
 
-def render_match_page(match_title, parsed, generated_date):
+def render_match_page(match_title, parsed, generated_date, replay=None, watch_href=None):
     """Render a complete static HTML page for a single match report.
 
     Assembles the full HTML document with the following sections:
         1. Report header: match title, generation date, and an optional YouTube
-           banner with per-set links when 'youtube_urls' is non-empty.
+           banner with stats and per-set links when a watch page or video exists.
         2. Global summary: three stat cards showing team rating, total actions,
            and perfect-efficiency percentage.
         3. Team actions: team card, phase-efficiency card, and scoring card.
@@ -674,6 +675,8 @@ def render_match_page(match_title, parsed, generated_date):
             'match_date' (str, optional): ISO 'YYYY-MM-DD' play date; when
                 present a 'Fecha' line is shown above the build date.
         generated_date (str): Date string displayed in the header, 'DD/MM/YYYY'.
+        replay (dict | None): Source replay model, separate from DB statistics.
+        watch_href (str | None): Relative generated watch page, if eligible.
 
     Returns:
         str: A complete HTML document string (<!DOCTYPE html> … </html>),
@@ -690,8 +693,14 @@ def render_match_page(match_title, parsed, generated_date):
 
     # YouTube banner
     yt_html = ''
-    if youtube_urls:
-        links = ''.join(
+    if youtube_urls or watch_href:
+        stats_link = (
+            '<a class="youtube-set-link youtube-set-link--stats" '
+            f'href="{_html_escape(watch_href, quote=True)}">Ver con estadísticas</a>'
+            if watch_href
+            else ''
+        )
+        links = stats_link + ''.join(
             f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="youtube-set-link">Set {i + 1}</a>'
             for i, url in enumerate(youtube_urls)
         )
@@ -740,6 +749,7 @@ def render_match_page(match_title, parsed, generated_date):
 
     match_date = _format_iso_date(parsed.get('match_date'))
     date_line = f'<p>Fecha: {match_date}</p>\n    ' if match_date else ''
+    replay_html = _replay_notice(replay, watch_href)
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -760,6 +770,7 @@ def render_match_page(match_title, parsed, generated_date):
     <h1>Reporte: {match_title}</h1>
     {date_line}<p>Generado: {generated_date}</p>
     {yt_html}
+    {replay_html}
   </div>
 
   {
@@ -789,6 +800,179 @@ def render_match_page(match_title, parsed, generated_date):
 
   {_back_nav('matches.html', '← Todos los partidos')}
 </div>
+</body>
+</html>"""
+
+
+def _replay_notice(replay, watch_href=None, viewer=False):
+    """Render additive eligibility explanations; never infer a watch URL."""
+    if replay is None:
+        return ''
+    items = []
+    for item in replay['sets']:
+        if not item['eligible']:
+            reasons = '; '.join(item['diagnostics'])
+            items.append(f'<li>Set {item["number"]}: {_html_escape(reasons)}</li>')
+    if watch_href and not viewer and not items:
+        return ''
+    link = '' if watch_href or viewer else '<p>Reproducción sincronizada no disponible.</p>'
+    exclusions = (
+        '<details><summary>Sets no disponibles para reproducción sincronizada</summary>'
+        f'<ul>{"".join(items)}</ul></details>'
+        if items
+        else ''
+    )
+    if not replay['sets']:
+        exclusions = '<p>No hay sets con jugadas completas para sincronizar.</p>'
+    return f'<aside class="replay-notice">{link}{exclusions}</aside>'
+
+
+def render_watch_page(
+    match_title, replay, names, report_href, team_name='Equipo', opponent_name='Rival'
+):
+    """Render a spoiler-safe, read-only viewer with source-derived snapshots.
+
+    Args:
+        match_title (str): Display match title (escaped here).
+        replay (dict): Analytics replay model; only eligible sets reach the player.
+        names (dict): Dataset player numbers to display names.
+        report_href (str): Relative full-report backlink (contains final results).
+        team_name (str): Display name for the left side of the scoreboard.
+        opponent_name (str): Display name for the right side of the scoreboard.
+
+    Returns:
+        str: A static HTML document; synchronized playback requires HTTP(S).
+    """
+    sets = [
+        {
+            key: item[key]
+            for key in (
+                'id',
+                'number',
+                'video_id',
+                'reconciled',
+                'start_score',
+                'rallies',
+                'snapshots',
+            )
+        }
+        for item in replay['sets']
+        if item['eligible']
+    ]
+    payload = json.dumps({'sets': sets, 'names': names}, ensure_ascii=False, allow_nan=False)
+    # HTML parsers recognize script end tags even in application/json. Escape
+    # markup delimiters, not JSON quotes, so JSON.parse recovers the exact data.
+    for char, replacement in (
+        ('&', '\\u0026'),
+        ('<', '\\u003c'),
+        ('>', '\\u003e'),
+        ('\u2028', '\\u2028'),
+        ('\u2029', '\\u2029'),
+    ):
+        payload = payload.replace(char, replacement)
+    options = ''.join(
+        f'<option value="{index}">Set {item["number"]}</option>' for index, item in enumerate(sets)
+    )
+    first_video = sets[0]['video_id'] if sets else ''
+    start_score = sets[0]['start_score'] if sets else [0, 0]
+    initial_score = ' \u2013 '.join(str(value) for value in start_score)
+    offset = start_score != [0, 0]
+    scope = (
+        'Estad\u00edsticas registradas en la grabaci\u00f3n'
+        if offset
+        else 'Estad\u00edsticas del set hasta este momento'
+    )
+    start_note = (
+        f'La grabaci\u00f3n inicia con el marcador {start_score[0]}\u2013{start_score[1]}.'
+        if offset
+        else ''
+    )
+    title = _html_escape(match_title)
+    safe_report_href = _html_escape(report_href, quote=True)
+    top_back = _back_link(
+        safe_report_href, '\u2190 Reporte completo', 'Contiene resultados finales'
+    )
+    bottom_back = _back_nav(safe_report_href, '\u2190 Reporte completo')
+    stats_section = _section(
+        'Estad\u00edsticas del set',
+        f'<p id="replay-scope" class="replay-muted">{scope}</p>'
+        '<p id="replay-reconciliation" class="replay-muted"></p>'
+        '<div id="replay-stats"><div class="general-stats replay-cards" id="replay-cards"></div></div>',
+    )
+    players_section = _section(
+        'Jugadores',
+        '<div class="replay-spotlight-control">'
+        '<label for="replay-spotlight-select">Destacar jugador</label>'
+        '<select id="replay-spotlight-select"><option value="">Ninguno</option></select>'
+        '</div><div id="replay-spotlight" class="stat-card replay-spotlight" hidden></div>'
+        '<p id="replay-table-note" class="replay-muted replay-table-note">'
+        'Toques registrados, no estad\u00edsticas del rival</p>'
+        '<div class="replay-table-wrap">'
+        '<table class="summary-table" aria-describedby="replay-table-note">'
+        '<thead><tr><th scope="col">Jugador</th><th scope="col">Toques</th>'
+        '<th scope="col">Puntos</th><th scope="col">Errores</th>'
+        '<th scope="col">Rating</th></tr></thead><tbody id="replay-players"></tbody>'
+        '</table></div>'
+        '<p class="replay-muted replay-detail-note">'
+        'Detalle por acci\u00f3n (remates, bloqueos, recepci\u00f3n\u2026) en el '
+        f'<a href="{safe_report_href}" title="Contiene resultados finales">Reporte completo</a></p>',
+    )
+    rally_section = _section(
+        'Jugadas del set',
+        '<div class="replay-rallies action-grid" id="replay-rallies"></div>',
+        collapsed=True,
+    )
+    exclusions = (
+        _replay_notice(replay, viewer=True)
+        if any(not item['eligible'] for item in replay['sets'])
+        else ''
+    )
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title} \u2014 Ver con estad\u00edsticas</title>
+  <link rel="icon" href="../../favicon.ico" sizes="any">
+  <link rel="stylesheet" href="styles.css">
+  {_THEME_BOOT}
+  {_COLLAPSIBLE_JS}
+  <script src="viewer.js" defer></script>
+</head>
+<body>
+{_THEME_TOGGLE}
+<main class="container replay-viewer" id="replay-viewer">
+  {top_back}
+  <header class="report-header">
+    <h1>{title}</h1>
+    <p class="replay-subtitle">Ver con estad\u00edsticas</p>
+  </header>
+  <div class="stat-card replay-scoreboard" aria-label="Marcador del set">
+    <div class="replay-scoreboard-row">
+      <span class="replay-side-label">{_html_escape(team_name)}</span>
+      <span id="replay-score" class="stat-value replay-score" aria-live="polite">{initial_score}</span>
+      <span class="replay-side-label">{_html_escape(opponent_name)}</span>
+    </div>
+    <p id="replay-current" class="stat-label replay-current">Antes de la primera jugada</p>
+    <p id="replay-start-note" class="replay-start-note"{' ' if offset else ' hidden'}>{start_note}</p>
+  </div>
+  <div class="replay-video stat-card"><div class="replay-video-frame"><div id="replay-player"></div></div></div>
+  <nav class="replay-controls" aria-label="Controles de reproducci\u00f3n">
+    <div class="replay-control-set"><label for="replay-set">Set</label><select id="replay-set">{options}</select></div>
+    <button type="button" data-replay="repeat" aria-label="\u25c0 Repetir jugada" title="Repetir jugada" disabled><span class="replay-label-full">\u25c0 Repetir jugada</span><span class="replay-label-short" aria-hidden="true">\u25c0 Repetir</span></button>
+    <button type="button" data-replay="next" aria-label="Siguiente jugada \u25b6" title="Siguiente jugada" disabled><span class="replay-label-full">Siguiente jugada \u25b6</span><span class="replay-label-short" aria-hidden="true">Siguiente \u25b6</span></button>
+  </nav>
+  <p id="replay-status" class="replay-status" role="status" aria-live="polite">Esperando al reproductor; estad\u00edsticas en cero.</p>
+  <a id="replay-youtube" class="replay-link" hidden href="https://www.youtube.com/watch?v={_html_escape(first_video, quote=True)}"
+      target="_blank" rel="noopener noreferrer">Abrir el video en YouTube \u2197</a>
+  {players_section}
+  {stats_section}
+  {rally_section}
+  {exclusions}
+  {bottom_back}
+  <noscript>La sincronizaci\u00f3n requiere JavaScript y una conexi\u00f3n a YouTube. Los controles no est\u00e1n disponibles.</noscript>
+</main>
+<script id="replay-data" type="application/json">{payload}</script>
 </body>
 </html>"""
 

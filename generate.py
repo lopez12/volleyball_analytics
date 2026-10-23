@@ -51,6 +51,7 @@ from renderer import (
     render_players_page,
     render_root_index_page,
     render_team_season_page,
+    render_watch_page,
 )
 
 TEAMS_ROOT = Path('teams')
@@ -231,13 +232,19 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
     conn.commit()
 
     # Parse all .txt files and upsert into the database
+    replays = {}
     for txt_path in txt_files:
         log_text = txt_path.read_text(encoding='utf-8')
         parsed = parse_log(log_text)
-        if parsed['team']['total'] == 0:
+        stem = txt_path.stem
+        replays[stem] = parsed['replay']
+        eligible = any(item['eligible'] for item in parsed['replay']['sets'])
+        if not eligible:
+            # Only remove the exact generated watch file for this known source.
+            (out_dir / f'{stem}_watch.html').unlink(missing_ok=True)
+        if parsed['team']['total'] == 0 and not eligible:
             print(f'  Skipped (no data): {team_slug}/{tournament_slug}/{txt_path.name}')
             continue
-        stem = txt_path.stem
         title = format_title(stem, team_name)
         upsert_match(conn, stem, title, parsed)
         print(f'  Stored: {team_slug}/{tournament_slug}/{txt_path.name}')
@@ -250,6 +257,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
 
     out_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy('styles.css', out_dir / 'styles.css')
+    shutil.copy('viewer.js', out_dir / 'viewer.js')
 
     # Render match pages from DB
     for meta in matches_meta:
@@ -260,7 +268,19 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
         parsed['_phase_stats'] = get_phase_stats_from_db(conn, stem)
         parsed['_point_stats'] = get_point_stats_from_db(conn, stem)
         parsed['_earned_points'] = get_earned_points_from_db(conn, stem)
-        html = render_match_page(meta['title'], parsed, today)
+        replay = replays.get(stem)
+        watch_href = None
+        if replay and any(item['eligible'] for item in replay['sets']):
+            watch_href = f'{stem}_watch.html'
+            opponent_name = (
+                meta['title'].split(' vs ', 1)[1] if ' vs ' in meta['title'] else 'Rival'
+            )
+            watch_html = render_watch_page(
+                meta['title'], replay, names, meta['file'], team_name, opponent_name
+            )
+            (out_dir / watch_href).write_text(watch_html, encoding='utf-8')
+            print(f'  Generated: docs/{team_slug}/{tournament_slug}/{watch_href}')
+        html = render_match_page(meta['title'], parsed, today, replay, watch_href)
         (out_dir / meta['file']).write_text(html, encoding='utf-8')
         print(f'  Generated: docs/{team_slug}/{tournament_slug}/{meta["file"]}')
 

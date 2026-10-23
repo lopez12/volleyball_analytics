@@ -136,6 +136,149 @@
     background: var(--regular-bg);
     border-radius: 6px;
 }
+/* Preserve the match report's replay link appearance. */
+.replay-link {
+    background: var(--surface-2);
+    color: var(--text-main);
+    border: 1px solid var(--primary);
+    border-radius: 6px;
+    padding: 10px;
+    font: inherit;
+}
+/* Spoiler-safe spectator viewer, composed from the shared dashboard components. */
+.replay-viewer .report-header { margin-bottom: 16px; }
+.replay-viewer .report-header h1 { overflow-wrap: anywhere; }
+.replay-subtitle { color: var(--text-muted); margin: 5px 0 0; }
+.replay-scoreboard { margin: 0 0 18px; padding: 16px; }
+.replay-scoreboard-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 20px;
+}
+.replay-side-label { color: var(--text-main); font-size: 1.2rem; font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+/* Mirror the labels around the centred score: team reads toward it from the left, rival from the right. */
+.replay-side-label:first-child { text-align: right; }
+.replay-side-label:last-child { text-align: left; }
+.replay-score { white-space: nowrap; font-size: 2rem; }
+.replay-current { margin: 10px 0 0; }
+.replay-start-note { color: var(--text-muted); font-size: 0.8rem; margin: 8px 0 0; }
+.replay-video { margin: 0 0 14px; padding: 10px; }
+.replay-video-frame {
+    aspect-ratio: 16 / 9;
+    background: var(--surface-3);
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100%;
+}
+.replay-video-frame > *, .replay-video-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+.replay-controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; }
+.replay-control-set { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; }
+.replay-viewer .replay-label-short { display: none; }
+.replay-viewer .replay-controls > button { min-height: 40px; }
+.replay-viewer button, .replay-viewer select, .replay-viewer .replay-link {
+    background: var(--surface-2);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font: inherit;
+    text-decoration: none;
+}
+.replay-viewer button:not(:disabled), .replay-viewer select, .replay-viewer .replay-link { cursor: pointer; }
+.replay-viewer button:disabled { opacity: 0.55; cursor: not-allowed; }
+.replay-viewer .replay-link { color: var(--primary); border-color: var(--primary); }
+.replay-viewer :focus-visible, .replay-notice :focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 3px;
+}
+.replay-status, .replay-muted { color: var(--text-muted); font-size: 0.82rem; }
+.replay-status { margin: 7px 0 16px; min-height: 1.3em; }
+.replay-muted { margin: 0 0 10px; }
+.general-stats.replay-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.replay-cards .stat-card { margin: 0; width: auto; }
+.replay-cards .stat-value { overflow-wrap: anywhere; }
+.replay-table-note { margin: 0 0 8px; overflow-wrap: anywhere; }
+.replay-table-wrap {
+    background: var(--card-bg);
+    border-radius: 8px;
+    overflow-x: auto;
+    scrollbar-color: var(--border) var(--surface-2);
+}
+.replay-table-wrap::-webkit-scrollbar { height: 8px; }
+.replay-table-wrap::-webkit-scrollbar-track { background: var(--surface-2); }
+.replay-table-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.replay-table-wrap .summary-table { min-width: 0; }
+.replay-detail-note { margin-top: 12px; }
+.replay-viewer .replay-detail-note a { color: var(--primary); font-weight: 600; text-decoration: none; }
+.replay-viewer .replay-detail-note a:hover { text-decoration: underline; }
+.replay-spotlight-control { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.replay-spotlight-control label { color: var(--text-main); font-weight: 600; }
+.replay-spotlight[hidden] { display: none; }
+.replay-spotlight { margin: 0 0 14px; }
+.replay-spotlight .card-header { background: var(--primary); }
+.replay-spotlight .card-body { padding: 12px; }
+.replay-spotlight-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.replay-spotlight-value { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 6px; text-align: center; }
+.replay-spotlight-value strong { display: block; color: var(--text-main); font-size: 1.1rem; }
+.replay-spotlight-value span { color: var(--text-muted); font-size: 0.68rem; }
+.replay-spotlight-empty { color: var(--text-muted); font-size: 0.82rem; margin: 10px 0 0; }
+.replay-table-wrap tr[aria-current="true"] { background: var(--primary-soft); font-weight: 700; }
+.replay-table-wrap tr[aria-current="true"] td { background: var(--primary-soft); font-weight: 700; }
+.replay-table-wrap tr[aria-current="true"] td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
+.replay-rallies { gap: 8px; padding: 0; margin: 0; }
+.replay-rallies button { min-width: 36px; justify-content: center; padding: 5px 11px; }
+.replay-rallies button[aria-current="true"] { background: var(--primary); border-color: var(--primary); color: var(--card-bg); font-weight: 800; }
+.replay-notice { margin: 20px 0; padding: 16px; background: var(--surface-2); border-radius: 8px; }
+.replay-notice details { margin-top: 14px; }
+.replay-viewer .section-title { margin-top: 18px; }
+.replay-value-pulse { animation: replay-value-pulse 600ms ease-out; }
+.replay-spotlight .player-rating.replay-value-pulse { animation: replay-rating-pulse 600ms ease-out; }
+@keyframes replay-rating-pulse {
+    0% { background: var(--primary-soft); }
+    100% { background: transparent; }
+}
+@keyframes replay-value-pulse {
+    0% { background: var(--primary-soft); }
+    100% { background: var(--surface-2); }
+}
+@media (max-width: 600px) {
+    /* The shared mobile .stat-card rule uses !important padding; override it here. */
+    .replay-viewer .replay-scoreboard.stat-card { padding: 12px 8px !important; }
+    .replay-viewer .replay-video.stat-card { padding: 4px !important; }
+    .replay-video-frame { border-radius: 6px; }
+    .replay-scoreboard-row { gap: 10px; }
+    .replay-side-label { font-size: 1rem; }
+    .replay-score { font-size: 1.8rem; }
+    .replay-controls { gap: 6px; }
+    .replay-viewer .replay-control-set label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+    }
+    .replay-viewer .replay-control-set select { min-width: 0; min-height: 40px; padding: 9px 4px; }
+    .replay-viewer .replay-controls > button {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 9px 4px;
+        white-space: nowrap;
+    }
+    .replay-viewer .replay-label-full { display: none; }
+    .replay-viewer .replay-label-short { display: inline; }
+    .general-stats.replay-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .replay-table-wrap .summary-table th, .replay-table-wrap .summary-table td { padding: 8px 5px; }
+    .replay-table-wrap .summary-table th { font-size: 0.68rem; letter-spacing: 0; }
+    .replay-spotlight-values { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .replay-spotlight-control { align-items: stretch; flex-direction: column; gap: 6px; }
+    .replay-spotlight-control select { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .replay-value-pulse, .replay-spotlight .player-rating.replay-value-pulse { animation: none; }
+}
 /* Volleyball Analytics Dashboard Styles */
 :root {
     --primary: #2563eb;
@@ -457,6 +600,18 @@ button:active { transform: translateY(0); }
 .youtube-set-link::before {
     content: '▶';
     font-size: 0.65rem;
+}
+
+.youtube-set-link--stats {
+    background: var(--primary);
+    box-shadow: none;
+}
+
+/* The primary-hover token is lighter in dark mode; darken consistently instead. */
+.youtube-set-link--stats:hover {
+    background: var(--primary);
+    filter: brightness(0.92);
+    box-shadow: none;
 }
 
 .general-stats {

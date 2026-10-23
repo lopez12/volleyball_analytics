@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Replay controller browser tests</title></head>
+<body>
+<h1>Replay controller browser tests</h1>
+<p id="result">RUNNING</p>
+<!-- This optional harness runs the same controller assertions without Node.
+     Serve the repo over HTTP and provide fixture.json from the Python parser,
+     or use tests/browser_smoke.py to create an isolated temporary fixture. -->
+<script>var module = {exports: {}};</script>
+<script src="../viewer.js"></script>
+<script>
+(function () {
+    'use strict';
+    var failed = false;
+    var result = document.getElementById('result');
+    window.addEventListener('error', function (event) {
+        failed = true;
+        result.textContent = 'FAIL: ' + event.message;
+    });
+    fetch('fixture.json').then(function (response) {
+        if (!response.ok) throw new Error('Missing parser fixture');
+        return response.text();
+    }).then(function (fixture) {
+        function assert(value) { if (!value) throw new Error('Assertion failed'); }
+        assert.strictEqual = function (actual, expected) {
+            if (actual !== expected) throw new Error('Expected ' + expected + ', got ' + actual);
+        };
+        assert.deepStrictEqual = function (actual, expected) {
+            assert.strictEqual(JSON.stringify(actual), JSON.stringify(expected));
+        };
+        window.require = function (name) {
+            if (name === 'assert') return assert;
+            if (name === '../viewer.js') return module.exports;
+            if (name === 'child_process') return {execFileSync: function () { return fixture; }};
+            throw new Error('Unexpected module: ' + name);
+        };
+        var script = document.createElement('script');
+        script.src = 'viewer_test.js';
+        script.onload = function () { if (!failed) result.textContent = 'PASS'; };
+        script.onerror = function () { result.textContent = 'FAIL: could not load assertions'; };
+        document.head.append(script);
+    }).catch(function (error) { result.textContent = 'FAIL: ' + error.message; });
+}());
+</script>
+</body>
+</html>
