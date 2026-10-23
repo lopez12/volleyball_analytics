@@ -528,8 +528,14 @@
 /* ----- Analysis layout ----- */
 .lg-analysis {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
+}
+
+.lg-analysis__main,
+.lg-analysis__side,
+.lg-analysis .lg-panel {
+  min-width: 0;
 }
 
 .lg-video {
@@ -594,6 +600,7 @@
 
 .lg-rally {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
@@ -617,12 +624,13 @@
 }
 
 .lg-rally__chain {
-  flex: 1;
+  flex: 1 1 12ch;
+  min-width: 0;
   font-family: monospace;
   font-size: 0.85rem;
   color: var(--text-main);
-  overflow-x: auto;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .lg-rally__outcome {
@@ -743,18 +751,20 @@
   border: 1.5px dashed var(--primary);
   border-radius: 10px;
   background: var(--surface-2);
-  overflow-x: auto;
 }
 
 .lg-chain__text {
+  min-width: 0;
   font-family: monospace;
   font-size: 1rem;
   font-weight: 700;
   color: var(--primary);
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .lg-chain__caret {
+  flex-shrink: 0;
   width: 2px;
   height: 20px;
   background: var(--primary);
@@ -1093,7 +1103,7 @@ select:focus-visible {
    =================================================================== */
 @media (max-width: 1023px) {
   .lg-analysis {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "video   video"
       "roster  action"
@@ -1129,7 +1139,12 @@ select:focus-visible {
   /* Keep buttons tappable in the narrower side-by-side columns. */
   .lg-a-action .lg-token-row--action,
   .lg-a-action .lg-token-row--grade {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lg-a-action .lg-token-btn {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -1140,13 +1155,23 @@ select:focus-visible {
    =================================================================== */
 @media (min-width: 1024px) {
   .lg-analysis {
-    grid-template-columns: 1.4fr 1fr;
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
     align-items: start;
   }
 
   .lg-analysis__side {
     position: sticky;
     top: 16px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .lg-container {
+    max-width: 1400px;
+  }
+
+  .lg-analysis {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
   }
 }
 
