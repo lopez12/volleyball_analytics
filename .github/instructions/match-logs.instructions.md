@@ -24,11 +24,7 @@ The grammar is defined once in `analytics.py` and enforced by `validate_logs.py`
 - `@date: YYYY-MM-DD` optional match play date.
 - `@t:<start>[-<end>]` optional per-rally video timestamp in seconds (e.g. `@t:3-9`), powering the Match Logger's replay.
 
-A replay set reconciles only when start + recorded wins/losses equals the final
-score. A valid start without `@set:` is accepted without independent reconciliation.
-Do not invent rallies or use an offset for a mid-set recording gap. Nonzero starts
-show a recording-start note and recorded-only scope in the viewer. The Match Logger
-imports/exports this metadata and persists it in drafts; blank/0-0 is not exported.
+A replay set reconciles only when start + recorded wins/losses equals the final score. A valid start without `@set:` is accepted without independent reconciliation. Do not invent rallies or use an offset for a mid-set recording gap. Nonzero starts show a recording-start note and recorded-only scope in the viewer. The Match Logger imports/exports this metadata and persists it in drafts; blank/0-0 is not exported.
 
 ## Outcome tokens (optional, but ground truth when present)
 
