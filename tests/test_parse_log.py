@@ -26,6 +26,7 @@ def test_empty_log_shape(text):
         'youtube_urls': [],
         'set_scores': [],
         'match_date': None,
+        'replay': {'sets': []},
     }
 
 

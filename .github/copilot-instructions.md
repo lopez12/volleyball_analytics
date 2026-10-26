@@ -35,7 +35,7 @@ A dependency-free **Python static-site generator** that turns volleyball match l
 One line per rally; space-separated, chronological tokens.
 
 - **Play token** `<num?><action><grade>` (a team action omits the number): actions `A` `B` `S` `R` `D` `E`; grades `#` `+` `!` `-`.
-- **Special lines:** `---` set separator, `@set: V-R`, `@youtube: <url>`, `@date: YYYY-MM-DD`, `@t:<start>[-<end>]`.
+- **Special lines:** `---` set separator, `@set: V-R`, optional `@start: V-R` (score at recording start, before the set's first rally; replay scoreboard only), `@youtube: <url>`, `@date: YYYY-MM-DD`, `@t:<start>[-<end>]`.
 - **Outcome tokens** (optional, last on a line): `@won`, `@lost`, `@won:re`, `@won:se`.
 - **Grade the touch, not the scoreboard:** `#` on a terminal action means it won the point by its own quality; a point from an opponent error is nobody's `#` (grade honestly, mark `@won:re`).
 
@@ -58,4 +58,4 @@ Work flows through three agents in `.github/agents/`:
 - **developer** - implements the brief.
 - **reviewer** - checks the diff against the brief and runs the QA gate. Does not write feature code.
 
-The current brief lives at `ARCHITECT-BRIEF.md`; completed briefs are archived under `briefs/` as the project's decision history. The `/new-brief` prompt scaffolds a brief. When planning, read the current brief and the `briefs/` archive before contradicting past decisions.
+The current brief lives at `ARCHITECT-BRIEF.md`; completed briefs are archived under `briefs/` as the project's decision history. Both are local, git-ignored planning documents - never commit them. The `/new-brief` prompt scaffolds a brief. When planning, read the current brief and the `briefs/` archive before contradicting past decisions.

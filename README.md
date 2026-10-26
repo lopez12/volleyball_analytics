@@ -183,6 +183,7 @@ The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much eac
 - `---` — set separator (resets rally context)
 - `@youtube: https://youtu.be/...` — links a YouTube video to this set
 - `@set: V-R` — final set score (team score first, rival second), e.g. `@set: 25-18`
+- `@start: V-R` — optional score when recording begins, team first (e.g. `@start: 7-4`); before the first rally in its `---`-delimited set block.
 - `@date: YYYY-MM-DD` — optional match play date, e.g. `@date: 2026-05-17`; shown on match and season pages (distinct from the report build date)
 - `@won` / `@lost` / `@won:re` / `@won:se` — **rally outcome** (see below)
 - `@t:<start>[-<end>]` — optional per-rally **video timestamp** in seconds into that set's video, e.g. `@t:3-9` or `@t:12` (see [Video timestamps](#video-timestamps--two-pass-tagging) below)
@@ -270,8 +271,10 @@ python validate_logs.py teams/nova # validate a subset (file or folder)
 
 It reports two severities:
 
-- **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`, a player number missing from the roster, or a malformed `@set: V-R` line. These are genuinely broken data the engine would drop.
+- **ERROR** (fails the check) — a token that is not `<num?><SREADB><#+!->`, a player number missing from the roster, or a malformed `@set: V-R` / `@start: V-R` line. These are genuinely broken data the engine would drop.
 - **WARN** (does not fail) — an outcome token that isn't last / is duplicated, a rally with no `@won`/`@lost` in a file that otherwise uses outcome tokens, an invalid `@youtube:` URL, a malformed `@t:` video timestamp, or a line/token the parser ignores such as `(Sin registro)` or `--- SEGUNDO SET ---`.
+
+**R10 (`@start:`):** malformed syntax is an **ERROR**. Duplicate declarations, a declaration after the block's first rally, or either starting component exceeding the matching final component are **WARN**. The validator imports the pattern from `analytics.py`; header order relative to `@set:` and `@youtube:` does not matter.
 
 The _outcome-completeness_ check is intentionally advisory: legacy logs without outcome tokens still work via the heuristic fallback, so they are exempt. Use `--strict` if you want warnings to fail too.
 
@@ -399,6 +402,63 @@ Every generated page supports a light and a dark theme:
 - **Persistent.** Your choice is saved in the browser (`localStorage['va-theme']`, value `light` or `dark`) and applies across pages and reloads until you toggle again. Clearing it returns to following the system preference.
 
 Theming is pure CSS custom properties plus a tiny inline script — no build step, no libraries, and it works both from a local `file://` open and from GitHub Pages. Colors live as tokens in `styles.css` (`:root` for light, `:root[data-theme="dark"]` and a `prefers-color-scheme` block for dark).
+
+## Spectator replay: Ver con estadísticas
+
+Published match reports offer **Ver con estadísticas** as the first pill in the **Ver partido** banner, before the YouTube set links, when at least one set has a complete, unambiguous replay timeline. The separate `<match>_watch.html` page uses the same dashboard components and theme as the match report. Its stacked layout puts the scoreboard (team and opponent labels, live score, set, and current-rally status) directly below the title, followed by a full-width 16:9 video and its set selector and replay/next controls. The players section (spotlight and table), set statistics, and the collapsed rally-chip list follow below the video, in that order. The start-score note appears inside the scoreboard when recording began after play started.
+
+Choose **Destacar jugador** above the player table to keep one player's live spotlight visible while the match plays. The spotlight and compact player table show touches, points, errors, and rating. Points are direct scoring touches (aces + kills + blocks); errors are touches graded `-`. The spotlight uses four columns on desktop and a 2×2 grid on mobile, and the table fits a 375px screen without sideways scrolling. The selected player's table row moves to the topand is marked with a star. Players with no touches in the current set show zeros
+and a no-touches note, without being added to the table. The selection is saved in `localStorage` (`va-replay-player`) and persists across sets and reloads. The rally chips show only rally numbers, highlight the active (or latest completed) rally, and seek to its start when clicked; future results are never shown. The longest completed rally appears only as a set-stat value, not as a separate replay control. Set cards show direct points, kills, aces, touches with errors, attack efficiency, and the longest completed rally. For the per-action
+breakdown (including blocks and reception), use **Reporte completo** below the player table; its spoiler warning notes that it contains final results.
+
+Playback starts at 0–0 unless `@start: V-R` records a late recording start: a rally's score and touches appear only when playback reaches its recorded end. Rewinding restores the corresponding earlier snapshot. The full-report backlink contains final results. This is spoiler-safe presentation, not secrecy: the embedded public JSON contains all snapshots.
+
+Eligibility is strict and **per set**, not a new log-validation requirement:
+
+- Exact `---` lines separate independent set/video clocks; empty blocks are ignored. Each set needs one supported YouTube URL with an 11-character ID.
+- Every rally needs exactly one explicit outcome and one complete, finite `@t:start-end` interval with `0 ≤ start ≤ end`. Intervals must already be in chronological, non-overlapping order; equal boundaries and zero-duration events are supported. Nothing is inferred, sorted, or corrected.
+- Every rally needs graded touches, except touchless `@won:se` opponent serve faults. Outcome/timestamp-only segmentation is not evidence of full grading.
+- If `@set: V-R` exists, its score must equal the starting score plus all explicit outcomes. Conflicting final scores, repeated video declarations and unrecognized content exclude that set. Without a final score, the viewer explicitly disclaims independent score reconciliation. Reports explain exclusions in Spanish; mixed matches still offer their eligible sets.
+
+### Late recording starts (`@start:`)
+
+Place the optional initial score before the first recorded rally of its set.
+It may come before or after the final-score and video headers:
+
+```text
+@set: 23-25
+@start: 7-4
+@youtube: https://youtu.be/abcdefghijk
+7A# @won @t:10-15
+```
+
+With 16 recorded wins and 21 recorded losses, that start reconciles to 23-25. Missing `@start:` and explicit `@start: 0-0` are equivalent. Duplicate, misplaced, or over-final starts exclude that set from replay. A non-reconciling score keeps its exclusion message and, when neither count is excessive, suggests the missing wins/losses as an `@start:` hint. This is only a hint: never auto-fill an offset or use it to conceal a mid-set recording gap. Without `@set:`, a valid start is accepted but the result is not independently reconciled.
+
+A nonzero start shows **La grabación inicia con el marcador V–R.** and changes the viewer scope to **Estadísticas registradas en la grabación**. Rewinding before the first rally ends restores the starting score. Only the scoreboard is offset: ratings, touches, points, phases, longest rally and rally numbering still describe recorded rallies only. Existing static report scores and season totals do not change.
+
+In the Match Logger, each set offers optional **Marcador inicial** fields beside the final score, using the same nonnegative-integer V-R check and inline errors. Export puts `@start: V-R` immediately after `@set:` (or first when no final exists), but omits blank and 0-0 starts. Import and IndexedDB drafts preserve the value; old logs and drafts without it continue to work unchanged.
+
+Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks and all `-` touches (**Toques con error**, not points lost). Attack efficiency is the existing `(A# − A-) / A_total`; player ratings use the existing weighted rating formula. Unattributed touches affect team totals only. Undefined efficiency and no-touch player ratings display `—`. The longest *completed* rally uses the timestamp interval, with the first winning ties; this is not a measurement of exact ball-in-play time.
+
+**Siguiente jugada** seeks to the earliest start strictly after the video's actual current time. **Repetir jugada** replays the active interval or latest completed rally during a gap. Rally chips seek to their rally starts while preserving playing/paused intent subject to YouTube restrictions; clicking a rally before first play starts playback from that rally. Selecting a set resets its statistics and cues its own video at zero. There is no automatic skipping or cross-set advancement.
+
+Playback requires JavaScript, HTTP(S), access to the YouTube IFrame API and permission to embed the selected video. `file://`, API failures, blocked embeds and invalid payloads disable synchronized controls with an explanation and show **Abrir el video en YouTube ↗** below the status line only as a fallback when the player cannot load. This link follows the selected set and stays hidden during normal playback. The static final reports still work without JS. For local playback, run `python -m http.server` and open the generated `docs/` page through localhost, not directly from disk.
+
+Dependency-free replay tests:
+
+```bash
+python -m unittest discover -s tests
+node tests/viewer_test.js           # optional local Node, no npm dependencies
+# Or use an installed Chromium browser (controller + mocked-player DOM checks):
+python tests/browser_smoke.py "C:\path\to\msedge.exe"
+python validate_logs.py
+# PowerShell: $env:CI = '1'; python generate.py
+CI=1 python generate.py             # POSIX shells
+ruff check .
+ruff format --check .
+```
+
+Before merging, check real YouTube playback and seeking, native paused scrubbing, set switching, blocked embeds, keyboard controls, light/dark themes, mobile (~375px) and desktop (~1440px), and the browser console/CSP on an HTTP(S) preview. Synthetic integration fixtures cover eligible sets without changing real logs. The optional browser harness tests computed responsive layout (including an actual 375 CSS-pixel iframe viewport), theme tokens, safe player-name rendering, readiness, failure states and navigation with a **fake** IFrame API. It neither loads real YouTube media nor verifies deployment response headers.
 
 ## Troubleshooting
 
