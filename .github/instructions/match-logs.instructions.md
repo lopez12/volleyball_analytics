@@ -49,10 +49,7 @@ This keeps `#` meaning "perfect execution" and never "we happened to win," so at
 
 ## Roster and validation
 
-- **R10:** a malformed line beginning `@start:` is an **ERROR**. Duplicate starts,
-  placement after the first rally, or a start component above the matching final
-  component are **WARN** and exclude that set from replay. A mismatch may suggest
-  the missing wins/losses as a hint; it is never inferred or filled automatically.
+- **R10:** a malformed line beginning `@start:` is an **ERROR**. Duplicate starts, placement after the first rally, or a start component above the matching final component are **WARN** and exclude that set from replay. A mismatch may suggest the missing wins/losses as a hint; it is never inferred or filled automatically.
 
 
 - Every player number used in a log must exist in that dataset's `team.json` roster, or `validate_logs.py` raises an **ERROR** (rule R2). Add the player to the roster instead of working around it.
