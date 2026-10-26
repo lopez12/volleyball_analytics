@@ -405,55 +405,20 @@ Theming is pure CSS custom properties plus a tiny inline script — no build ste
 
 ## Spectator replay: Ver con estadísticas
 
-Published match reports offer **Ver con estadísticas** as the first pill in the
-**Ver partido** banner, before the YouTube set links, when at least one set has a
-complete, unambiguous replay timeline. The separate `<match>_watch.html`
-page uses the same dashboard components and theme as the match report. Its
-stacked layout puts the scoreboard (team and opponent labels, live score, set,
-and current-rally status) directly below the title, followed by a full-width
-16:9 video and its set selector and replay/next controls. The
-players section (spotlight and table), set statistics, and the collapsed
-rally-chip list follow below the video, in that order. The start-score note
-appears inside the scoreboard when recording began after play started.
+Published match reports offer **Ver con estadísticas** as the first pill in the **Ver partido** banner, before the YouTube set links, when at least one set has a complete, unambiguous replay timeline. The separate `<match>_watch.html` page uses the same dashboard components and theme as the match report. Its stacked layout puts the scoreboard (team and opponent labels, live score, set, and current-rally status) directly below the title, followed by a full-width 16:9 video and its set selector and replay/next controls. The players section (spotlight and table), set statistics, and the collapsed rally-chip list follow below the video, in that order. The start-score note appears inside the scoreboard when recording began after play started.
 
-Choose **Destacar jugador** above the player table to keep one player's live
-spotlight visible while the match plays. The spotlight and compact player table
-show touches, points, errors, and rating. Points are direct scoring touches
-(aces + kills + blocks); errors are touches graded `-`. The spotlight uses four
-columns on desktop and a 2×2 grid on mobile, and the table fits a 375px screen
-without sideways scrolling. The selected player's table row moves to the top
-and is marked with a star. Players with no touches in the current set show zeros
-and a no-touches note, without being added to the table. The selection is saved
-in `localStorage` (`va-replay-player`) and persists across sets and reloads.
-The rally chips show only rally numbers, highlight the active (or latest
-completed) rally, and seek to its start when clicked; future results are never
-shown. The longest completed rally appears only as a set-stat value, not as a
-separate replay control. Set cards show direct points, kills, aces, touches with
-errors, attack efficiency, and the longest completed rally. For the per-action
-breakdown (including blocks and reception), use **Reporte completo** below the
-player table; its spoiler warning notes that it contains final results.
+Choose **Destacar jugador** above the player table to keep one player's live spotlight visible while the match plays. The spotlight and compact player table show touches, points, errors, and rating. Points are direct scoring touches (aces + kills + blocks); errors are touches graded `-`. The spotlight uses four columns on desktop and a 2×2 grid on mobile, and the table fits a 375px screen without sideways scrolling. The selected player's table row moves to the topand is marked with a star. Players with no touches in the current set show zeros
+and a no-touches note, without being added to the table. The selection is saved in `localStorage` (`va-replay-player`) and persists across sets and reloads. The rally chips show only rally numbers, highlight the active (or latest completed) rally, and seek to its start when clicked; future results are never shown. The longest completed rally appears only as a set-stat value, not as a separate replay control. Set cards show direct points, kills, aces, touches with errors, attack efficiency, and the longest completed rally. For the per-action
+breakdown (including blocks and reception), use **Reporte completo** below the player table; its spoiler warning notes that it contains final results.
 
-Playback starts at 0–0 unless `@start: V-R` records a late recording start: a
-rally's score and touches appear only when playback reaches its recorded end.
-Rewinding restores the corresponding earlier snapshot. The full-report backlink
-contains final results. This is spoiler-safe presentation, not secrecy: the
-embedded public JSON contains all snapshots.
+Playback starts at 0–0 unless `@start: V-R` records a late recording start: a rally's score and touches appear only when playback reaches its recorded end. Rewinding restores the corresponding earlier snapshot. The full-report backlink contains final results. This is spoiler-safe presentation, not secrecy: the embedded public JSON contains all snapshots.
 
 Eligibility is strict and **per set**, not a new log-validation requirement:
 
-- Exact `---` lines separate independent set/video clocks; empty blocks are
-  ignored. Each set needs one supported YouTube URL with an 11-character ID.
-- Every rally needs exactly one explicit outcome and one complete, finite
-  `@t:start-end` interval with `0 ≤ start ≤ end`. Intervals must already be in
-  chronological, non-overlapping order; equal boundaries and zero-duration
-  events are supported. Nothing is inferred, sorted, or corrected.
-- Every rally needs graded touches, except touchless `@won:se` opponent serve
-  faults. Outcome/timestamp-only segmentation is not evidence of full grading.
-- If `@set: V-R` exists, its score must equal the starting score plus all explicit outcomes. Conflicting
-  final scores, repeated video declarations and unrecognized content exclude
-  that set. Without a final score, the viewer explicitly disclaims independent
-  score reconciliation. Reports explain exclusions in Spanish; mixed matches
-  still offer their eligible sets.
+- Exact `---` lines separate independent set/video clocks; empty blocks are ignored. Each set needs one supported YouTube URL with an 11-character ID.
+- Every rally needs exactly one explicit outcome and one complete, finite `@t:start-end` interval with `0 ≤ start ≤ end`. Intervals must already be in chronological, non-overlapping order; equal boundaries and zero-duration events are supported. Nothing is inferred, sorted, or corrected.
+- Every rally needs graded touches, except touchless `@won:se` opponent serve faults. Outcome/timestamp-only segmentation is not evidence of full grading.
+- If `@set: V-R` exists, its score must equal the starting score plus all explicit outcomes. Conflicting final scores, repeated video declarations and unrecognized content exclude that set. Without a final score, the viewer explicitly disclaims independent score reconciliation. Reports explain exclusions in Spanish; mixed matches still offer their eligible sets.
 
 ### Late recording starts (`@start:`)
 
@@ -467,50 +432,17 @@ It may come before or after the final-score and video headers:
 7A# @won @t:10-15
 ```
 
-With 16 recorded wins and 21 recorded losses, that start reconciles to 23-25.
-Missing `@start:` and explicit `@start: 0-0` are equivalent. Duplicate, misplaced,
-or over-final starts exclude that set from replay. A non-reconciling score keeps
-its exclusion message and, when neither count is excessive, suggests the missing
-wins/losses as an `@start:` hint. This is only a hint: never auto-fill an offset
-or use it to conceal a mid-set recording gap. Without `@set:`, a valid start is
-accepted but the result is not independently reconciled.
+With 16 recorded wins and 21 recorded losses, that start reconciles to 23-25. Missing `@start:` and explicit `@start: 0-0` are equivalent. Duplicate, misplaced, or over-final starts exclude that set from replay. A non-reconciling score keeps its exclusion message and, when neither count is excessive, suggests the missing wins/losses as an `@start:` hint. This is only a hint: never auto-fill an offset or use it to conceal a mid-set recording gap. Without `@set:`, a valid start is accepted but the result is not independently reconciled.
 
-A nonzero start shows **La grabación inicia con el marcador V–R.** and changes
-the viewer scope to **Estadísticas registradas en la grabación**. Rewinding
-before the first rally ends restores the starting score. Only the scoreboard is
-offset: ratings, touches, points, phases, longest rally and rally numbering
-still describe recorded rallies only. Existing static report scores and season
-totals do not change.
+A nonzero start shows **La grabación inicia con el marcador V–R.** and changes the viewer scope to **Estadísticas registradas en la grabación**. Rewinding before the first rally ends restores the starting score. Only the scoreboard is offset: ratings, touches, points, phases, longest rally and rally numbering still describe recorded rallies only. Existing static report scores and season totals do not change.
 
-In the Match Logger, each set offers optional **Marcador inicial** fields beside
-the final score, using the same nonnegative-integer V-R check and inline errors.
-Export puts `@start: V-R` immediately after `@set:` (or first when no final exists),
-but omits blank and 0-0 starts. Import and IndexedDB drafts preserve the value;
-old logs and drafts without it continue to work unchanged.
+In the Match Logger, each set offers optional **Marcador inicial** fields beside the final score, using the same nonnegative-integer V-R check and inline errors. Export puts `@start: V-R` immediately after `@set:` (or first when no final exists), but omits blank and 0-0 starts. Import and IndexedDB drafts preserve the value; old logs and drafts without it continue to work unchanged.
 
-Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks
-and all `-` touches (**Toques con error**, not points lost). Attack efficiency
-is the existing `(A# − A-) / A_total`; player ratings use the existing weighted
-rating formula. Unattributed touches affect team totals only. Undefined
-efficiency and no-touch player ratings display `—`. The longest *completed*
-rally uses the timestamp interval, with the first winning ties; this is not a
-measurement of exact ball-in-play time.
+Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks and all `-` touches (**Toques con error**, not points lost). Attack efficiency is the existing `(A# − A-) / A_total`; player ratings use the existing weighted rating formula. Unattributed touches affect team totals only. Undefined efficiency and no-touch player ratings display `—`. The longest *completed* rally uses the timestamp interval, with the first winning ties; this is not a measurement of exact ball-in-play time.
 
-**Siguiente jugada** seeks to the earliest start strictly after the video's
-actual current time. **Repetir jugada** replays the active interval or latest
-completed rally during a gap. Rally chips seek to their rally starts while
-preserving playing/paused intent subject to YouTube restrictions; clicking a rally before first play starts playback from that rally. Selecting a
-set resets its statistics and cues its own video at zero. There is no automatic
-skipping or cross-set advancement.
+**Siguiente jugada** seeks to the earliest start strictly after the video's actual current time. **Repetir jugada** replays the active interval or latest completed rally during a gap. Rally chips seek to their rally starts while preserving playing/paused intent subject to YouTube restrictions; clicking a rally before first play starts playback from that rally. Selecting a set resets its statistics and cues its own video at zero. There is no automatic skipping or cross-set advancement.
 
-Playback requires JavaScript, HTTP(S), access to the YouTube IFrame API and
-permission to embed the selected video. `file://`, API failures, blocked
-embeds and invalid payloads disable synchronized controls with an explanation
-and show **Abrir el video en YouTube ↗** below the status line only as a
-fallback when the player cannot load. This link follows the selected set and
-stays hidden during normal playback. The static final reports still work without JS.
-For local playback, run `python -m http.server` and open the generated `docs/`
-page through localhost, not directly from disk.
+Playback requires JavaScript, HTTP(S), access to the YouTube IFrame API and permission to embed the selected video. `file://`, API failures, blocked embeds and invalid payloads disable synchronized controls with an explanation and show **Abrir el video en YouTube ↗** below the status line only as a fallback when the player cannot load. This link follows the selected set and stays hidden during normal playback. The static final reports still work without JS. For local playback, run `python -m http.server` and open the generated `docs/` page through localhost, not directly from disk.
 
 Dependency-free replay tests:
 
@@ -526,14 +458,7 @@ ruff check .
 ruff format --check .
 ```
 
-Before merging, check real YouTube playback and seeking, native paused scrubbing,
-set switching, blocked embeds, keyboard controls, light/dark themes, mobile
-(~375px) and desktop (~1440px), and the browser console/CSP on an HTTP(S) preview.
-Synthetic integration fixtures cover eligible sets without changing real logs.
-The optional browser harness tests computed responsive layout (including an
-actual 375 CSS-pixel iframe viewport), theme tokens, safe player-name rendering,
-readiness, failure states and navigation with a **fake** IFrame API. It neither
-loads real YouTube media nor verifies deployment response headers.
+Before merging, check real YouTube playback and seeking, native paused scrubbing, set switching, blocked embeds, keyboard controls, light/dark themes, mobile (~375px) and desktop (~1440px), and the browser console/CSP on an HTTP(S) preview. Synthetic integration fixtures cover eligible sets without changing real logs. The optional browser harness tests computed responsive layout (including an actual 375 CSS-pixel iframe viewport), theme tokens, safe player-name rendering, readiness, failure states and navigation with a **fake** IFrame API. It neither loads real YouTube media nor verifies deployment response headers.
 
 ## Troubleshooting
 
