@@ -43,7 +43,8 @@ class ReplayAnalyticsTests(unittest.TestCase):
         legacy = {'__name__': 'legacy_analytics'}
         exec(compile(source, 'legacy_analytics.py', 'exec'), legacy)
         paths = sorted(Path('teams').glob('**/matches/*.txt'))
-        self.assertEqual(len(paths), 17)
+        # Lower bound only: guards against an empty glob without breaking on new matches.
+        self.assertGreaterEqual(len(paths), 17)
         for path in paths:
             text = path.read_text(encoding='utf-8')
             old = legacy['parse_log'](text)
