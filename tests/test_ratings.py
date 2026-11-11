@@ -2,72 +2,79 @@ from copy import deepcopy
 
 import pytest
 
-from analytics import _scale_rating, calculate_action_stats, calculate_rating
-
-
-@pytest.mark.parametrize(
-    'action,ratings',
-    [
-        ('S', [10.0, 7.8, 4.7, 1.6]),
-        ('R', [10.0, 7.6, 4.8, 2.0]),
-        ('E', [8.6, 7.0, 5.2, 3.4]),
-        ('A', [10.0, 8.1, 4.4, 1.0]),
-        ('D', [10.0, 7.6, 4.8, 2.0]),
-        ('B', [10.0, 7.9, 4.6, 1.2]),
-    ],
+from analytics import (
+    ACTION_NOTA_CENTER,
+    ACTION_NOTA_SCALE,
+    RATING_CENTER,
+    TEAM_RATING_RAW_MEAN,
+    TEAM_RATING_SCALE,
+    calculate_action_stats,
+    calculate_rating,
 )
-@pytest.mark.parametrize('grade,index', [('#', 0), ('+', 1), ('!', 2), ('-', 3)])
-def test_rating_leverage_by_action_and_grade(stats_factory, action, ratings, grade, index):
-    assert calculate_rating(stats_factory(action + grade)) == ratings[index]
+
+
+def test_frozen_team_and_action_rating_constants():
+    assert RATING_CENTER == 7.0
+    assert TEAM_RATING_RAW_MEAN == 0.114
+    assert TEAM_RATING_SCALE == 17.6
+    assert ACTION_NOTA_CENTER == {
+        'S': 0.206,
+        'R': 0.023,
+        'E': 0.071,
+        'A': 0.1,
+        'D': 0.069,
+        'B': 0.155,
+    }
+    assert ACTION_NOTA_SCALE == {'S': 4.8, 'R': 5.3, 'E': 7.3, 'A': 4.3, 'D': 5.8, 'B': 4.0}
 
 
 @pytest.mark.parametrize(
     'touches,expected',
     [
         ('', 0.0),
-        ('A# E+', 9.1),
-        ('A# A# A#', 10.0),
+        ('A#', 10.0),
+        ('E+', 8.5),
+        ('A# E+', 10.0),
+        ('R# R- R+', 3.5),
         ('A- A- A-', 1.0),
-        ('R# R- R+', 6.5),
+        ('S+ S+ A+ E+ D+ R+', 7.6),
     ],
 )
-def test_rating_mixed_raw_touch_denominator_and_empty(stats_factory, touches, expected):
+def test_team_rating_shared_values_and_plain_touch_average(stats_factory, touches, expected):
     assert calculate_rating(stats_factory(touches)) == expected
 
 
 @pytest.mark.parametrize(
-    'weighted,total,expected',
+    'action,ratings',
     [
-        (-3, 1, 1.0),
-        (-1.25, 1, 1.0),
-        (-1.2, 1, 1.2),
-        (0, 2, 6.0),
-        (1, 1, 10.0),
-        (2, 1, 10.0),
-        (0.26, 1, 7.0),
-        (0.4, 3, 6.5),
-        (0.3, 1, 7.2),
+        ('S', [10.0, 6.5, 5.1, 1.2]),
+        ('R', [9.5, 8.2, 5.8, 1.6]),
+        ('E', [9.4, 7.9, 3.6, 1.0]),
+        ('A', [10.0, 6.6, 5.7, 2.3]),
+        ('D', [9.5, 8.0, 6.6, 2.0]),
+        ('B', [10.0, 7.2, 5.2, 3.2]),
     ],
 )
-def test_scale_rating_boundaries_and_rounding(weighted, total, expected):
-    assert _scale_rating(weighted, total) == expected
-
-
-@pytest.mark.parametrize('action', 'SREADB')
-@pytest.mark.parametrize(
-    'grade,rating,good', [('#', 10.0, 1), ('+', 7.6, 1), ('!', 4.8, 0), ('-', 2.0, 0)]
-)
-def test_action_stats_grade_has_no_leverage(stats_factory, action, grade, rating, good):
+@pytest.mark.parametrize('grade,index,good', [('#', 0, 1), ('+', 1, 1), ('!', 2, 0), ('-', 3, 0)])
+def test_action_stats_single_touch_nota(stats_factory, action, ratings, grade, index, good):
     result = calculate_action_stats(stats_factory(action + grade))
     assert list(result) == list('SREADB')
     assert result == {
         a: (
-            {'tot': 1, 'good': good, 'pos_pct': float(good), 'rating': rating}
+            {'tot': 1, 'good': good, 'pos_pct': float(good), 'rating': ratings[index]}
             if a == action
             else {'tot': 0, 'good': 0, 'pos_pct': None, 'rating': None}
         )
         for a in 'SREADB'
     }
+
+
+@pytest.mark.parametrize(
+    'action,expected', [('S', 5.7), ('R', 5.6), ('E', 4.0), ('A', 6.3), ('D', 6.0), ('B', 6.2)]
+)
+def test_action_stats_mixed_grade_nota(stats_factory, action, expected):
+    touches = f'{action}# {action}! {action}-'
+    assert calculate_action_stats(stats_factory(touches))[action]['rating'] == expected
 
 
 def test_action_stats_empty_and_unrounded_fraction(stats_factory):
@@ -79,7 +86,7 @@ def test_action_stats_empty_and_unrounded_fraction(stats_factory):
     assert attack['tot'] == 3
     assert attack['good'] == 1
     assert attack['pos_pct'] == pytest.approx(1 / 3)
-    assert attack['rating'] == 5.6
+    assert attack['rating'] == 6.3
 
 
 @pytest.mark.parametrize('calculator', [calculate_rating, calculate_action_stats])

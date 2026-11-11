@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlparse
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+# Legacy score_sum total only; not used by any rating.
 WEIGHTS = {'#': 1.0, '+': 0.4, '!': -0.3, '-': -1.0}
 FULL_NAMES = {
     'S': 'Saque',
@@ -25,21 +26,9 @@ FULL_NAMES = {
 ACTIONS = list(FULL_NAMES.keys())
 GRADES = ['#', '+', '!', '-']
 
-# Per-action leverage weights for the team rating (calculate_rating). Terminal,
-# point-scoring actions matter most; setting is a low-risk continuation and is
-# intentionally discounted. Player ratings use calculate_player_rating instead.
-ACTION_WEIGHTS = {
-    'A': 1.3,  # Ataque   - terminal, scores points
-    'B': 1.2,  # Bloqueo  - terminal, scores points
-    'S': 1.1,  # Saque    - can ace or break serve-receive
-    'R': 1.0,  # Recepción - baseline
-    'D': 1.0,  # Defensa  - baseline
-    'E': 0.65,  # Acomodo  - low-risk continuation
-}
-
-# Player-rating constants (calculate_player_rating). Derived from the
+# Shared grade values and player-rating constants. Derived from the
 # 2026-11-11 analysis (#56) and frozen: never recomputed per dataset.
-# Per-action value of each grade for the player rating.
+# Per-action value of each grade for team, player and per-action ratings.
 PLAYER_GRADE_VALUES = {
     'S': {'#': 1.0, '+': 0.1, '!': -0.2, '-': -1.0},
     'R': {'#': 0.5, '+': 0.25, '!': -0.2, '-': -1.0},
@@ -64,6 +53,28 @@ RATING_SHRINK = 3  # pseudo-touches at value 0 per action
 RATING_CENTER = 7.0  # rating of an average raw score
 RATING_RAW_MEAN = 0.066  # raw score mapped to RATING_CENTER
 RATING_SCALE = 11.6  # rating points per unit of raw score
+
+# Team and per-action scales fitted on 2026-11-11 data (#57) and frozen.
+TEAM_RATING_RAW_MEAN = 0.114  # team raw score mapped to RATING_CENTER
+TEAM_RATING_SCALE = 17.6  # team rating points per unit of raw score
+# Per-action average raw score mapped to RATING_CENTER.
+ACTION_NOTA_CENTER = {
+    'S': 0.206,
+    'R': 0.023,
+    'E': 0.071,
+    'A': 0.1,
+    'D': 0.069,
+    'B': 0.155,
+}
+# Per-action Nota points per unit of raw score.
+ACTION_NOTA_SCALE = {
+    'S': 4.8,
+    'R': 5.3,
+    'E': 7.3,
+    'A': 4.3,
+    'D': 5.8,
+    'B': 4.0,
+}
 
 # ---------------------------------------------------------------------------
 # Player position config
@@ -259,8 +270,8 @@ def _new_stats():
 
     The returned dictionary has the following structure:
         - 'total' (int): Total number of recorded actions across all types and grades.
-        - 'score_sum' (float): Cumulative weighted score. Each action contributes
-          WEIGHTS[grade] to this sum. Used by calculate_rating().
+        - 'score_sum' (float): Legacy cumulative score. Each action contributes
+          WEIGHTS[grade] to this sum; it is not used by any rating.
         - 'grades' (dict): Count of actions per grade symbol:
             '#' (Perfect), '+' (Positive), '!' (Regular), '-' (Error).
         - 'actions' (dict): Per-action-letter summary with two sub-keys:
@@ -811,43 +822,24 @@ def build_replay(source_sets, positions=None):
 # ---------------------------------------------------------------------------
 
 
-def _scale_rating(weighted, total):
-    """Map a weighted grade sum onto the 1-10 rating scale.
-
-    Args:
-        weighted (float): Sum of per-touch weights.
-        total (int): Touch count the sum is averaged over. Must be > 0.
-
-    Returns:
-        float: ``6.0 + (weighted / total) * 4.0`` clamped to [1.0, 10.0],
-            rounded to one decimal.
-    """
-    raw = 6.0 + (weighted / total) * 4.0
-    return round(max(1.0, min(10.0, raw)), 1)
-
-
 def calculate_rating(data):
-    """Compute the overall performance rating for a player or team on a 1–10 scale.
+    """Compute the team rating from its plain touch average on a fixed 1–10 scale.
 
-    The rating is action-weighted ("leverage-scaled"): each recorded touch
-    contributes its grade weight (WEIGHTS) multiplied by its action's leverage
-    weight (ACTION_WEIGHTS), and the sum is divided by the raw touch count.
+    Every touch uses PLAYER_GRADE_VALUES, without role weights or shrinkage:
 
-        weighted = Σ_action Σ_grade  grade_count[grade][action]
-                                      * WEIGHTS[grade] * ACTION_WEIGHTS[action]
-        raw      = 6.0 + (weighted / total) * 4.0
-        rating   = clamp(raw, 1.0, 10.0)
+        raw = Σ_action Σ_grade (grade_count[grade][action]
+                                * PLAYER_GRADE_VALUES[action][grade]) / total
+        rating = round(clamp(RATING_CENTER + (raw - TEAM_RATING_RAW_MEAN)
+                             * TEAM_RATING_SCALE, 1.0, 10.0), 1)
 
-    Dividing by the raw count (not by Σ count*ACTION_WEIGHTS) is deliberate: it
-    makes low-leverage actions such as setting contribute *less* to the rating,
-    instead of merely re-weighting an average (which would leave a pure-setting
-    profile unchanged). Elite terminal performances may reach the 10.0 clamp.
+    The frozen team scale maps its average raw score to RATING_CENTER (7.0).
 
     Args:
         data (dict): A statistics dictionary with at minimum:
             'total' (int): Total number of recorded actions.
             'grade_count' (dict): Cross-tab of grade -> action -> count, as
                 produced by _new_stats()/_record() or _row_to_stats().
+            Not mutated.
 
     Returns:
         float: Rounded performance rating in the inclusive range [1.0, 10.0].
@@ -857,11 +849,17 @@ def calculate_rating(data):
     if total == 0:
         return 0.0
     grade_count = data['grade_count']
-    weighted = 0.0
-    for grade in GRADES:
-        for action in ACTIONS:
-            weighted += grade_count[grade][action] * WEIGHTS[grade] * ACTION_WEIGHTS[action]
-    return _scale_rating(weighted, total)
+    raw = (
+        sum(
+            grade_count[grade][action] * PLAYER_GRADE_VALUES[action][grade]
+            for action in ACTIONS
+            for grade in GRADES
+        )
+        / total
+    )
+    return round(
+        _clamp(RATING_CENTER + (raw - TEAM_RATING_RAW_MEAN) * TEAM_RATING_SCALE, 1.0, 10.0), 1
+    )
 
 
 def _clamp(value, low, high):
@@ -948,10 +946,15 @@ def calculate_player_rating(data, position='U'):
 def calculate_action_stats(data):
     """Compute the positive percentage and 1-10 grade ("Nota") for every action.
 
-    The grade uses the same scale as calculate_rating() but without
-    ACTION_WEIGHTS: within a single action the leverage weight is a constant
-    multiplier that would only shrink that action's attainable range. Hence
-    per-action grades are not expected to average to the overall rating.
+    Each action's plain touch average uses PLAYER_GRADE_VALUES, without shrinkage:
+
+        avg = Σ_grade grade_count[grade][action]
+                      * PLAYER_GRADE_VALUES[action][grade] / tot
+        rating = round(clamp(RATING_CENTER + (avg - ACTION_NOTA_CENTER[action])
+                             * ACTION_NOTA_SCALE[action], 1.0, 10.0), 1)
+
+    The frozen centers and scales make 7.0 the average quality for that action
+    in the calibration data, not a common absolute scale across actions.
 
     Args:
         data (dict): A stats dict with 'actions' and 'grade_count' keys (from
@@ -972,9 +975,19 @@ def calculate_action_stats(data):
         tot = actions[action]['tot']
         good = actions[action]['good']
         if tot:
-            weighted = sum(gc[grade][action] * WEIGHTS[grade] for grade in GRADES)
+            avg = (
+                sum(gc[grade][action] * PLAYER_GRADE_VALUES[action][grade] for grade in GRADES)
+                / tot
+            )
             pos_pct = good / tot
-            rating = _scale_rating(weighted, tot)
+            rating = round(
+                _clamp(
+                    RATING_CENTER + (avg - ACTION_NOTA_CENTER[action]) * ACTION_NOTA_SCALE[action],
+                    1.0,
+                    10.0,
+                ),
+                1,
+            )
         else:
             pos_pct = None
             rating = None
