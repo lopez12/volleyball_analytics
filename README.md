@@ -158,40 +158,76 @@ Each line is one rally. Tokens within a line are space-separated.
 
 ### Actions
 
-| Code | Name                           | Leverage weight |
-| ---- | ------------------------------ | --------------- |
-| `A`  | Ataque (Attack)                | 1.3             |
-| `B`  | Bloqueo (Block)                | 1.2             |
-| `S`  | Saque (Serve)                  | 1.1             |
-| `R`  | Recepción de Saque (Reception) | 1.0             |
-| `D`  | Defensa (Defense)              | 1.0             |
-| `E`  | Acomodo (Set)                  | 0.65            |
-
-The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much each action contributes to the **team** rating and the per-action "Nota". Terminal, point-scoring actions (attack, block) count for more; setting is a low-risk continuation and is discounted. Player ratings use the role-based formula described in [Player rating](#player-rating-role-based).
+| Code | Name                          |
+| ---- | ----------------------------- |
+| `A`  | Ataque (Attack)                |
+| `B`  | Bloqueo (Block)                |
+| `S`  | Saque (Serve)                  |
+| `R`  | Recepción de Saque (Reception) |
+| `D`  | Defensa (Defense)              |
+| `E`  | Acomodo (Set)                  |
 
 ### Grades
 
-| Code | Name                | Rating weight |
-| ---- | ------------------- | ------------- |
-| `#`  | Perfecto (Perfect)  | +1.0          |
-| `+`  | Positivo (Positive) | +0.4          |
-| `!`  | Regular (Regular)   | −0.3          |
-| `-`  | Error (Error)       | −1.0          |
+| Code | Name                |
+| ---- | ------------------- |
+| `#`  | Perfecto (Perfect)  |
+| `+`  | Positivo (Positive) |
+| `!`  | Regular (Regular)   |
+| `-`  | Error (Error)       |
 
-The rating weights above apply to the team rating and the per-action "Nota".
+Team ratings, player ratings and per-action "Notas" all use one shared grade-value table, `PLAYER_GRADE_VALUES` in `analytics.py`:
+
+| Action | `#` | `+`  | `!`  | `-`  |
+| ------ | --- | ---- | ---- | ---- |
+| `S`    | 1.0 | 0.1  | −0.2 | −1.0 |
+| `R`    | 0.5 | 0.25 | −0.2 | −1.0 |
+| `E`    | 0.4 | 0.2  | −0.4 | −1.0 |
+| `A`    | 1.0 | 0.0  | −0.2 | −1.0 |
+| `D`    | 0.5 | 0.25 | 0.0  | −0.8 |
+| `B`    | 1.0 | 0.2  | −0.3 | −0.8 |
+
+`WEIGHTS` feeds only the legacy `score_sum` total; it is not used by any rating.
+
+### Team rating
+
+`calculate_rating()` uses the team's plain touch average over the shared values, with no role weights or shrinkage:
+
+`raw = (Σ_action Σ_grade grade_count[grade][action] × PLAYER_GRADE_VALUES[action][grade]) / total`
+
+`rating = round(clamp(RATING_CENTER + (raw − TEAM_RATING_RAW_MEAN) × TEAM_RATING_SCALE, 1.0, 10.0), 1)`
+
+`RATING_CENTER = 7.0`, `TEAM_RATING_RAW_MEAN = 0.114` and `TEAM_RATING_SCALE = 17.6`. The team scale was fitted on 2026-11-11 data (#57) and is frozen, not recalculated per dataset. No recorded touches returns 0.0.
 
 ### Player rating (role-based)
 
 `calculate_player_rating()` grades each player per match on a fixed 1–10 scale centered at 7.0. Grading rules do not change; only the values that turn grades into a rating do.
 
-1. **Per-action values.** Each action has its own grade values (`PLAYER_GRADE_VALUES`); for example `A+` is worth 0.0 and `E#` 0.4.
+1. **Per-action values.** Uses the same shared `PLAYER_GRADE_VALUES` table; for example `A+` is worth 0.0 and `E#` 0.4.
 2. **Role mix per set.** For each `---` set block the player touched, the role comes from an `@role:` line in that block, or is inferred from the player's set share there (`E` touches / touches): at or below 15% no setter profile, at or above 55% the full setter profile (`ROLE_ACTION_WEIGHTS['S']`), blended in between with her roster position (`S` and unknown codes fall back to `U`). `@role: n=S` forces the full setter profile; any other code forces that profile with no setter share.
 3. **Match mix.** Each set's role weights count in proportion to the player's touches in that set.
 4. **Shrinkage.** Each action's score is its summed grade values over the match divided by `touches + 3`, so a few touches cannot dominate.
 5. **Assists.** A player set immediately followed by an attack on the same line is an assist, graded with that attack's grade; it counts for setters only (scaled by the setter share) at weight 0.30.
 6. **Scale.** The weighted score maps to `7.0 + (raw − 0.066) × 11.6`, clamped to `[1.0, 10.0]`. The constants are fixed (#56), so past grades do not move when matches are added.
 
-The team rating (`calculate_rating()`) and the per-action "Nota" are unchanged.
+### Per-action Nota
+
+`calculate_action_stats()` keeps each action's attempts and positive percentage (`#` or `+` / attempts). Its "Nota" uses that action's plain touch average `avg` over `PLAYER_GRADE_VALUES`, with no shrinkage:
+
+`rating = round(clamp(RATING_CENTER + (avg − ACTION_NOTA_CENTER[action]) × ACTION_NOTA_SCALE[action], 1.0, 10.0), 1)`
+
+Each action has its own frozen center and scale, fitted on 2026-11-11 data (#57):
+
+| Action | `ACTION_NOTA_CENTER` | `ACTION_NOTA_SCALE` |
+| ------ | -------------------- | ------------------- |
+| `S`    | 0.206                | 4.8                 |
+| `R`    | 0.023                | 5.3                 |
+| `E`    | 0.071                | 7.3                 |
+| `A`    | 0.1                  | 4.3                 |
+| `D`    | 0.069                | 5.8                 |
+| `B`    | 0.155                | 4.0                 |
+
+**7.0 means average quality for that action in the calibration data**, not a common absolute score across actions. An action with no attempts keeps `None` for its percentage and Nota.
 
 ### Special lines
 
@@ -315,7 +351,7 @@ python -m pytest -q tests/test_parse_log.py  # a single module
 
 Pytest is pinned in `requirements-dev.txt` and is **dev-only**. Generation, deployment, and log validation still need only the Python standard library. Use `python -m pytest` so imports resolve the local engine without path changes.
 
-The suite covers parsing and metadata alignment, player/team aggregation, roster configuration, leverage-weighted ratings and clamps, per-action grades, efficiency, phase sequences, explicit outcomes, legacy win inference, and earned/gifted points. Tests use synthetic inputs and temporary files, not production match logs or generated output. The existing log validator and smoke build remain separate QA checks; unit tests do not replace them.
+The suite covers parsing and metadata alignment, player/team aggregation, roster configuration, shared-value team ratings and clamps, role-based player ratings, per-action grades, efficiency, phase sequences, explicit outcomes, legacy win inference, and earned/gifted points. Tests use synthetic inputs and temporary files, not production match logs or generated output. The existing log validator and smoke build remain separate QA checks; unit tests do not replace them.
 
 ## Linting & formatting (ruff)
 
@@ -403,7 +439,7 @@ After that, every `git push` to `main` triggers an automatic rebuild.
 1. `generate.py` discovers every dataset folder under `teams/` that contains a `team.json`
 2. For each dataset it parses the `matches/*.txt` logs into a dedicated `data/<team>/<tournament>/volleyball.db`
 3. `parse_log()` tokenizes lines into rallies and records per-player and team stats
-4. `calculate_rating()` computes the team's action-weighted 1–10 rating: `6.0 + 4.0 × (Σ grade_count × grade_weight × action_weight) / total`, then clamped to `[1.0, 10.0]`. Player ratings use `calculate_player_rating()` (see [Player rating](#player-rating-role-based)). `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
+4. `calculate_rating()` computes the team's plain-touch raw average over `PLAYER_GRADE_VALUES`, then `round(clamp(7.0 + (raw − 0.114) × 17.6, 1.0, 10.0), 1)`. Per-action Notas use their own action-centered scales. Player ratings use `calculate_player_rating()` (see [Player rating](#player-rating-role-based)). `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
 5. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
 6. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
 7. Static HTML is written to `docs/<team>/<tournament>/`, and a root `docs/index.html` selector links to every dataset

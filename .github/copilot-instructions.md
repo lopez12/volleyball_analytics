@@ -41,8 +41,14 @@ One line per rally; space-separated, chronological tokens.
 
 ## Rating
 
-- **Team rating** (`analytics.calculate_rating`, unchanged; also the per-action "Nota"): sum each touch's `WEIGHTS[grade] * ACTION_WEIGHTS[action]`, then `raw = 6.0 + (weighted / total) * 4.0`, clamped to `[1.0, 10.0]`.
+- **Shared grade values:** team ratings, player ratings and per-action "Notas" all use `PLAYER_GRADE_VALUES[action][grade]`. `WEIGHTS` feeds only the legacy `score_sum` total, not any rating.
+- **Team rating** (`analytics.calculate_rating`): `raw = (Σ_action Σ_grade grade_count[grade][action] * PLAYER_GRADE_VALUES[action][grade]) / total`, then `round(clamp(RATING_CENTER + (raw - TEAM_RATING_RAW_MEAN) * TEAM_RATING_SCALE, 1.0, 10.0), 1)`. Reuses `RATING_CENTER = 7.0`; `TEAM_RATING_RAW_MEAN = 0.114`, `TEAM_RATING_SCALE = 17.6`. No role weights or shrinkage; no touches returns 0.0.
+- **Per-action Nota** (`analytics.calculate_action_stats`): each action's plain-touch average `avg` over the same grade values maps to `round(clamp(RATING_CENTER + (avg - ACTION_NOTA_CENTER[action]) * ACTION_NOTA_SCALE[action], 1.0, 10.0), 1)`, without shrinkage. 7.0 means average quality for that action in the calibration data, not a common absolute scale; no attempts keeps `rating = None`.
+  - `ACTION_NOTA_CENTER = {'S': 0.206, 'R': 0.023, 'E': 0.071, 'A': 0.1, 'D': 0.069, 'B': 0.155}`.
+  - `ACTION_NOTA_SCALE = {'S': 4.8, 'R': 5.3, 'E': 7.3, 'A': 4.3, 'D': 5.8, 'B': 4.0}`.
 - **Player rating** (`analytics.calculate_player_rating(stats, position)`): per-action grade values (`PLAYER_GRADE_VALUES`) with shrinkage (`RATING_SHRINK`), mixed by role weights (`ROLE_ACTION_WEIGHTS`). The role is resolved per `---` set block from `@role:` or inferred from the set share in that block (`SETTER_SHARE_LOW`/`HIGH`, roster position as base), then touch-weighted across the match. Setters add an assist term (`ASSIST_WEIGHT`). Fixed scale `RATING_CENTER + (raw - RATING_RAW_MEAN) * RATING_SCALE`, clamped to `[1.0, 10.0]`. The constants are frozen (#56); don't recompute them per dataset.
+
+The team and per-action scale constants were fitted on 2026-11-11 data (#57) and are frozen; never recompute them per dataset.
 
 ## Workflow
 
