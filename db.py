@@ -13,6 +13,7 @@ from analytics import (
     _determine_win,
     calculate_earned_points,
     calculate_phase_stats,
+    calculate_player_rating,
     calculate_point_stats,
     calculate_rating,
 )
@@ -70,7 +71,8 @@ CREATE TABLE IF NOT EXISTS team_match_stats (
     points_won_kill         INTEGER,
     points_won_rival_error  INTEGER,
     points_won_serve_error  INTEGER,
-    points_lost             INTEGER
+    points_lost             INTEGER,
+    ast_perfect INTEGER, ast_positive INTEGER, ast_regular INTEGER, ast_error INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS player_match_stats (
@@ -96,6 +98,8 @@ CREATE TABLE IF NOT EXISTS player_match_stats (
     regular_a INTEGER, regular_d INTEGER, regular_b INTEGER,
     error_s INTEGER, error_r INTEGER, error_e INTEGER,
     error_a INTEGER, error_d INTEGER, error_b INTEGER,
+    ast_perfect INTEGER, ast_positive INTEGER, ast_regular INTEGER, ast_error INTEGER,
+    role_blocks TEXT,
     PRIMARY KEY (match_id, player_num)
 );
 """
@@ -112,6 +116,9 @@ _TEAM_OUTCOME_COLUMNS = (
     'points_won_serve_error',
     'points_lost',
 )
+
+# Setter assist counts per attack grade (#56), on both stats tables.
+_ASSIST_COLUMNS = tuple(f'ast_{prefix}' for prefix in _GRADE_PREFIX.values())
 
 
 def _ensure_team_outcome_columns(conn):
@@ -150,6 +157,28 @@ def _ensure_match_date_column(conn):
         conn.execute('ALTER TABLE matches ADD COLUMN match_date TEXT')
 
 
+def _ensure_rating_columns(conn):
+    """Add the player-rating columns (#56) if they are missing.
+
+    Adds the nullable assist columns to both stats tables and the nullable
+    'role_blocks' JSON column to player_match_stats. Idempotent no-op once present.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+
+    Returns:
+        None
+    """
+    for table, extra in (('team_match_stats', ()), ('player_match_stats', ('role_blocks',))):
+        existing = {row[1] for row in conn.execute(f'PRAGMA table_info({table})')}
+        for col in _ASSIST_COLUMNS:
+            if col not in existing:
+                conn.execute(f'ALTER TABLE {table} ADD COLUMN {col} INTEGER')
+        for col in extra:
+            if col not in existing:
+                conn.execute(f'ALTER TABLE {table} ADD COLUMN {col} TEXT')
+
+
 def init_db(conn):
     """Create all database tables if they do not exist and enable foreign key enforcement.
 
@@ -173,6 +202,7 @@ def init_db(conn):
     conn.execute('PRAGMA foreign_keys = ON')
     _ensure_team_outcome_columns(conn)
     _ensure_match_date_column(conn)
+    _ensure_rating_columns(conn)
     conn.commit()
 
 
@@ -219,6 +249,8 @@ def _stats_to_row(stats):
         for action in ACTIONS:
             a_lower = action.lower()
             row[f'{prefix}_{a_lower}'] = stats['grade_count'][grade][action]
+    for grade in GRADES:
+        row[f'ast_{_GRADE_PREFIX[grade]}'] = stats['assists'][grade]
     return row
 
 
@@ -345,6 +377,7 @@ def upsert_match(conn, stem, title, parsed):
         if player_data['total'] == 0:
             continue
         p_row = _stats_to_row(player_data)
+        p_row['role_blocks'] = json.dumps(player_data['role_blocks'])
         p_row['match_id'] = match_id
         p_row['player_num'] = player_num
         cols = ', '.join(p_row.keys())
@@ -408,7 +441,8 @@ def _row_to_stats(row):
 
     Returns:
         dict: A stats dict with keys 'total', 'score_sum', 'grades', 'actions',
-            and 'grade_count', identical in structure to _new_stats() output.
+            'grade_count', 'assists' (NULL -> 0) and 'role_blocks' (decoded JSON,
+            or [] when absent/NULL), identical in structure to _new_stats() output.
     """
     stats = {
         'total': row['total'],
@@ -421,6 +455,8 @@ def _row_to_stats(row):
         },
         'actions': {},
         'grade_count': {g: {} for g in GRADES},
+        'assists': {g: row.get(f'ast_{_GRADE_PREFIX[g]}') or 0 for g in GRADES},
+        'role_blocks': json.loads(row['role_blocks']) if row.get('role_blocks') else [],
     }
     for action in ACTIONS:
         a_lower = action.lower()
@@ -675,8 +711,13 @@ def get_all_player_nums(conn):
     return [row['player_num'] for row in rows]
 
 
-def get_player_season_stats(conn, player_num):
+def get_player_season_stats(conn, player_num, position='U'):
     """Return per-match stats for a player across the season, ordered chronologically.
+
+    Args:
+        conn (sqlite3.Connection): An open database connection.
+        player_num (str): Player number.
+        position (str): Roster position code passed to calculate_player_rating().
 
     Returns:
         list[dict]: One dict per match with keys: match_id, match_title, match_stem,
@@ -695,7 +736,7 @@ def get_player_season_stats(conn, player_num):
     results = []
     for row in rows:
         d = dict(row)
-        d['rating'] = calculate_rating(_row_to_stats(d))
+        d['rating'] = calculate_player_rating(_row_to_stats(d), position)
         results.append(d)
     return results
 

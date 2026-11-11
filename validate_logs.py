@@ -25,6 +25,12 @@ Rules:
                                            timestamp (expected
                                            ``@t:<start>[-<end>]`` in seconds).
     R10 (ERROR/WARN) ``@start:`` format / placement / score bounds.
+    R11 (ERROR/WARN) ``@role:`` per-set override - a malformed line or unknown
+                                           position code (ERROR); a player
+                                           assigned twice in one set, with no
+                                           touches in that set, or a line after
+                                           the set's first rally (WARN). A
+                                           number absent from the roster is R2.
 Grammar is imported from ``analytics.py`` (single source of truth); it is never
 re-hard-coded here.
 
@@ -42,13 +48,16 @@ import sys
 from pathlib import Path
 
 from analytics import (
+    _RE_ROLE,
     _RE_SET,
     _RE_START,
     _RE_YT,
     ACTIONS,
     GRADES,
+    POSITION_LABELS,
     _parse_date_token,
     _parse_outcome_token,
+    _parse_role_line,
     _parse_timestamp_token,
 )
 
@@ -105,6 +114,77 @@ def _rel(path):
         return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _check_roles(block, first_rally, roster):
+    """Check the ``@role:`` lines of one ``---`` set block (rule R11).
+
+    Args:
+        block (list[tuple[int, str]]): ``(line_no, trimmed_line)`` pairs.
+        first_rally (int | None): Line number of the block's first rally.
+        roster (set[str]): Valid player-number keys from team.json.
+
+    Returns:
+        list[tuple]: Issues as ``(line_no, severity, rule_id, message, token)``.
+    """
+    issues = []
+    touched = {
+        m.group(1)
+        for _, line in block
+        for token in line.split()
+        if (m := PLAY_RE.match(token)) and m.group(1)
+    }
+    assigned = set()
+    for n, line in block:
+        if not line.lower().startswith('@role:'):
+            continue
+        entries = _parse_role_line(line)
+        if entries is None:
+            reason = 'unknown position code' if _RE_ROLE.match(line) else 'malformed @role: line'
+            issues.append(
+                (
+                    n,
+                    ERROR,
+                    'R11',
+                    f'{reason} (expected "@role: <num>=<POS>[, ...]" with POS in '
+                    f'{"/".join(POSITION_LABELS)})',
+                    line,
+                )
+            )
+            continue
+        if first_rally is not None and n > first_rally:
+            issues.append((n, WARN, 'R11', '@role: should precede the first rally', line))
+        for num, pos in entries:
+            token = f'{num}={pos}'
+            if num not in roster:
+                issues.append(
+                    (n, ERROR, 'R2', f'player #{num} is not in the team.json roster', token)
+                )
+            if num in assigned:
+                issues.append(
+                    (
+                        n,
+                        WARN,
+                        'R11',
+                        f'player #{num} has more than one @role: in this set '
+                        '(only the first is used)',
+                        token,
+                    )
+                )
+                continue
+            assigned.add(num)
+            if num not in touched:
+                issues.append(
+                    (
+                        n,
+                        WARN,
+                        'R11',
+                        f'player #{num} has no touches in this set '
+                        '(override has no effect in this set)',
+                        token,
+                    )
+                )
+    return issues
 
 
 def validate_file(txt_path, roster):
@@ -167,6 +247,7 @@ def validate_file(txt_path, roster):
                 issues.append((n, WARN, 'R10', '@start: must precede the first rally', line))
             if finals and any(int(match[i]) > int(finals[0][i]) for i in (1, 2)):
                 issues.append((n, WARN, 'R10', '@start: exceeds the final score', line))
+        issues.extend(_check_roles(block, first_rally, roster))
 
     for line_no, raw in enumerate(lines, start=1):
         trimmed = raw.strip()
@@ -174,7 +255,7 @@ def validate_file(txt_path, roster):
             continue
 
         low = trimmed.lower()
-        if low.startswith('@start:'):
+        if low.startswith(('@start:', '@role:')):
             continue
         if low.startswith('@youtube:'):
             url = trimmed[9:].strip()

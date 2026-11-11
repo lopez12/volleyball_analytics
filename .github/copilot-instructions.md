@@ -35,13 +35,14 @@ A dependency-free **Python static-site generator** that turns volleyball match l
 One line per rally; space-separated, chronological tokens.
 
 - **Play token** `<num?><action><grade>` (a team action omits the number): actions `A` `B` `S` `R` `D` `E`; grades `#` `+` `!` `-`.
-- **Special lines:** `---` set separator, `@set: V-R`, optional `@start: V-R` (score at recording start, before the set's first rally; replay scoreboard only), `@youtube: <url>`, `@date: YYYY-MM-DD`, `@t:<start>[-<end>]`.
+- **Special lines:** `---` set separator, `@set: V-R`, optional `@start: V-R` (score at recording start, before the set's first rally; replay scoreboard only), optional `@role: <num>=<POS>[, ...]` (per-set player-rating role override for its `---` block, before the set's first rally), `@youtube: <url>`, `@date: YYYY-MM-DD`, `@t:<start>[-<end>]`.
 - **Outcome tokens** (optional, last on a line): `@won`, `@lost`, `@won:re`, `@won:se`.
 - **Grade the touch, not the scoreboard:** `#` on a terminal action means it won the point by its own quality; a point from an opponent error is nobody's `#` (grade honestly, mark `@won:re`).
 
 ## Rating
 
-`analytics.calculate_rating`: sum each touch's `WEIGHTS[grade] * ACTION_WEIGHTS[action]`, then `raw = 6.0 + (weighted / total) * 4.0`, clamped to `[1.0, 10.0]`. Dividing by the raw touch count (not the weighted count) makes low-leverage actions like setting contribute less. `ACTION_WEIGHTS['E'] = 0.65` is the primary tuning dial.
+- **Team rating** (`analytics.calculate_rating`, unchanged; also the per-action "Nota"): sum each touch's `WEIGHTS[grade] * ACTION_WEIGHTS[action]`, then `raw = 6.0 + (weighted / total) * 4.0`, clamped to `[1.0, 10.0]`.
+- **Player rating** (`analytics.calculate_player_rating(stats, position)`): per-action grade values (`PLAYER_GRADE_VALUES`) with shrinkage (`RATING_SHRINK`), mixed by role weights (`ROLE_ACTION_WEIGHTS`). The role is resolved per `---` set block from `@role:` or inferred from the set share in that block (`SETTER_SHARE_LOW`/`HIGH`, roster position as base), then touch-weighted across the match. Setters add an assist term (`ASSIST_WEIGHT`). Fixed scale `RATING_CENTER + (raw - RATING_RAW_MEAN) * RATING_SCALE`, clamped to `[1.0, 10.0]`. The constants are frozen (#56); don't recompute them per dataset.
 
 ## Workflow
 

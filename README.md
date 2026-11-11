@@ -167,7 +167,7 @@ Each line is one rally. Tokens within a line are space-separated.
 | `D`  | Defensa (Defense)              | 1.0             |
 | `E`  | Acomodo (Set)                  | 0.65            |
 
-The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much each action contributes to the rating. Terminal, point-scoring actions (attack, block) count for more; setting is a low-risk continuation and is discounted so the rating no longer favours setters simply because they touch the ball most. `ACTION_WEIGHTS['E']` (0.65) is the primary tuning dial — lower it to discount setting further, raise it to reward playmaking.
+The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much each action contributes to the **team** rating and the per-action "Nota". Terminal, point-scoring actions (attack, block) count for more; setting is a low-risk continuation and is discounted. Player ratings use the role-based formula described in [Player rating](#player-rating-role-based).
 
 ### Grades
 
@@ -178,12 +178,28 @@ The **leverage weight** (`ACTION_WEIGHTS` in `analytics.py`) scales how much eac
 | `!`  | Regular (Regular)   | −0.3          |
 | `-`  | Error (Error)       | −1.0          |
 
+The rating weights above apply to the team rating and the per-action "Nota".
+
+### Player rating (role-based)
+
+`calculate_player_rating()` grades each player per match on a fixed 1–10 scale centered at 7.0. Grading rules do not change; only the values that turn grades into a rating do.
+
+1. **Per-action values.** Each action has its own grade values (`PLAYER_GRADE_VALUES`); for example `A+` is worth 0.0 and `E#` 0.4.
+2. **Role mix per set.** For each `---` set block the player touched, the role comes from an `@role:` line in that block, or is inferred from the player's set share there (`E` touches / touches): at or below 15% no setter profile, at or above 55% the full setter profile (`ROLE_ACTION_WEIGHTS['S']`), blended in between with her roster position (`S` and unknown codes fall back to `U`). `@role: n=S` forces the full setter profile; any other code forces that profile with no setter share.
+3. **Match mix.** Each set's role weights count in proportion to the player's touches in that set.
+4. **Shrinkage.** Each action's score is its summed grade values over the match divided by `touches + 3`, so a few touches cannot dominate.
+5. **Assists.** A player set immediately followed by an attack on the same line is an assist, graded with that attack's grade; it counts for setters only (scaled by the setter share) at weight 0.30.
+6. **Scale.** The weighted score maps to `7.0 + (raw − 0.066) × 11.6`, clamped to `[1.0, 10.0]`. The constants are fixed (#56), so past grades do not move when matches are added.
+
+The team rating (`calculate_rating()`) and the per-action "Nota" are unchanged.
+
 ### Special lines
 
 - `---` — set separator (resets rally context)
 - `@youtube: https://youtu.be/...` — links a YouTube video to this set
 - `@set: V-R` — final set score (team score first, rival second), e.g. `@set: 25-18`
 - `@start: V-R` — optional score when recording begins, team first (e.g. `@start: 7-4`); before the first rally in its `---`-delimited set block.
+- `@role: <num>=<POS>[, <num>=<POS> ...]` — optional per-set role override for the player rating, e.g. `@role: 2=S, 25=MB` (codes from `POSITION_LABELS`). It applies only to its `---` set block, so repeat it in each set where it applies, before the set's first rally. Without it the role is inferred from the set share in that set.
 - `@date: YYYY-MM-DD` — optional match play date, e.g. `@date: 2026-05-17`; shown on match and season pages (distinct from the report build date)
 - `@won` / `@lost` / `@won:re` / `@won:se` — **rally outcome** (see below)
 - `@t:<start>[-<end>]` — optional per-rally **video timestamp** in seconds into that set's video, e.g. `@t:3-9` or `@t:12` (see [Video timestamps](#video-timestamps--two-pass-tagging) below)
@@ -275,6 +291,8 @@ It reports two severities:
 - **WARN** (does not fail) — an outcome token that isn't last / is duplicated, a rally with no `@won`/`@lost` in a file that otherwise uses outcome tokens, an invalid `@youtube:` URL, a malformed `@t:` video timestamp, or a line/token the parser ignores such as `(Sin registro)` or `--- SEGUNDO SET ---`.
 
 **R10 (`@start:`):** malformed syntax is an **ERROR**. Duplicate declarations, a declaration after the block's first rally, or either starting component exceeding the matching final component are **WARN**. The validator imports the pattern from `analytics.py`; header order relative to `@set:` and `@youtube:` does not matter.
+
+**R11 (`@role:`):** malformed syntax or an unknown position code is an **ERROR**, and a player number missing from the roster is an R2 **ERROR**. Assigning the same player twice in one block, an override for a player with no touches in that block, or a `@role:` line after the block's first rally are **WARN**. Only a bare `---` line separates sets, so in a file without one `@role:` applies to the whole match.
 
 The _outcome-completeness_ check is intentionally advisory: legacy logs without outcome tokens still work via the heuristic fallback, so they are exempt. Use `--strict` if you want warnings to fail too.
 
@@ -385,8 +403,7 @@ After that, every `git push` to `main` triggers an automatic rebuild.
 1. `generate.py` discovers every dataset folder under `teams/` that contains a `team.json`
 2. For each dataset it parses the `matches/*.txt` logs into a dedicated `data/<team>/<tournament>/volleyball.db`
 3. `parse_log()` tokenizes lines into rallies and records per-player and team stats
-4. `calculate_rating()` computes an action-weighted 1–10 rating: `6.0 + 4.0 × (Σ grade_count × grade_weight × action_weight) / total`, then clamped to `[1.0, 10.0]`. Dividing by the raw touch count (not by the weighted
-   count) is what makes low-leverage actions such as setting contribute less. `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
+4. `calculate_rating()` computes the team's action-weighted 1–10 rating: `6.0 + 4.0 × (Σ grade_count × grade_weight × action_weight) / total`, then clamped to `[1.0, 10.0]`. Player ratings use `calculate_player_rating()` (see [Player rating](#player-rating-role-based)). `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
 5. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
 6. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
 7. Static HTML is written to `docs/<team>/<tournament>/`, and a root `docs/index.html` selector links to every dataset
@@ -438,7 +455,7 @@ A nonzero start shows **La grabación inicia con el marcador V–R.** and change
 
 In the Match Logger, each set offers optional **Marcador inicial** fields beside the final score, using the same nonnegative-integer V-R check and inline errors. Export puts `@start: V-R` immediately after `@set:` (or first when no final exists), but omits blank and 0-0 starts. Import and IndexedDB drafts preserve the value; old logs and drafts without it continue to work unchanged.
 
-Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks and all `-` touches (**Toques con error**, not points lost). Attack efficiency is the existing `(A# − A-) / A_total`; player ratings use the existing weighted rating formula. Unattributed touches affect team totals only. Undefined efficiency and no-touch player ratings display `—`. The longest *completed* rally uses the timestamp interval, with the first winning ties; this is not a measurement of exact ball-in-play time.
+Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks and all `-` touches (**Toques con error**, not points lost). Attack efficiency is the existing `(A# − A-) / A_total`; player ratings use the role-based player rating with that set's `@role:` override. Unattributed touches affect team totals only. Undefined efficiency and no-touch player ratings display `—`. The longest *completed* rally uses the timestamp interval, with the first winning ties; this is not a measurement of exact ball-in-play time.
 
 **Siguiente jugada** seeks to the earliest start strictly after the video's actual current time. **Repetir jugada** replays the active interval or latest completed rally during a gap. Rally chips seek to their rally starts while preserving playing/paused intent subject to YouTube restrictions; clicking a rally before first play starts playback from that rally. Selecting a set resets its statistics and cues its own video at zero. There is no automatic skipping or cross-set advancement.
 

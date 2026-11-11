@@ -11,7 +11,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import generate
-from analytics import calculate_efficiency, calculate_rating, parse_log, youtube_video_id
+from analytics import (
+    calculate_efficiency,
+    calculate_player_rating,
+    calculate_rating,
+    parse_log,
+    youtube_video_id,
+)
 from renderer import render_match_page, render_watch_page
 from validate_logs import validate_file
 
@@ -50,6 +56,9 @@ class ReplayAnalyticsTests(unittest.TestCase):
             old = legacy['parse_log'](text)
             for variant in (text, text.replace('@start: 7-4\n', '')):
                 parsed = parse_log(variant)
+                # Additive #56 keys are absent from the legacy parser.
+                for stats in [parsed['team'], *parsed['players'].values()]:
+                    del stats['assists'], stats['role_blocks']
                 for key in old.keys() - {'replay'}:
                     with self.subTest(path=path, key=key):
                         self.assertEqual(
@@ -163,7 +172,9 @@ class ReplayAnalyticsTests(unittest.TestCase):
             for row in snapshot['players']:
                 stats = prefix['players'].get(row['number'])
                 self.assertEqual(row['touches'], stats['total'] if stats else 0)
-                self.assertEqual(row['rating'], calculate_rating(stats) if stats else None)
+                self.assertEqual(
+                    row['rating'], calculate_player_rating(stats, 'U') if stats else None
+                )
         final = item['snapshots'][-1]
         self.assertEqual(final['team']['aces'], 1)
         self.assertEqual(final['team']['kills'], 1)

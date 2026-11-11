@@ -26,6 +26,7 @@
   var RE_PLAY = /^(\d*)([SREADB])([#+!\-])$/i;       // mirrors analytics._RE_ANY
   var RE_TS = /^@t:(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?$/i;   // mirrors analytics._RE_TIMESTAMP
   var RE_START = /^@start:\s*(\d+)-(\d+)$/i;   // source: analytics.py _RE_START
+  var RE_ROLE = /^@role:\s*(\d+=[A-Za-z]+(?:\s*,\s*\d+=[A-Za-z]+)*)\s*$/i;   // source: analytics.py _RE_ROLE
   var DATASET_CANDIDATES = ['../datasets.json', 'datasets.json'];
   var DB_NAME = 'registro-partido';
   var DB_VERSION = 1;
@@ -1055,6 +1056,7 @@
       if (set.score) lines.push('@set: ' + set.score);
       if (set.start_score && set.start_score !== '0-0') lines.push('@start: ' + set.start_score);
       if (set.video_url) lines.push('@youtube: ' + set.video_url);
+      (set.roles || []).forEach(function (role) { lines.push(role); });
       set.rallies.forEach(function (r) {
         var parts = r.tokens.slice();
         if (r.outcome) parts.push(outcomeToken(r.outcome));
@@ -1096,10 +1098,10 @@
 
   function parseLogToSets(text) {
     var sets = [];
-    var cur = { score: null, start_score: null, video_url: null, rallies: [] };
+    var cur = { score: null, start_score: null, video_url: null, roles: [], rallies: [] };
     String(text || '').replace(/\r/g, '').split('\n').forEach(function (raw) {
       var line = raw.trim();
-      if (line === '---') { sets.push(cur); cur = { score: null, start_score: null, video_url: null, rallies: [] }; return; }
+      if (line === '---') { sets.push(cur); cur = { score: null, start_score: null, video_url: null, roles: [], rallies: [] }; return; }
       if (!line) return;
       if (line.toLowerCase().indexOf('@youtube:') === 0) {
         var url = line.slice(9).trim();
@@ -1110,6 +1112,11 @@
       if (ms) { cur.score = parseInt(ms[1], 10) + '-' + parseInt(ms[2], 10); return; }
       var initial = RE_START.exec(line);
       if (initial) { cur.start_score = parseInt(initial[1], 10) + '-' + parseInt(initial[2], 10); return; }
+      // Per-set role overrides are kept verbatim; there is no UI to edit them.
+      if (line.toLowerCase().indexOf('@role:') === 0) {
+        if (RE_ROLE.test(line)) cur.roles.push(line);
+        return;
+      }
       var plays = [], outcome = null, start = null, end = null;
       line.split(/\s+/).forEach(function (tok) {
         var mt = RE_TS.exec(tok);

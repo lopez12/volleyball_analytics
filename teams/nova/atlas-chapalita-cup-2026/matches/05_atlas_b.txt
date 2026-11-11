@@ -33,6 +33,7 @@
 22S# @won @t:799.9-807.7
 22S+ 22D! 7E+ 18A! 22D! 18E+ 12A+ 22D# 12E+ 18A+ 22D+ 12E# 7A# @won @t:817.2-858.6
 ---
+@role: 2=S
 @set: 25-17
 @youtube: https://youtu.be/URXtVfunSn4
 22D! 13B# @won @t:163.5-175.6

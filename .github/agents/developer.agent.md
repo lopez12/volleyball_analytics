@@ -53,9 +53,9 @@ volleyball_analytics/
 Each line in a `.txt` file is one rally; tokens are space-separated and chronological. The authoritative grammar lives in `analytics.py` and is documented in `README.md` and `.github/instructions/match-logs.instructions.md`. In brief:
 
 - **Play token:** `<num?><action><grade>`, e.g. `7A#`. A team action omits the number (`S#`).
-- **Actions** (with rating leverage weight): `A` Ataque 1.3, `B` Bloqueo 1.2, `S` Saque 1.1, `R` Recepción 1.0, `D` Defensa 1.0, `E` Acomodo 0.65.
-- **Grades** (rating weight): `#` +1.0, `+` +0.4, `!` -0.3, `-` -1.0.
-- **Special lines:** `---` set separator; `@set: V-R` final set score; `@youtube: <url>`; `@date: YYYY-MM-DD`; per-rally `@t:<start>[-<end>]` video timestamp.
+- **Actions** (with team-rating leverage weight): `A` Ataque 1.3, `B` Bloqueo 1.2, `S` Saque 1.1, `R` Recepción 1.0, `D` Defensa 1.0, `E` Acomodo 0.65.
+- **Grades** (team-rating weight): `#` +1.0, `+` +0.4, `!` -0.3, `-` -1.0.
+- **Special lines:** `---` set separator (only a bare `---` line); `@set: V-R` final set score; `@start: V-R` recording-start score; `@role: <num>=<POS>[, ...]` per-set role override (applies to its `---` block, before the first rally); `@youtube: <url>`; `@date: YYYY-MM-DD`; per-rally `@t:<start>[-<end>]` video timestamp.
 - **Outcome tokens** (optional, one per rally, last on the line): `@won`, `@lost`, `@won:re` (we scored on a rival error), `@won:se` (opponent serve fault, touchless). When absent, the engine falls back to a win heuristic, so old logs keep working.
 
 **Grade the touch, not the scoreboard.** `A#` means the attack *won the point by its own quality* (a kill), not merely that the rally was won. A point won on an opponent error is nobody's `#`: grade your last touch honestly (`!`/`+`) and mark the rally `@won:re`.
@@ -66,14 +66,16 @@ Each line in a `.txt` file is one rally; tokens are space-separated and chronolo
 
 | Module | Owns | Key entry points |
 |--------|------|------------------|
-| `analytics.py` | Constants, grammar, parsing, calculations. No HTML/SQLite. | `parse_log()`, `load_team_config()`, `calculate_rating()`, `calculate_efficiency()`, `calculate_phase_stats()`, `calculate_point_stats()`, `calculate_earned_points()` |
+| `analytics.py` | Constants, grammar, parsing, calculations. No HTML/SQLite. | `parse_log()`, `load_team_config()`, `calculate_rating()`, `calculate_player_rating()`, `calculate_efficiency()`, `calculate_phase_stats()`, `calculate_point_stats()`, `calculate_earned_points()` |
 | `db.py` | SQLite schema + queries. No HTML. | `init_db()`, `upsert_match()`, `get_match()`, `get_*_season_stats()` |
 | `renderer.py` | HTML cards + the seven page renderers. No I/O. | `render_match_page()`, `render_index_page()`, `render_*_season_page()`, `render_root_index_page()`, `aggregate_season_data()` |
 | `generate.py` | Orchestration + file I/O. | `discover_datasets()`, `_generate_dataset()`, `write_datasets_manifest()` |
-| `validate_logs.py` | Static log validation (the PR gate). | rules R1-R9; imports grammar from `analytics.py` |
+| `validate_logs.py` | Static log validation (the PR gate). | rules R1-R11; imports grammar from `analytics.py` |
 | `logger/app.js` | Client tagging UI (IIFE, `var`, delegated events). | parse / setup / analysis / review screens, draft in IndexedDB, `.txt` export |
 
-**Rating** (`analytics.calculate_rating`): sum each touch's `WEIGHTS[grade] * ACTION_WEIGHTS[action]`, then `raw = 6.0 + (weighted / total) * 4.0`, clamped to `[1.0, 10.0]`. Dividing by the raw touch count (not the weighted count) is deliberate - it makes low-leverage actions like setting contribute *less*, rather than merely re-weighting an average. `ACTION_WEIGHTS['E'] = 0.65` is the primary tuning dial.
+**Team rating** (`analytics.calculate_rating`, also the per-action "Nota" scale): sum each touch's `WEIGHTS[grade] * ACTION_WEIGHTS[action]`, then `raw = 6.0 + (weighted / total) * 4.0`, clamped to `[1.0, 10.0]`.
+
+**Player rating** (`analytics.calculate_player_rating(stats, position)`, #56): per-action grade values (`PLAYER_GRADE_VALUES`) with shrinkage (`RATING_SHRINK`), mixed by role weights (`ROLE_ACTION_WEIGHTS`). The role is resolved per `---` set block from `@role:` or inferred from the set share in that block (`SETTER_SHARE_LOW`/`HIGH`, roster position as base), then touch-weighted across the match. Setters add an assist term (`ASSIST_WEIGHT`). Fixed scale `RATING_CENTER + (raw - RATING_RAW_MEAN) * RATING_SCALE`, clamped to `[1.0, 10.0]`. The constants are frozen; don't recompute them per dataset.
 
 The per-player/team stats dict (from `parse_log` or a DB row) centres on `total` (touch count) and `grade_count` (grade -> action -> count). Rosters and names are **not** in code - they live in each dataset's `team.json` and load via `load_team_config()`.
 

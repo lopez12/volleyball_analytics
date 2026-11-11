@@ -21,6 +21,7 @@ The grammar is defined once in `analytics.py` and enforced by `validate_logs.py`
 - `@set: V-R` final set score, team first (e.g. `@set: 25-18`).
 - `@start: V-R` optional score when recording begins, team first (e.g. `@start: 7-4`). Place it before the first rally in its `---`-delimited set block; order relative to `@set:` / `@youtube:` does not matter. Omitted or `0-0` means a zero start. It offsets only the replay scoreboard, never touches or statistics.
 - `@youtube: https://youtu.be/...` links a video to the current set.
+- `@role: <num>=<POS>[, <num>=<POS> ...]` optional player-rating role override, e.g. `@role: 2=S, 25=MB` (`POS` from `POSITION_LABELS`: `S`, `OH`, `OPP`, `MB`, `L`, `U`). It applies to its `---` set block only, so repeat it in each set where it applies, and place it before that set's first rally. Without it, the role is inferred from the player's set share in that set. Only a bare `---` line separates sets; in a file without one (e.g. `---- PRIMER SET ----`), it applies to the whole match.
 - `@date: YYYY-MM-DD` optional match play date.
 - `@t:<start>[-<end>]` optional per-rally video timestamp in seconds (e.g. `@t:3-9`), powering the Match Logger's replay.
 
@@ -50,6 +51,7 @@ This keeps `#` meaning "perfect execution" and never "we happened to win," so at
 ## Roster and validation
 
 - **R10:** a malformed line beginning `@start:` is an **ERROR**. Duplicate starts, placement after the first rally, or a start component above the matching final component are **WARN** and exclude that set from replay. A mismatch may suggest the missing wins/losses as a hint; it is never inferred or filled automatically.
+- **R11:** a malformed `@role:` line or unknown position code is an **ERROR**; an unrostered number is an R2 **ERROR**. The same player twice in one block (only the first is used), a player with no touches in that block, or a `@role:` line after the block's first rally are **WARN**.
 
 
 - Every player number used in a log must exist in that dataset's `team.json` roster, or `validate_logs.py` raises an **ERROR** (rule R2). Add the player to the roster instead of working around it.
