@@ -17,6 +17,7 @@ from analytics import (
     calculate_action_stats,
     calculate_efficiency,
     calculate_phase_stats,
+    calculate_player_rating,
     calculate_point_stats,
     calculate_rating,
 )
@@ -646,7 +647,9 @@ def format_title(stem, team_name):
     return f'{team_name} vs {opponent}'
 
 
-def render_match_page(match_title, parsed, generated_date, replay=None, watch_href=None):
+def render_match_page(
+    match_title, parsed, generated_date, replay=None, watch_href=None, positions=None
+):
     """Render a complete static HTML page for a single match report.
 
     Assembles the full HTML document with the following sections:
@@ -677,6 +680,8 @@ def render_match_page(match_title, parsed, generated_date, replay=None, watch_hr
         generated_date (str): Date string displayed in the header, 'DD/MM/YYYY'.
         replay (dict | None): Source replay model, separate from DB statistics.
         watch_href (str | None): Relative generated watch page, if eligible.
+        positions (dict | None): Roster player number -> position code for
+            calculate_player_rating(); missing players use 'U'.
 
     Returns:
         str: A complete HTML document string (<!DOCTYPE html> … </html>),
@@ -738,8 +743,13 @@ def render_match_page(match_title, parsed, generated_date, replay=None, watch_hr
     scoring_card = build_scoring_card_html(point_stats)
     earned_card = build_earned_points_card_html(parsed.get('_earned_points'))
 
+    positions = positions or {}
     players_sorted = sorted(
-        [(num, data, calculate_rating(data)) for num, data in players.items() if data['total'] > 0],
+        [
+            (num, data, calculate_player_rating(data, positions.get(num, 'U')))
+            for num, data in players.items()
+            if data['total'] > 0
+        ],
         key=lambda x: x[2],
         reverse=True,
     )

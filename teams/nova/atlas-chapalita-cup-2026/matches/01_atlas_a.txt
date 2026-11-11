@@ -47,6 +47,7 @@
 5R- @lost @t:1236.2-1238.9
 12R# 7A! 13A+ 13B- @lost @t:1249.2-1256.5
 ---
+@role: 2=S
 @set: 13-25
 @start: 4-6
 @youtube: https://youtu.be/XoMZ7SvdLtA

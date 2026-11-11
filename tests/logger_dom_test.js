@@ -133,6 +133,21 @@
             assert(review() === expected, 'Import/export canonical round-trip failed');
             await importLog(review());
             assert(review() === expected, 'Export/import round-trip failed');
+            // Per-set @role: lines survive import/export in their own set and never become rallies.
+            var plain = expected;
+            expected = '@set: 8-5\n@start: 7-4\n@role: 7=S\n7A# @won @t:10-15\n7A- @lost @t:30-38\n---\n@set: 1-0\n@role: 7=OPP, 8=mb\n@won:se @t:0-0';
+            await importLog('@role: 7=S\n@role: 7=XX\n@set: 8-5\n@start: 7-4\n7A# @won @t:10-15\n7A- @lost @t:30-38\n---\n@set: 1-0\n@role: 7=OPP, 8=mb\n@won:se @t:0-0');
+            assert(review() === expected, 'Role lines not preserved per set');
+            var roleRecords = [];
+            await waitFor(function () {
+                records().then(function (list) { roleRecords = list; });
+                var sets = roleRecords.length && roleRecords[0].analysis && roleRecords[0].analysis.sets;
+                return sets && sets.length === 2 && sets[0].roles.join('|') === '@role: 7=S' &&
+                    sets[1].roles.join('|') === '@role: 7=OPP, 8=mb' &&
+                    sets[0].rallies.length === 2 && sets[1].rallies.length === 1;
+            }, 'role persistence');
+            expected = plain;
+            await importLog(expected);
             location.hash = '#setup';
             window.dispatchEvent(new Event('hashchange'));
             assert(document.documentElement.scrollWidth <= innerWidth, 'Logger overflows viewport');

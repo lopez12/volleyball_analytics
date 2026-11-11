@@ -235,7 +235,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
     replays = {}
     for txt_path in txt_files:
         log_text = txt_path.read_text(encoding='utf-8')
-        parsed = parse_log(log_text)
+        parsed = parse_log(log_text, positions)
         stem = txt_path.stem
         replays[stem] = parsed['replay']
         eligible = any(item['eligible'] for item in parsed['replay']['sets'])
@@ -280,7 +280,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
             )
             (out_dir / watch_href).write_text(watch_html, encoding='utf-8')
             print(f'  Generated: docs/{team_slug}/{tournament_slug}/{watch_href}')
-        html = render_match_page(meta['title'], parsed, today, replay, watch_href)
+        html = render_match_page(meta['title'], parsed, today, replay, watch_href, positions)
         (out_dir / meta['file']).write_text(html, encoding='utf-8')
         print(f'  Generated: docs/{team_slug}/{tournament_slug}/{meta["file"]}')
 
@@ -300,7 +300,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
     player_nums = get_all_player_nums(conn)
     player_summaries = []
     for pnum in player_nums:
-        pstats = get_player_season_stats(conn, pnum)
+        pstats = get_player_season_stats(conn, pnum, positions.get(pnum, 'U'))
         if not pstats:
             continue
         team_match_ratings = [team_ratings_by_match.get(m['match_id'], 0.0) for m in pstats]

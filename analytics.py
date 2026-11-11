@@ -25,18 +25,45 @@ FULL_NAMES = {
 ACTIONS = list(FULL_NAMES.keys())
 GRADES = ['#', '+', '!', '-']
 
-# Per-action leverage weights for the rating. Terminal, point-scoring actions
-# matter most; setting is a low-risk continuation and is intentionally
-# discounted. ACTION_WEIGHTS['E'] is the primary tuning dial: lower it to
-# further reduce setter inflation, raise it to reward playmaking.
+# Per-action leverage weights for the team rating (calculate_rating). Terminal,
+# point-scoring actions matter most; setting is a low-risk continuation and is
+# intentionally discounted. Player ratings use calculate_player_rating instead.
 ACTION_WEIGHTS = {
     'A': 1.3,  # Ataque   - terminal, scores points
     'B': 1.2,  # Bloqueo  - terminal, scores points
     'S': 1.1,  # Saque    - can ace or break serve-receive
     'R': 1.0,  # Recepción - baseline
     'D': 1.0,  # Defensa  - baseline
-    'E': 0.65,  # Acomodo  - low-risk continuation (primary dial)
+    'E': 0.65,  # Acomodo  - low-risk continuation
 }
+
+# Player-rating constants (calculate_player_rating). Derived from the
+# 2026-11-11 analysis (#56) and frozen: never recomputed per dataset.
+# Per-action value of each grade for the player rating.
+PLAYER_GRADE_VALUES = {
+    'S': {'#': 1.0, '+': 0.1, '!': -0.2, '-': -1.0},
+    'R': {'#': 0.5, '+': 0.25, '!': -0.2, '-': -1.0},
+    'E': {'#': 0.4, '+': 0.2, '!': -0.4, '-': -1.0},
+    'A': {'#': 1.0, '+': 0.0, '!': -0.2, '-': -1.0},
+    'D': {'#': 0.5, '+': 0.25, '!': 0.0, '-': -0.8},
+    'B': {'#': 1.0, '+': 0.2, '!': -0.3, '-': -0.8},
+}
+# Per-role action mix; keys equal POSITION_LABELS keys.
+ROLE_ACTION_WEIGHTS = {
+    'S': {'E': 0.50, 'S': 0.15, 'D': 0.15, 'R': 0.10, 'A': 0.05, 'B': 0.05},
+    'OH': {'A': 0.35, 'R': 0.25, 'S': 0.15, 'D': 0.15, 'B': 0.05, 'E': 0.05},
+    'OPP': {'A': 0.45, 'S': 0.15, 'B': 0.15, 'D': 0.15, 'R': 0.05, 'E': 0.05},
+    'MB': {'A': 0.40, 'B': 0.25, 'S': 0.20, 'D': 0.10, 'R': 0.0, 'E': 0.05},
+    'L': {'R': 0.45, 'D': 0.40, 'E': 0.10, 'S': 0.05, 'A': 0.0, 'B': 0.0},
+    'U': {a: 1 / 6 for a in ACTIONS},
+}
+SETTER_SHARE_LOW = 0.15  # E share at or below which no setter profile is applied
+SETTER_SHARE_HIGH = 0.55  # E share at or above which the full setter profile is applied
+ASSIST_WEIGHT = 0.30  # weight of the setter assist term, scaled by the setter factor
+RATING_SHRINK = 3  # pseudo-touches at value 0 per action
+RATING_CENTER = 7.0  # rating of an average raw score
+RATING_RAW_MEAN = 0.066  # raw score mapped to RATING_CENTER
+RATING_SCALE = 11.6  # rating points per unit of raw score
 
 # ---------------------------------------------------------------------------
 # Player position config
@@ -53,6 +80,30 @@ POSITION_LABELS = {
     'L': 'Líbero',
     'U': 'Universal',
 }
+
+# Per-set role override: '@role: <num>=<POS>[, <num>=<POS> ...]'. Applies to the
+# '---' block it appears in; POS must be a POSITION_LABELS key.
+_RE_ROLE = re.compile(r'^@role:\s*(\d+=[A-Za-z]+(?:\s*,\s*\d+=[A-Za-z]+)*)\s*$', re.IGNORECASE)
+_RE_ROLE_ENTRY = re.compile(r'(\d+)=([A-Za-z]+)')
+
+
+def _parse_role_line(trimmed):
+    """Parse a ``@role:`` line into ``(num, POS)`` entries, or return None.
+
+    Args:
+        trimmed (str): A stripped log line, e.g. '@role: 2=S, 25=MB'.
+
+    Returns:
+        list[tuple[str, str]] | None: Entries in line order with POS upper-cased;
+            None when the syntax is wrong or any POS is not a POSITION_LABELS key.
+    """
+    m = _RE_ROLE.match(trimmed)
+    if not m:
+        return None
+    entries = [(num, pos.upper()) for num, pos in _RE_ROLE_ENTRY.findall(m.group(1))]
+    if any(pos not in POSITION_LABELS for _, pos in entries):
+        return None
+    return entries
 
 
 def load_team_config(path):
@@ -220,6 +271,10 @@ def _new_stats():
         - 'grade_count' (dict): Cross-tabulation of grade × action counts.
           Outer key is a grade symbol, inner key is an action letter.
           e.g. grade_count['#']['A'] gives the number of perfect attacks.
+        - 'assists' (dict): Count per grade of the attack that immediately
+          followed a player set on the same rally line (see _record_assists).
+        - 'role_blocks' (list): Per '---' block in which a player touched the
+          ball, {'touches', 'sets', 'role'}; always empty for team stats.
 
     Returns:
         dict: A zeroed statistics dictionary ready to accumulate recorded actions.
@@ -230,6 +285,8 @@ def _new_stats():
         'grades': {g: 0 for g in GRADES},
         'actions': {a: {'tot': 0, 'good': 0} for a in ACTIONS},
         'grade_count': {g: {a: 0 for a in ACTIONS} for g in GRADES},
+        'assists': {g: 0 for g in GRADES},
+        'role_blocks': [],
     }
 
 
@@ -261,12 +318,36 @@ def _record(stats, action, grade):
     stats['grade_count'][grade][action] += 1
 
 
+def _record_assists(tokens, players, team):
+    """Credit setter assists for one rally line.
+
+    A player set token (``<num>E<g>``) immediately followed by an attack token
+    (player or team ``A<g>``) credits ``assists[<attack grade>]`` to both the
+    setter and the team. Only adjacent tokens of the same line count.
+
+    Args:
+        tokens (list[str]): The rally's valid play tokens, in order.
+        players (dict): Player number -> stats dict; must contain every setter.
+        team (dict): Team stats dict.
+
+    Returns:
+        None
+    """
+    for token, following in zip(tokens, tokens[1:], strict=False):
+        m_set = _RE_PLAYER.match(token)
+        m_att = _RE_ANY.match(following)
+        if m_set and m_set.group(2) == 'E' and m_att and m_att.group(2) == 'A':
+            grade = m_att.group(3)
+            players[m_set.group(1)]['assists'][grade] += 1
+            team['assists'][grade] += 1
+
+
 # ---------------------------------------------------------------------------
 # Parsing
 # ---------------------------------------------------------------------------
 
 
-def parse_log(log_string):
+def parse_log(log_string, positions=None):
     """Parse a raw match log string and return structured statistics for all players and the team.
 
     Each non-empty line in the log represents one rally. Tokens within a line are
@@ -281,6 +362,11 @@ def parse_log(log_string):
         - Match date:    '@date: YYYY-MM-DD'         Optional, match-level. The
                                                      first valid ISO date wins;
                                                      malformed dates are dropped.
+        - Set role:      '@role: <num>=<POS>[, ...]' Optional role override for
+                                                     its '---' block only; the
+                                                     first valid entry per player
+                                                     wins; malformed lines are
+                                                     dropped. Never a rally.
         - Rally outcome: '@won' / '@lost' / '@won:re' / '@won:se'  (inline,
                                                      trailing, case-insensitive).
                                                      Consumed as the rally's
@@ -301,11 +387,14 @@ def parse_log(log_string):
 
     Args:
         log_string (str): Full text content of a .txt match log file.
+        positions (dict | None): Roster player number -> position code, used
+            only for replay snapshot player ratings.
 
     Returns:
         dict with the following keys:
             'players' (dict): Maps player number strings (e.g. '7') to their
-                individual statistics dictionaries (see _new_stats()).
+                individual statistics dictionaries (see _new_stats()), including
+                per-block 'role_blocks' and setter 'assists'.
             'team' (dict): Aggregated statistics dictionary for the whole team,
                 including both player-tagged tokens and bare team tokens.
             'rallies' (list[list[str]]): Ordered list of rallies; each rally is
@@ -348,15 +437,28 @@ def parse_log(log_string):
     team = _new_stats()
     replay_sets = []
     replay_set = _new_replay_set()
+    block_counts = {}  # player -> [touches, sets] in the current block
+
+    def close_block():
+        for num, (touches, sets) in block_counts.items():
+            players[num]['role_blocks'].append(
+                {'touches': touches, 'sets': sets, 'role': replay_set['roles'].get(num)}
+            )
+        block_counts.clear()
+        if _replay_set_has_content(replay_set):
+            replay_sets.append(replay_set)
 
     for line in lines:
         trimmed = line.strip()
         if trimmed == '---':
-            if any(replay_set.values()):
-                replay_sets.append(replay_set)
+            close_block()
             replay_set = _new_replay_set()
             continue
         if not trimmed:
+            continue
+        if trimmed.lower().startswith('@role:'):
+            for num, pos in _parse_role_line(trimmed) or []:
+                replay_set['roles'].setdefault(num, pos)
             continue
         if trimmed.lower().startswith('@youtube:'):
             url = trimmed[9:].strip()
@@ -428,6 +530,9 @@ def parse_log(log_string):
                     players[num] = _new_stats()
                 _record(players[num], action, grade)
                 _record(team, action, grade)
+                counts = block_counts.setdefault(num, [0, 0])
+                counts[0] += 1
+                counts[1] += action == 'E'
                 rally_tokens.append(token)
                 if replay_content:
                     replay_tokens.append(token)
@@ -443,6 +548,8 @@ def parse_log(log_string):
                     replay_set['diagnostics'].append(
                         f'Contenido no reconocido: {token}. No se puede confirmar el registro completo.'
                     )
+
+        _record_assists(rally_tokens, players, team)
 
         if replay_tokens or replay_outcomes or replay_times:
             replay_set['rallies'].append(
@@ -461,8 +568,7 @@ def parse_log(log_string):
             rally_outcomes.append(outcome)
             rally_timestamps.append(timestamp)
 
-    if any(replay_set.values()):
-        replay_sets.append(replay_set)
+    close_block()
     points = calculate_earned_points(rally_outcomes)
     return {
         'players': players,
@@ -474,13 +580,25 @@ def parse_log(log_string):
         'youtube_urls': youtube_urls,
         'set_scores': set_scores,
         'match_date': match_date,
-        'replay': build_replay(replay_sets),
+        'replay': build_replay(replay_sets, positions or {}),
     }
 
 
 def _new_replay_set():
     """Return an empty source block; exact separators alone delimit blocks."""
-    return {'rallies': [], 'videos': [], 'scores': [], 'starts': [], 'diagnostics': []}
+    return {
+        'rallies': [],
+        'videos': [],
+        'scores': [],
+        'starts': [],
+        'diagnostics': [],
+        'roles': {},
+    }
+
+
+def _replay_set_has_content(replay_set):
+    """Return True when a block holds anything but '@role:' overrides."""
+    return any(value for key, value in replay_set.items() if key != 'roles')
 
 
 def youtube_video_id(url):
@@ -513,7 +631,7 @@ def youtube_video_id(url):
         return None
 
 
-def _replay_counts(stats):
+def _replay_counts(stats, rating):
     """Return detached JSON-compatible counts using the existing formulas."""
     return {
         'touches': stats['total'],
@@ -523,12 +641,18 @@ def _replay_counts(stats):
         'points': sum(stats['grade_count']['#'][action] for action in ('S', 'A', 'B')),
         'errors': stats['grades']['-'],
         'attack_efficiency': calculate_efficiency(stats)['attack_eff'],
-        'rating': calculate_rating(stats) if stats['total'] else None,
+        'rating': rating if stats['total'] else None,
     }
 
 
-def _replay_snapshots(rallies, start_score):
-    """Build zero and completed-prefix snapshots without mutating shared stats."""
+def _replay_snapshots(rallies, start_score, roles=None, positions=None):
+    """Build zero and completed-prefix snapshots without mutating shared stats.
+
+    Player rows use calculate_player_rating() over a single block carrying the
+    set's '@role:' override; the team row keeps calculate_rating().
+    """
+    roles = roles or {}
+    positions = positions or {}
     team = _new_stats()
     players = {
         _RE_ANY.match(token).group(1): _new_stats()
@@ -539,12 +663,20 @@ def _replay_snapshots(rallies, start_score):
     score = list(start_score)
     longest = None
 
+    def player_rating(num, stats):
+        block = {
+            'touches': stats['total'],
+            'sets': stats['actions']['E']['tot'],
+            'role': roles.get(num),
+        }
+        return calculate_player_rating({**stats, 'role_blocks': [block]}, positions.get(num, 'U'))
+
     def snapshot():
         return {
             'score': list(score),
-            'team': _replay_counts(team),
+            'team': _replay_counts(team, calculate_rating(team)),
             'players': [
-                {'number': num, **_replay_counts(stats)}
+                {'number': num, **_replay_counts(stats, player_rating(num, stats))}
                 for num, stats in sorted(players.items(), key=lambda item: int(item[0]))
             ],
             'longest': dict(longest) if longest is not None else None,
@@ -557,6 +689,7 @@ def _replay_snapshots(rallies, start_score):
             _record(team, action, grade)
             if num:
                 _record(players[num], action, grade)
+        _record_assists(rally['tokens'], players, team)
         score[0 if rally['outcome']['result'] == 'won' else 1] += 1
         duration = rally['end'] - rally['start']
         if longest is None or duration > longest['duration']:
@@ -565,11 +698,13 @@ def _replay_snapshots(rallies, start_score):
     return snapshots
 
 
-def build_replay(source_sets):
+def build_replay(source_sets, positions=None):
     """Certify source blocks and produce per-set replay payloads and diagnostics.
 
     Args:
         source_sets (list[dict]): Ordered blocks retained by the normal parser.
+        positions (dict | None): Roster player number -> position code for
+            snapshot player ratings.
 
     Returns:
         dict: All source sets (including exclusions), with eligible timelines
@@ -660,7 +795,11 @@ def build_replay(source_sets):
                 'diagnostics': list(dict.fromkeys(reasons)),
                 'eligible': eligible,
                 'rallies': rallies if eligible else [],
-                'snapshots': _replay_snapshots(rallies, start_score) if eligible else [],
+                'snapshots': (
+                    _replay_snapshots(rallies, start_score, source.get('roles'), positions)
+                    if eligible
+                    else []
+                ),
                 'source': source,
             }
         )
@@ -723,6 +862,87 @@ def calculate_rating(data):
         for action in ACTIONS:
             weighted += grade_count[grade][action] * WEIGHTS[grade] * ACTION_WEIGHTS[action]
     return _scale_rating(weighted, total)
+
+
+def _clamp(value, low, high):
+    """Return ``value`` limited to the inclusive range [low, high]."""
+    return max(low, min(high, value))
+
+
+def calculate_player_rating(data, position='U'):
+    """Compute a player's role-weighted 1-10 match rating.
+
+    Each '---' block in which the player touched the ball resolves a setter
+    factor alpha and a base role: an explicit '@role:' override wins ('S' means
+    alpha = 1, any other code alpha = 0 with that base); otherwise alpha is
+    inferred from the block's set share between SETTER_SHARE_LOW and
+    SETTER_SHARE_HIGH, with the roster ``position`` as base ('S' -> 'U').
+    Blocks are touch-weighted into one action mix. Per-action scores use the
+    match totals with PLAYER_GRADE_VALUES and RATING_SHRINK pseudo-touches; a
+    setter assist term (ASSIST_WEIGHT x alpha) values the attacks after her
+    sets. The raw score maps linearly onto a fixed scale centered at
+    RATING_CENTER. The team rating stays calculate_rating().
+
+    Args:
+        data (dict): A player stats dict with 'total', 'actions' and
+            'grade_count'; optional 'assists' (missing = zeros) and
+            'role_blocks' (missing or empty = one inferred block). Not mutated.
+        position (str): Roster position code; unknown codes act as 'U'.
+
+    Returns:
+        float: Rating in [1.0, 10.0] rounded to one decimal, or 0.0 when the
+            player has no touches.
+    """
+    total = data['total']
+    if total == 0:
+        return 0.0
+    grade_count = data['grade_count']
+    blocks = [b for b in data.get('role_blocks') or [] if b['touches'] > 0] or [
+        {'touches': total, 'sets': data['actions']['E']['tot'], 'role': None}
+    ]
+    span = SETTER_SHARE_HIGH - SETTER_SHARE_LOW
+    block_touches = sum(b['touches'] for b in blocks)
+    alpha = 0.0
+    weights = dict.fromkeys(ACTIONS, 0.0)
+    for block in blocks:
+        role = block['role']
+        if role:
+            block_alpha = 1.0 if role == 'S' else 0.0
+            base = role if role in ROLE_ACTION_WEIGHTS and role != 'S' else 'U'
+        else:
+            share = block['sets'] / block['touches']
+            block_alpha = _clamp((share - SETTER_SHARE_LOW) / span, 0.0, 1.0)
+            base = position if position in ROLE_ACTION_WEIGHTS and position != 'S' else 'U'
+        fraction = block['touches'] / block_touches
+        alpha += fraction * block_alpha
+        for action in ACTIONS:
+            weights[action] += fraction * (
+                block_alpha * ROLE_ACTION_WEIGHTS['S'][action]
+                + (1 - block_alpha) * ROLE_ACTION_WEIGHTS[base][action]
+            )
+
+    tots = {a: data['actions'][a]['tot'] for a in ACTIONS}
+    if not any(tots[a] > 0 and weights[a] > 0 for a in ACTIONS):
+        weights = ROLE_ACTION_WEIGHTS['U']
+
+    num = den = 0.0
+    for action in ACTIONS:
+        n = tots[action]
+        if n == 0 or weights[action] <= 0:
+            continue
+        value = sum(grade_count[g][action] * PLAYER_GRADE_VALUES[action][g] for g in GRADES)
+        num += weights[action] * value / (n + RATING_SHRINK)
+        den += weights[action]
+
+    assists = data.get('assists') or dict.fromkeys(GRADES, 0)
+    n_ast = sum(assists.values())
+    if alpha > 0 and n_ast > 0:
+        value = sum(assists[g] * PLAYER_GRADE_VALUES['A'][g] for g in GRADES)
+        num += alpha * ASSIST_WEIGHT * value / (n_ast + RATING_SHRINK)
+        den += alpha * ASSIST_WEIGHT
+
+    raw = num / den
+    return round(_clamp(RATING_CENTER + (raw - RATING_RAW_MEAN) * RATING_SCALE, 1.0, 10.0), 1)
 
 
 def calculate_action_stats(data):

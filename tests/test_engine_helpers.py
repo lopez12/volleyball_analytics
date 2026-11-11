@@ -12,6 +12,8 @@ def empty_stats():
         'grades': dict.fromkeys('#+!-', 0),
         'actions': {a: {'tot': 0, 'good': 0} for a in 'SREADB'},
         'grade_count': {g: dict.fromkeys('SREADB', 0) for g in '#+!-'},
+        'assists': dict.fromkeys('#+!-', 0),
+        'role_blocks': [],
     }
 
 
