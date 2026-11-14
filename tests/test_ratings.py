@@ -5,10 +5,14 @@ import pytest
 from analytics import (
     ACTION_NOTA_CENTER,
     ACTION_NOTA_SCALE,
+    ACTIONS,
+    POSITION_LABELS,
     RATING_CENTER,
+    ROLE_ACTION_WEIGHTS,
     TEAM_RATING_RAW_MEAN,
     TEAM_RATING_SCALE,
     calculate_action_stats,
+    calculate_player_rating,
     calculate_rating,
 )
 
@@ -95,3 +99,26 @@ def test_rating_calculators_do_not_mutate(stats_factory, calculator):
     before = deepcopy(data)
     calculator(data)
     assert data == before
+
+
+def test_role_action_weights_sum_to_one_and_have_no_zero_weights():
+    assert set(ROLE_ACTION_WEIGHTS) == set(POSITION_LABELS)
+    for role, weights in ROLE_ACTION_WEIGHTS.items():
+        assert set(weights) == set(ACTIONS), f'{role} missing actions'
+        assert sum(weights.values()) == pytest.approx(1.0), f'{role} weights do not sum to 1.0'
+        for action, weight in weights.items():
+            assert weight > 0.0, f'{role} has non-positive weight for {action}'
+
+
+def test_mb_reception_and_opp_defense_affect_player_rating(stats_factory):
+    # MB reception touches are counted (non-zero R weight)
+    mb_good_r = calculate_player_rating(stats_factory('A# A+ R# R# R#'), 'MB')
+    mb_bad_r = calculate_player_rating(stats_factory('A# A+ R- R- R-'), 'MB')
+    assert mb_good_r > mb_bad_r
+
+    # OPP weights defense higher than attack while still caring about attack
+    assert ROLE_ACTION_WEIGHTS['OPP']['D'] > ROLE_ACTION_WEIGHTS['OPP']['A'] > 0.0
+    opp_good_a = calculate_player_rating(stats_factory('D# D+ A# A#'), 'OPP')
+    opp_bad_a = calculate_player_rating(stats_factory('D# D+ A- A-'), 'OPP')
+    assert opp_good_a > opp_bad_a
+

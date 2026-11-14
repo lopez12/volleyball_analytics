@@ -150,9 +150,9 @@ def _section(title, content_html, collapsed=False):
 # Actions that are less relevant per position and should start collapsed
 _POSITION_COLLAPSED_ACTIONS = {
     'L': {'S', 'A', 'B', 'E'},  # Libero: Reception + Defense are primary
-    'MB': {'R', 'D', 'E'},  # Middle Blocker: Attack + Block + Serve primary
+    'MB': {'D', 'E'},  # Middle Blocker: Attack + Block + Serve + Reception
     'OH': {'B', 'E'},  # Outside Hitter: Attack + Reception primary
-    'OPP': {'R', 'B'},  # Opposite: Attack focused
+    'OPP': {'B'},  # Opposite: Defensive/all-around + Attack
     'S': {'A', 'R', 'B'},  # Setter: Set is primary; no blocking
     'U': set(),  # Universal: nothing collapsed
 }
