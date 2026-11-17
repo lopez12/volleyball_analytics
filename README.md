@@ -299,6 +299,14 @@ These timestamps power the **Match Logger's** video features. Timestamp capture 
 
 This enables a two-person split: one segments (times + result), another grades the plays quickly while the video auto-advances.
 
+On desktop (from 1024px), the logger shows all six action letters in one compact
+row; hover for their full names. The tagging sidebar scrolls independently,
+while **Enviar rally** and the review link stay in its footer. Scroll the
+workspace into view to keep submission reachable without scrolling through the
+rally history. On smaller screens the action names remain visible, the page
+scrolls normally, and submission/review appear before registered rallies.
+Touch targets remain at least 44px.
+
 ### Example log
 
 ```
@@ -458,10 +466,28 @@ Theming is pure CSS custom properties plus a tiny inline script — no build ste
 
 ## Spectator replay: Ver con estadísticas
 
-Published match reports offer **Ver con estadísticas** as the first pill in the **Ver partido** banner, before the YouTube set links, when at least one set has a complete, unambiguous replay timeline. The separate `<match>_watch.html` page uses the same dashboard components and theme as the match report. Its stacked layout puts the scoreboard (team and opponent labels, live score, set, and current-rally status) directly below the title, followed by a full-width 16:9 video and its set selector and replay/next controls. The players section (spotlight and table), set statistics, and the collapsed rally-chip list follow below the video, in that order. The start-score note appears inside the scoreboard when recording began after play started.
+Published match reports offer **Ver con estadísticas** as the first pill in the
+**Ver partido** banner, before the grouped YouTube set links, when at least one
+set has a complete, unambiguous replay timeline. At widths up to 767px, the viewer
+link is centered at its natural width on its own row; on wider screens the set
+group moves below it when the combined links do not fit. The viewer link uses
+the same red styling as the set links.
+
+The separate `<match>_watch.html` page uses the same dashboard components and
+theme as the match report. At 1200px and wider it uses a video-dominant 3:2 split:
+the 16:9 video and playback controls on the left, players, set statistics and
+the collapsed rally list on the right. The playback column stays sticky only
+on screens at least 800px tall. Smaller screens use the same reading order in
+a single column. The scoreboard (team/opponent labels and live score) appears
+above the video/statistics workspace, without a viewer subtitle. Current-set/rally
+status remains below the video, together with the recording-start note when
+applicable. Set selection, repeat/next controls and
+synchronization status follow; statistics scope/reconciliation notes stay
+with the statistics. Compact mobile playback controls retain their single row
+unless enlarged text requires wrapping.
 
 Choose **Destacar jugador** above the player table to keep one player's live spotlight visible while the match plays. The spotlight and compact player table show touches, points, errors, and rating. Points are direct scoring touches (aces + kills + blocks); errors are touches graded `-`. The spotlight uses four columns on desktop and a 2×2 grid on mobile, and the table fits a 375px screen without sideways scrolling. The selected player's table row moves to the topand is marked with a star. Players with no touches in the current set show zeros
-and a no-touches note, without being added to the table. The selection is saved in `localStorage` (`va-replay-player`) and persists across sets and reloads. The rally chips show only rally numbers, highlight the active (or latest completed) rally, and seek to its start when clicked; future results are never shown. The longest completed rally appears only as a set-stat value, not as a separate replay control. Set cards show direct points, kills, aces, touches with errors, attack efficiency, and the longest completed rally. For the per-action
+and a no-touches note, without being added to the table. The selection is saved in `localStorage` (`va-replay-player`) and persists across sets and reloads. Rally chips seek to their starts and mark the active (or latest completed) rally with an independent outline. Only completed rallies show their team point outcome: green with `+` for won, red with `-` for lost, with accessible Spanish labels and a legend. Outcomes appear at the confirmed video end boundary, and disappear again when rewinding before it. In-progress and future chips show only their number, including their accessible text. Keyboard focus stays on a chip when statistics update. These colors describe point outcomes, not touch quality or player points. The longest completed rally appears only as a set-stat value, not as a separate replay control. Set cards show direct points, kills, aces, touches with errors, attack efficiency, and the longest completed rally. For the per-action
 breakdown (including blocks and reception), use **Reporte completo** below the player table; its spoiler warning notes that it contains final results.
 
 Playback starts at 0–0 unless `@start: V-R` records a late recording start: a rally's score and touches appear only when playback reaches its recorded end. Rewinding restores the corresponding earlier snapshot. The full-report backlink contains final results. This is spoiler-safe presentation, not secrecy: the embedded public JSON contains all snapshots.

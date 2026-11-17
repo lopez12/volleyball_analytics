@@ -6,6 +6,8 @@
     var state = 2;
     var videoId = 'abcdefghijk';
     var events;
+    var deferSeek = false;
+    var requestedSeek = null;
     var result = document.createElement('p');
     result.id = 'browser-smoke-result';
     function assert(value, message) { if (!value) throw new Error(message); }
@@ -14,6 +16,13 @@
         return Array.from(document.querySelectorAll(selector), function (node) {
             return node.textContent;
         });
+    }
+    function chips() { return Array.from(document.querySelectorAll('#replay-rallies button')); }
+    function neutral(button, number) {
+        assert(button.textContent === String(number) &&
+            button.getAttribute('aria-label') === 'Jugada ' + number &&
+            button.className === 'action-pill' && !button.title,
+            'Future/unready chip leaks its outcome: ' + button.outerHTML);
     }
     function action(name) { return document.querySelector('[data-replay="' + name + '"]'); }
     function update() { events.onStateChange(); }
@@ -71,7 +80,10 @@
                 getCurrentTime: function () { return clock; },
                 getPlayerState: function () { return state; },
                 getVideoData: function () { return {video_id: videoId}; },
-                seekTo: function (time) { clock = time; },
+                seekTo: function (time) {
+                    requestedSeek = time;
+                    if (!deferSeek) clock = time;
+                },
                 playVideo: function () { state = 1; },
                 pauseVideo: function () { state = 2; },
                 cueVideoById: function (video) {
@@ -83,6 +95,51 @@
             setTimeout(function () {
                 try {
                     events.onReady();
+                    var scenario = new URLSearchParams(location.search).get('scenario');
+                    if (scenario) {
+                        var scenarioSet = document.getElementById('replay-set');
+                        scenarioSet.value = scenario === 'boundaries' ? '2' : '3';
+                        scenarioSet.dispatchEvent(new Event('change'));
+                        update();
+                        chips().forEach(function (button, index) { neutral(button, index + 1); });
+                        if (scenario === 'invalid-delta') {
+                            clock = 38;
+                            update();
+                            assert(document.getElementById('replay-status').textContent.includes('no válido'),
+                                'Inconsistent score delta was not reported');
+                            assert(!document.getElementById('replay-youtube').hidden &&
+                                Array.from(document.querySelectorAll('[data-replay]')).every(function (button) {
+                                    return button.disabled;
+                                }), 'Inconsistent score did not disable playback controls');
+                            chips().forEach(function (button, index) { neutral(button, index + 1); });
+                        } else {
+                            clock = 14.999;
+                            update();
+                            chips().forEach(function (button, index) { neutral(button, index + 1); });
+                            deferSeek = true;
+                            chips()[2].click();
+                            assert(requestedSeek === 20, 'Future chip did not request seek');
+                            chips().forEach(function (button, index) { neutral(button, index + 1); });
+                            clock = 15;
+                            update();
+                            assert(score() === '4 – 6' && chips()[0].textContent === '1 +',
+                                'Offset win not revealed at shared boundary');
+                            neutral(chips()[1], 2);
+                            assert(chips()[1].getAttribute('aria-current') === 'true',
+                                'Newly active shared-boundary chip not current');
+                            clock = 20;
+                            update();
+                            assert(score() === '5 – 7' && chips()[1].textContent === '2 -' &&
+                                chips()[2].textContent === '3 +',
+                                'Zero-duration serve fault or loss not revealed at completion');
+                            clock = 19.999;
+                            update();
+                            neutral(chips()[1], 2);
+                            neutral(chips()[2], 3);
+                        }
+                        finish('PASS');
+                        return;
+                    }
                     assert(pollers() === 1, 'Ready player did not start exactly one poller');
                     var youtube = document.getElementById('replay-youtube');
                     assert(youtube.hidden && youtube.href === 'https://www.youtube.com/watch?v=abcdefghijk',
@@ -122,11 +179,28 @@
                     assert(values('#replay-cards .stat-label').join('|') ===
                         'Puntos directos|Kills|Aces|Toques con error|Eficiencia de ataque|Rally m\u00e1s largo',
                         'Wrong team cards or order');
+                    var rallyContent = document.getElementById('replay-rallies').parentElement;
+                    var rallyHeading = rallyContent.previousElementSibling;
+                    assert(rallyHeading.getAttribute('role') === 'button' &&
+                        rallyHeading.getAttribute('aria-expanded') === 'false',
+                        'Collapsed section is not keyboard accessible');
+                    rallyHeading.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true}));
+                    assert(!rallyContent.classList.contains('collapsed') &&
+                        rallyHeading.getAttribute('aria-expanded') === 'true',
+                        'Enter did not expand the section with matching ARIA state');
+                    var firstChip = chips()[0];
+                    chips().forEach(function (button, index) { neutral(button, index + 1); });
+                    firstChip.focus();
+                    clock = 14.999;
+                    update();
+                    neutral(firstChip, 1);
+                    var initialPayload = JSON.parse(document.getElementById('replay-data').textContent);
+                    var boundaryRating = initialPayload.sets[0].snapshots[1].players[0].rating;
                     clock = 15;
                     update();
-                    assert(values('#replay-players tr td').slice(1).join('|') === '1|1|0|10',
+                    assert(values('#replay-players tr td').slice(1).join('|') === '1|1|0|' + boundaryRating,
                         'Boundary table points/errors incorrect');
-                    assert(values('.replay-spotlight-value strong').join('|') === '1|1|0|10',
+                    assert(values('.replay-spotlight-value strong').join('|') === '1|1|0|' + boundaryRating,
                         'Boundary spotlight values incorrect');
                     assert(score() === '1 – 0', 'Exact end boundary did not count');
                     assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '1',
@@ -135,8 +209,14 @@
                         'Rally más largo', 'Longest rally is not a stat card');
                     assert(document.querySelectorAll('#replay-rallies button').length === 2,
                         'Rally chips were not rendered');
-                    assert(document.querySelector('#replay-rallies button[aria-current="true"]').textContent === '1',
+                    assert(document.querySelector('#replay-rallies button[aria-current="true"]').textContent === '1 +',
                         'Active rally chip is not highlighted');
+                    assert(chips()[0] === firstChip && document.activeElement === firstChip,
+                        'Snapshot update detached the focused rally chip');
+                    assert(firstChip.classList.contains('replay-rally--won') &&
+                        firstChip.getAttribute('aria-label') === 'Jugada 1, punto ganado',
+                        'Completed win has no visual/accessible outcome');
+                    neutral(chips()[1], 2);
                     var pinned = document.querySelector('#replay-players tr[aria-current="true"]');
                     assert(pinned && pinned.dataset.player === '7', 'Selected row was not pinned');
                     assert(pinned.querySelector('[aria-hidden="true"]').textContent === '★ ',
@@ -170,6 +250,8 @@
                         ratingPill.classList.contains('replay-value-pulse'),
                         'Rewinding to a changed rating did not trigger a pulse');
                     assert(score() === '0 – 0', 'Rewind did not restore score');
+                    neutral(firstChip, 1);
+                    assert(document.activeElement === firstChip, 'Rewind stole chip focus');
                     assert(document.querySelector('#replay-cards .stat-card:nth-child(2) .stat-value').textContent === '0',
                         'Rewind did not restore kills');
                     assert(document.querySelector('.replay-spotlight .replay-spotlight-value strong').textContent === '0',
@@ -178,7 +260,7 @@
                         'Player with no touches was kept in the table');
                     clock = 16;
                     update();
-                    assert(document.querySelector('#replay-rallies button[aria-current="true"]').textContent === '1',
+                    assert(document.querySelector('#replay-rallies button[aria-current="true"]').textContent === '1 +',
                         'Completed rally chip is not highlighted during gap');
                     document.querySelector('#replay-rallies button').click();
                     assert(clock === 10, 'Rally chip did not seek to its start');
@@ -186,9 +268,14 @@
                     update();
                     action('next').click();
                     assert(clock === 30 && state === 2, 'Next did not preserve paused intent');
+                    neutral(chips()[1], 2);
                     clock = 38;
                     update();
                     assert(score() === '1 – 1' && action('next').disabled, 'Final boundary incorrect');
+                    assert(chips()[1].textContent === '2 -' &&
+                        chips()[1].classList.contains('replay-rally--lost') &&
+                        chips()[1].getAttribute('aria-label') === 'Jugada 2, punto perdido',
+                        'Completed loss has no visual/accessible outcome');
                     assert(values('#replay-players tr td').slice(1, 4).join('|') === '2|1|1',
                         'Error boundary table points/errors incorrect');
                     clock = 16;
@@ -203,6 +290,7 @@
                     selector.value = '1';
                     selector.dispatchEvent(new Event('change'));
                     assert(score() === '7 – 4' && action('next').disabled, 'Set switch did not reset');
+                    chips().forEach(function (button, index) { neutral(button, index + 1); });
                     assert(document.getElementById('replay-start-note').textContent ===
                         'La grabación inicia con el marcador 7–4.', 'Missing start note');
                     assert(document.getElementById('replay-scope').textContent ===
@@ -271,7 +359,7 @@
                                 'Replay buttons must share a row');
                             assert(Math.abs(setBox.top - repeatBox.top) <= 4 && setBox.right <= repeatBox.left,
                                 'Set selector must share the row with the buttons');
-                            assert(repeatBox.height >= 40 && nextBox.height >= 40, 'Buttons must be at least 40px tall');
+                            assert(repeatBox.height >= 44 && nextBox.height >= 44, 'Buttons must be at least 44px tall');
                             assert(controls.scrollWidth <= controls.clientWidth, 'Control bar overflows horizontally');
                             assert(action('repeat').getAttribute('aria-label') === '\u25c0 Repetir jugada' &&
                                 action('next').getAttribute('aria-label') === 'Siguiente jugada \u25b6',
@@ -295,6 +383,7 @@
                                 youtube.href === 'https://www.youtube.com/watch?v=ABCDEFGHIJK',
                                 'Failure must reveal the selected set fallback');
                             assert(score() === '7 – 4', 'Failure left stale score visible');
+                            chips().forEach(function (button, index) { neutral(button, index + 1); });
                             document.querySelectorAll('[data-replay]').forEach(function (button) {
                                 assert(button.disabled, 'Failure left an enabled synchronized control');
                             });

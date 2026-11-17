@@ -314,9 +314,19 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertIn('Test &amp; Team', page)
         self.assertIn('Opponent &lt;One&gt;', page)
         self.assertIn('aria-live="polite">0 ' + chr(0x2013) + ' 0', page)
-        self.assertLess(page.index('report-header'), page.index('replay-scoreboard'))
-        self.assertLess(page.index('replay-scoreboard'), page.index('replay-video'))
-        self.assertLess(page.index('replay-video'), page.index('replay-controls'))
+        self.assertLess(page.index('report-header'), page.index('replay-workspace'))
+        self.assertLess(page.index('replay-scoreboard'), page.index('replay-workspace'))
+        self.assertLess(page.index('replay-video'), page.index('replay-context'))
+        self.assertLess(page.index('replay-context'), page.index('id="replay-current"'))
+        self.assertLess(page.index('id="replay-current"'), page.index('replay-controls'))
+        self.assertNotIn('replay-subtitle', page)
+        scoreboard = re.search(
+            r'<div class="stat-card replay-scoreboard".*?</div>\s*</div>', page, re.S
+        ).group(0)
+        self.assertNotIn('replay-current', scoreboard)
+        self.assertNotIn('replay-start-note', scoreboard)
+        self.assertLess(page.index('replay-playback'), page.index('replay-video'))
+        self.assertLess(page.index('replay-controls'), page.index('replay-details'))
         self.assertLess(page.index('replay-controls'), page.index('Jugadores'))
         self.assertLess(page.index('Jugadores'), page.index('Estadísticas del set'))
         self.assertLess(page.index('Estadísticas del set'), page.index('Jugadas del set'))
@@ -346,6 +356,7 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertNotIn('data-replay="longest"', page)
         self.assertNotIn('replay-longest', page)
         self.assertIn('id="replay-rallies"', page)
+        self.assertIn('+ Punto ganado · - Punto perdido', page)
         self.assertIn('class="section-title collapsed"', page)
 
     def test_replay_link_styles_are_scoped(self):
@@ -427,6 +438,7 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertIn('href="match_watch.html?a=&quot;1&quot;&amp;b=2"', pill)
         self.assertNotIn('target=', pill)
         self.assertNotIn('rel=', pill)
+        self.assertIn('<div class="youtube-banner__sets">', links)
         self.assertLess(links.index(pill), links.index('>Set 1</a>'))
         self.assertEqual(page.count('Ver con estadísticas'), 1)
         self.assertNotIn('<aside class="replay-notice">', page)
@@ -439,8 +451,19 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertIn('youtube-set-link--stats', links)
         self.assertIn('href="watch.html"', links)
         self.assertNotIn('>Set ', links)
+        self.assertNotIn('youtube-banner__sets', links)
         self.assertEqual(links.count('<a '), 1)
         self.assertNotIn('<aside class="replay-notice">', page)
+
+    def test_report_groups_sets_without_viewer_and_escapes_video_urls(self):
+        parsed = parse_log(LOG)
+        parsed['youtube_urls'] = ['https://youtu.be/abcdefghijk?a="x"&b=2'] * 3
+        page = render_match_page('Test', parsed, '17/11/2026')
+        group = re.search(r'<div class="youtube-banner__sets">(.*?)</div>', page).group(1)
+        self.assertEqual(group.count('class="youtube-set-link"'), 3)
+        self.assertIn('href="https://youtu.be/abcdefghijk?a=&quot;x&quot;&amp;b=2"', group)
+        self.assertEqual(group.count('target="_blank" rel="noopener noreferrer"'), 3)
+        self.assertNotIn('youtube-set-link--stats', page)
 
     def test_mixed_exclusions_and_legacy_report(self):
         parsed = parse_log(LOG + '\n---\n' + VIDEO + '8S# @won @t:1')

@@ -526,6 +526,42 @@
 }
 
 /* ----- Analysis layout ----- */
+#screen-analysis {
+  --primary: var(--info-text);
+  --text-muted: var(--ui-muted);
+}
+
+#screen-analysis .back-link,
+#screen-analysis .lg-set-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+#screen-analysis .lg-set-tab {
+  color: var(--text-main);
+  border-color: var(--text-soft);
+}
+
+#screen-analysis .lg-set-tab.is-active {
+  background: var(--primary);
+  color: var(--card-bg);
+}
+
+#screen-analysis .lg-set-tab-wrap .lg-set-tab { padding-right: 56px; }
+#screen-analysis .lg-set-tab__remove {
+  right: 0;
+  width: 44px;
+  height: 44px;
+  color: var(--text-main);
+}
+#screen-analysis .lg-set-tab-wrap.is-active .lg-set-tab__remove { color: var(--card-bg); }
+
+@media (prefers-reduced-motion: reduce) {
+  #screen-analysis .lg-chain__caret { animation: none; }
+}
+
 .lg-analysis {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -536,6 +572,56 @@
 .lg-analysis__side,
 .lg-analysis .lg-panel {
   min-width: 0;
+}
+
+.lg-analysis .lg-panel {
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: none;
+}
+
+.lg-analysis__submit {
+  padding: 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--card-bg);
+}
+
+.lg-analysis button,
+.lg-analysis a {
+  box-sizing: border-box;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.lg-analysis .lg-token-btn,
+.lg-analysis .lg-outcome,
+.lg-analysis .lg-btn-ghost,
+.lg-analysis .lg-rally-more__btn {
+  border-color: var(--text-soft);
+  border-radius: 8px;
+}
+
+.lg-analysis .lg-grade--perfect { color: var(--good-text); border-color: var(--good-text); }
+.lg-analysis .lg-grade--positive { color: var(--info-text); border-color: var(--info-text); }
+.lg-analysis .lg-grade--regular { color: var(--text-main); border-color: var(--text-soft); }
+.lg-analysis .lg-grade--error { color: var(--ui-loss-text); border-color: var(--ui-loss-text); }
+.lg-analysis .lg-grade small { opacity: 1; }
+.lg-analysis .lg-rally__edit,
+.lg-analysis .lg-rally__del { color: var(--text-main); }
+.lg-analysis .lg-outcome.is-selected { color: var(--card-bg); background: var(--good-text); border-color: var(--good-text); }
+.lg-analysis .lg-outcome--lost.is-selected { background: var(--ui-loss-text); border-color: var(--ui-loss-text); }
+
+.lg-analysis .lg-send {
+  background: var(--good-text);
+  color: var(--card-bg);
+  border: 1px solid var(--good-text);
+  box-shadow: none;
+}
+
+.lg-analysis .lg-send:hover:not(:disabled) {
+  background: var(--good-text);
+  filter: brightness(0.94);
 }
 
 .lg-video {
@@ -1106,26 +1192,29 @@ select:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-areas:
       "video   video"
+      "capture capture"
       "roster  action"
       "chain   chain"
       "outcome outcome"
-      "rallies rallies"
-      "next    next";
+      "submit  submit"
+      "rallies rallies";
     align-items: start;
   }
 
   .lg-analysis__main,
-  .lg-analysis__side {
+  .lg-analysis__side,
+  .lg-analysis__controls {
     display: contents;
   }
 
   .lg-a-video   { grid-area: video; }
+  #analysis-capture { grid-area: capture; }
   .lg-a-roster  { grid-area: roster; }
   .lg-a-action  { grid-area: action; }
   .lg-a-chain   { grid-area: chain; }
   .lg-a-outcome { grid-area: outcome; }
   .lg-a-rallies { grid-area: rallies; }
-  .lg-a-next    { grid-area: next; justify-self: start; }
+  .lg-a-submit  { grid-area: submit; }
 
   .lg-a-video,
   .lg-a-roster,
@@ -1162,6 +1251,53 @@ select:focus-visible {
   .lg-analysis__side {
     position: sticky;
     top: 16px;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 32px);
+    height: calc(100dvh - 32px);
+    min-width: 0;
+  }
+
+  .lg-analysis__controls {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+    padding: 4px;
+    scroll-padding-block: 8px;
+  }
+
+  .lg-analysis__controls .lg-panel {
+    margin-bottom: 12px;
+    padding: 12px;
+  }
+
+  .lg-analysis__submit {
+    flex: 0 0 auto;
+    margin-top: 8px;
+  }
+
+  .lg-analysis .lg-token-row--action {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .lg-analysis .lg-token-row--action .lg-token-btn {
+    min-height: 44px;
+    padding: 8px 4px;
+    border-radius: 8px;
+  }
+
+  .lg-analysis .lg-token-row--action small {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
