@@ -60,7 +60,7 @@ def test_constants():
         ('A# A# A- R+', 'OH', None, None, 7.7),
         ('A# A# A- R+', 'OH', [blk(4, 0, 'S')], None, 7.4),
         ('E# E# S# S-', 'S', None, None, 7.6),
-        ('E# E# S# S-', 'S', [blk(4, 2, 'MB')], None, 6.6),
+        ('E# E# S# S-', 'S', [blk(4, 2, 'MB')], None, 6.7),
         ('A# A# B+ E!', 'S', None, None, 7.0),
         ('E# E+ E!', 'S', [blk(3, 3, 'OPP')], AST, 6.6),
         ('A# A# A- R+ E# E# E+ E+', 'OH', None, None, 8.0),

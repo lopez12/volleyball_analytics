@@ -121,4 +121,3 @@ def test_mb_reception_and_opp_defense_affect_player_rating(stats_factory):
     opp_good_a = calculate_player_rating(stats_factory('D# D+ A# A#'), 'OPP')
     opp_bad_a = calculate_player_rating(stats_factory('D# D+ A- A-'), 'OPP')
     assert opp_good_a > opp_bad_a
-
