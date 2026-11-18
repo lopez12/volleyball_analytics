@@ -362,7 +362,7 @@ def build_card_html(title, data, rating, extra_class=''):
             f'<span class="action-pct">{round(eff * 100)}%</span>'
             f'<span class="action-rating" style="color:{_rating_color(a_rating)};" '
             f'title="Nota: promedio de los grados de esta acción en una escala fija, '
-            f'ajustado hacia el centro cuando hay pocos intentos; '
+            f'ajustado hacia el centro cuando hay pocos intentos, excepto en bloqueo; '
             f'desglose en Resumen por Calidad y Acción">'
             f'{a_rating}</span>'
             f'</div>'

@@ -79,6 +79,10 @@ Each line in a `.txt` file is one rally; tokens are space-separated and chronolo
 
 **Per-action Nota** (`analytics.calculate_action_stats`): one fixed grade table for all six actions, `ACTION_NOTA_GRADE_VALUES = {'#': 1.0, '+': 0.4, '!': -0.3, '-': -1.0}` (a separate object from `WEIGHTS`), with `ACTION_NOTA_SHRINK = 3` neutral pseudo-attempts: `avg = Σ_grade grade_count[grade][action] * ACTION_NOTA_GRADE_VALUES[grade] / (tot + ACTION_NOTA_SHRINK)`, then `round(clamp(ACTION_NOTA_BASE + ACTION_NOTA_SPAN * avg, 1.0, 10.0), 1)` with `ACTION_NOTA_BASE = 6.0` and `ACTION_NOTA_SPAN = 4.0`. A single touch scores `#` 7.0, `+` 6.4, `!` 5.7, `-` 5.0. More attempts raise confidence but can't exceed the grade's limit (10.0 / 7.6 / 4.8 / 2.0). Position doesn't affect it, and it is not the overall player or team rating. No attempts keeps `rating = None`.
 
+- **Blocking exception:** `B` uses `value / tot`, without action-Nota shrinkage.
+  This applies to team/player cards and match/season aggregates.
+  Even one block reaches its anchor: `#` 10.0, `+` 7.6, `!` 4.8, `-` 2.0.
+  Other action Notas and overall ratings are unchanged.
 - Keep three numbers apart: positive percentage `good / tot` (`#`/`+` share), the Nota, and attack efficiency `(A# - A-) / A_tot`. Omega #7 (`07_omega.txt`): 5 `A+`, `A!`, `A-` → `5/7` (71%), Nota `6.0 + 4.0 * (5*0.4 - 0.3 - 1.0) / (7 + 3)` = 6.3, attack efficiency -1/7. Serves: #7 `4 * 0.4 / 7` → 6.9, #12 `6 * 0.4 / 9` → 7.1.
 - This model replaced the earlier fitted per-action centers and scales, so historical action Notas change on rebuild. Overall ratings and efficiency don't change.
 

@@ -8,7 +8,7 @@ from renderer import _GRADE_PREFIXES, _action_efficiency_charts, build_card_html
 OMEGA_LOG = Path(__file__).parents[1] / 'teams/nova/atlas-chapalita-cup-2026/matches/07_omega.txt'
 NOTA_TOOLTIP = (
     'title="Nota: promedio de los grados de esta acción en una escala fija, '
-    'ajustado hacia el centro cuando hay pocos intentos; '
+    'ajustado hacia el centro cuando hay pocos intentos, excepto en bloqueo; '
     'desglose en Resumen por Calidad y Acción"'
 )
 

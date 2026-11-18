@@ -64,7 +64,7 @@ TEAM_RATING_SCALE = 17.6  # team rating points per unit of raw score
 ACTION_NOTA_GRADE_VALUES = {'#': 1.0, '+': 0.4, '!': -0.3, '-': -1.0}
 ACTION_NOTA_BASE = 6.0  # Nota of a neutral (value 0) average
 ACTION_NOTA_SPAN = 4.0  # Nota points per unit of average grade value
-ACTION_NOTA_SHRINK = 3  # pseudo-attempts at value 0 per action (independent of RATING_SHRINK)
+ACTION_NOTA_SHRINK = 3  # neutral pseudo-attempts except blocks; independent of RATING_SHRINK
 
 # ---------------------------------------------------------------------------
 # Player position config
@@ -937,16 +937,17 @@ def calculate_action_stats(data):
     """Compute the positive percentage and 1-10 grade ("Nota") for every action.
 
     Every action uses the same fixed grade anchors, shrunk toward the neutral
-    midpoint by ACTION_NOTA_SHRINK pseudo-attempts valued 0:
+    midpoint by ACTION_NOTA_SHRINK pseudo-attempts valued 0, except blocking
+    (B), whose infrequent touches use their plain average (shrink = 0):
 
         avg = Σ_grade grade_count[grade][action]
-                      * ACTION_NOTA_GRADE_VALUES[grade] / (tot + ACTION_NOTA_SHRINK)
+                      * ACTION_NOTA_GRADE_VALUES[grade] / (tot + shrink)
         rating = round(clamp(ACTION_NOTA_BASE + ACTION_NOTA_SPAN * avg, 1.0, 10.0), 1)
 
     The Nota measures quality per touch: a single touch scores # 7.0, + 6.4,
     ! 5.7, - 5.0, and repeating one grade approaches its limit (10.0 / 7.6 /
-    4.8 / 2.0) without exceeding it. Position plays no part, and 'good' and
-    'pos_pct' stay unshrunk.
+    4.8 / 2.0) without exceeding it. Blocks reach those anchors immediately.
+    Position plays no part, and 'good' and 'pos_pct' stay unshrunk.
 
     Args:
         data (dict): A stats dict with 'actions' and 'grade_count' keys (from
@@ -968,7 +969,8 @@ def calculate_action_stats(data):
         good = actions[action]['good']
         if tot:
             value = sum(gc[grade][action] * ACTION_NOTA_GRADE_VALUES[grade] for grade in GRADES)
-            avg = value / (tot + ACTION_NOTA_SHRINK)
+            shrink = 0 if action == 'B' else ACTION_NOTA_SHRINK
+            avg = value / (tot + shrink)
             pos_pct = good / tot
             rating = round(_clamp(ACTION_NOTA_BASE + ACTION_NOTA_SPAN * avg, 1.0, 10.0), 1)
         else:

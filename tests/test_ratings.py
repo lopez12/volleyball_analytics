@@ -57,7 +57,7 @@ def test_team_rating_shared_values_and_plain_touch_average(stats_factory, touche
     assert calculate_rating(stats_factory(touches)) == expected
 
 
-@pytest.mark.parametrize('action', list('SREADB'))
+@pytest.mark.parametrize('action', list('SREAD'))
 @pytest.mark.parametrize(
     'grade,rating,good', [('#', 7.0, 1), ('+', 6.4, 1), ('!', 5.7, 0), ('-', 5.0, 0)]
 )
@@ -74,11 +74,19 @@ def test_action_stats_single_touch_nota(stats_factory, action, grade, rating, go
     }
 
 
-@pytest.mark.parametrize('action', list('SREADB'))
-def test_action_stats_mixed_grade_nota(stats_factory, action):
-    # (1.0 - 0.3 - 1.0) / (3 + 3) = -0.05 -> 6.0 - 0.2 = 5.8, the same for every action.
+@pytest.mark.parametrize('action,expected', [(a, 5.8) for a in 'SREAD'] + [('B', 5.6)])
+def test_action_stats_mixed_grade_nota(stats_factory, action, expected):
     touches = f'{action}# {action}! {action}-'
-    assert calculate_action_stats(stats_factory(touches))[action]['rating'] == 5.8
+    assert calculate_action_stats(stats_factory(touches))[action]['rating'] == expected
+
+
+@pytest.mark.parametrize(
+    'grade,expected,good', [('#', 10.0, 1), ('+', 7.6, 1), ('!', 4.8, 0), ('-', 2.0, 0)]
+)
+@pytest.mark.parametrize('count', [1, 6])
+def test_block_nota_has_no_shrinkage(stats_factory, grade, expected, good, count):
+    block = calculate_action_stats(stats_factory(' '.join(['B' + grade] * count)))['B']
+    assert block == {'tot': count, 'good': good * count, 'pos_pct': float(good), 'rating': expected}
 
 
 @pytest.mark.parametrize('count,expected', [(1, 6.4), (4, 6.9), (6, 7.1), (50, 7.5)])

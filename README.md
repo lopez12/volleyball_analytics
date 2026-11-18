@@ -221,9 +221,10 @@ attack efficiency, and neither value is the action's "Nota":
 - **Per-action Nota:** `calculate_action_stats()` averages the action's full
   grade distribution over one fixed grade table, `ACTION_NOTA_GRADE_VALUES`,
   identical for all six actions (`#` 1.0, `+` 0.4, `!` −0.3, `-` −1.0), adding
-  `ACTION_NOTA_SHRINK = 3` neutral pseudo-attempts (value 0):
+  `ACTION_NOTA_SHRINK = 3` neutral pseudo-attempts (value 0), except blocking
+  (`B`), which uses no shrinkage because block touches are infrequent:
 
-`avg = Σ_grade grade_count[grade][action] × ACTION_NOTA_GRADE_VALUES[grade] / (attempts + 3)`
+`avg = Σ_grade grade_count[grade][action] × ACTION_NOTA_GRADE_VALUES[grade] / (attempts + shrink)`, where `shrink = 0` for `B`, otherwise `3`.
 
 `rating = round(clamp(ACTION_NOTA_BASE + ACTION_NOTA_SPAN × avg, 1.0, 10.0), 1)` with `ACTION_NOTA_BASE = 6.0` and `ACTION_NOTA_SPAN = 4.0`.
 
@@ -233,15 +234,17 @@ attack efficiency, and neither value is the action's "Nota":
 How to read the Nota:
 
 - **Fixed anchors.** A single touch scores `#` 7.0, `+` 6.4, `!` 5.7, `-` 5.0
-  for every action; repeating one grade approaches its limit — 10.0 / 7.6 /
-  4.8 / 2.0 — without exceeding it. It is the same scale for team and player
+  except blocking; repeating one grade approaches its limit — 10.0 / 7.6 /
+  4.8 / 2.0 — without exceeding it. Blocks use those anchors immediately, even
+  for one touch (`B#` = 10.0, `B+` = 7.6, `B!` = 4.8, `B-` = 2.0).
+  It is the same scale for team and player
   cards and for match and season aggregates, and is never re-fitted per dataset,
   position or season. The constants are frozen.
 - **Shrinkage = confidence, not a volume bonus.** Few attempts are pulled toward
   6.0; more attempts of the same quality move the Nota toward that grade's
   limit. No number of `S+` can exceed the `S+` limit of 7.6
   (`1/4/6/50 × S+` → 6.4 / 6.9 / 7.1 / 7.5). Trade-off: every small sample sits
-  close to 6.0.
+  close to 6.0, except blocking, whose Nota depends only on its grade mix.
 - **Full grade mix, not the positive percentage.** `5×A+ A! A-` and
   `5×A# A! A-` share `5/7` positive, but score 6.3 and 7.5; errors weigh more
   than regular touches.
@@ -485,7 +488,7 @@ After that, every `git push` to `main` triggers an automatic rebuild.
 1. `generate.py` discovers every dataset folder under `teams/` that contains a `team.json`
 2. For each dataset it parses the `matches/*.txt` logs into a dedicated `data/<team>/<tournament>/volleyball.db`
 3. `parse_log()` tokenizes lines into rallies and records per-player and team stats
-4. `calculate_rating()` computes the team's plain-touch raw average over `PLAYER_GRADE_VALUES`, then `round(clamp(7.0 + (raw − 0.114) × 17.6, 1.0, 10.0), 1)`. Per-action Notas use the fixed `ACTION_NOTA_GRADE_VALUES` anchors with 3 neutral pseudo-attempts (see [Per-action Nota](#per-action-nota)). Player ratings use `calculate_player_rating()` (see [Player rating](#player-rating-role-based)). `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
+4. `calculate_rating()` computes the team's plain-touch raw average over `PLAYER_GRADE_VALUES`, then `round(clamp(7.0 + (raw − 0.114) × 17.6, 1.0, 10.0), 1)`. Per-action Notas use the fixed `ACTION_NOTA_GRADE_VALUES` anchors with 3 neutral pseudo-attempts, except blocking which has none (see [Per-action Nota](#per-action-nota)). Player ratings use `calculate_player_rating()` (see [Player rating](#player-rating-role-based)). `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
 5. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
 6. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
 7. Static HTML is written to `docs/<team>/<tournament>/`, and a root `docs/index.html` selector links to every dataset
