@@ -188,6 +188,7 @@
 
         <!-- Right: tagging controls -->
         <div class="lg-analysis__side">
+          <div class="lg-analysis__controls">
           <section class="lg-panel lg-a-roster" aria-labelledby="roster-title">
             <h2 id="roster-title" class="lg-panel__title">Jugadora</h2>
             <div class="lg-roster" id="analysis-roster" role="group" aria-label="Jugadoras">
@@ -206,12 +207,12 @@
           <section class="lg-panel lg-a-action" aria-labelledby="action-title">
             <h2 id="action-title" class="lg-panel__title">Acción</h2>
             <div class="lg-token-row lg-token-row--action" role="group" aria-label="Acciones">
-              <button type="button" class="lg-token-btn" data-action="S"><b>S</b><small>Saque</small></button>
-              <button type="button" class="lg-token-btn" data-action="R"><b>R</b><small>Recepción</small></button>
-              <button type="button" class="lg-token-btn" data-action="E"><b>E</b><small>Acomodo</small></button>
-              <button type="button" class="lg-token-btn" data-action="A"><b>A</b><small>Ataque</small></button>
-              <button type="button" class="lg-token-btn" data-action="D"><b>D</b><small>Defensa</small></button>
-              <button type="button" class="lg-token-btn" data-action="B"><b>B</b><small>Bloqueo</small></button>
+              <button type="button" class="lg-token-btn" data-action="S" title="Saque (S)"><b>S</b><small>Saque</small></button>
+              <button type="button" class="lg-token-btn" data-action="R" title="Recepción (R)"><b>R</b><small>Recepción</small></button>
+              <button type="button" class="lg-token-btn" data-action="E" title="Acomodo (E)"><b>E</b><small>Acomodo</small></button>
+              <button type="button" class="lg-token-btn" data-action="A" title="Ataque (A)"><b>A</b><small>Ataque</small></button>
+              <button type="button" class="lg-token-btn" data-action="D" title="Defensa (D)"><b>D</b><small>Defensa</small></button>
+              <button type="button" class="lg-token-btn" data-action="B" title="Bloqueo (B)"><b>B</b><small>Bloqueo</small></button>
             </div>
 
             <h2 class="lg-panel__title lg-panel__title--sub">Calificación</h2>
@@ -242,10 +243,12 @@
               <button type="button" class="lg-outcome lg-outcome--re" data-outcome="won:re">Ganado · error rival</button>
               <button type="button" class="lg-outcome lg-outcome--se" data-outcome="won:se">Ganado · saque rival</button>
             </div>
-            <button type="button" id="analysis-send" class="btn-success lg-action-btn lg-send" disabled>✓ Enviar rally</button>
           </section>
-
-          <a href="#review" class="lg-navlink lg-analysis-next lg-a-next">Ir a revisión →</a>
+          </div>
+          <div class="lg-analysis__submit lg-a-submit">
+            <button type="button" id="analysis-send" class="btn-success lg-action-btn lg-send" disabled>✓ Enviar rally</button>
+            <a href="#review" class="lg-navlink lg-analysis-next">Ir a revisión →</a>
+          </div>
         </div>
       </div>
     </section>

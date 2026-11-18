@@ -223,6 +223,11 @@
     if (typeof document === 'undefined') return;
     var root = document.getElementById('replay-viewer');
     if (!root) return;
+    root.querySelectorAll('.section-title').forEach(function (heading) {
+        heading.tabIndex = 0;
+        heading.setAttribute('role', 'button');
+        heading.setAttribute('aria-expanded', String(!heading.classList.contains('collapsed')));
+    });
 
     function el(id) { return document.getElementById('replay-' + id); }
     function text(id, value) {
@@ -247,6 +252,7 @@
         return;
     }
     var renderedKey = '';
+    var rallySetId = null;
     var timer = null;
     var loadTimeout = null;
     var failed = false;
@@ -360,6 +366,18 @@
     }
 
     function draw(set, index, time, available, message) {
+        var outcomes = [];
+        for (var i = 0; available && i < index; i++) {
+            var before = set.snapshots[i].score;
+            var after = set.snapshots[i + 1].score;
+            var won = after[0] - before[0] === 1 && after[1] === before[1];
+            var lost = after[1] - before[1] === 1 && after[0] === before[0];
+            if (!won && !lost) {
+                controller.fail('El marcador contiene un resultado de jugada no válido.');
+                return;
+            }
+            outcomes.push(won ? 'won' : 'lost');
+        }
         if (available) clearTimeout(loadTimeout);
         text('status', message);
         var snapshot = set.snapshots[index];
@@ -429,6 +447,9 @@
                 row.dataset.player = player.number;
                 rows.append(row);
             });
+        }
+        if (rallySetId !== set.id) {
+            rallySetId = set.id;
             var list = el('rallies');
             list.replaceChildren();
             set.rallies.forEach(function (rally) {
@@ -442,7 +463,18 @@
             });
         }
         updateSpotlight(snapshot);
-        el('rallies').querySelectorAll('[data-replay="rally"]').forEach(function (button) {
+        el('rallies').querySelectorAll('[data-replay="rally"]').forEach(function (button, position) {
+            var outcome = outcomes[position];
+            var number = String(set.rallies[position].number);
+            button.classList.toggle('replay-rally--won', outcome === 'won');
+            button.classList.toggle('replay-rally--lost', outcome === 'lost');
+            var label = 'Jugada ' + number;
+            if (outcome) {
+                number += outcome === 'won' ? ' +' : ' -';
+                label += outcome === 'won' ? ', punto ganado' : ', punto perdido';
+            }
+            if (button.textContent !== number) button.textContent = number;
+            button.setAttribute('aria-label', label);
             var current = active && button.dataset.rally === active.id;
             if (current) button.setAttribute('aria-current', 'true');
             else button.removeAttribute('aria-current');
@@ -494,8 +526,19 @@
         }, 20000);
     }
     root.addEventListener('click', function (event) {
+        var heading = event.target.closest('.section-title');
+        if (heading) {
+            heading.setAttribute('aria-expanded', String(!heading.classList.contains('collapsed')));
+        }
         var button = event.target.closest('[data-replay]');
         if (button && !button.disabled) controller.seek(button.dataset.replay, button.dataset.rally);
+    });
+    root.addEventListener('keydown', function (event) {
+        var heading = event.target.closest('.section-title');
+        if (heading && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            heading.click();
+        }
     });
     el('set').addEventListener('change', function () {
         if (!failed) waitForVideo();

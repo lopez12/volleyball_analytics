@@ -146,9 +146,22 @@
     font: inherit;
 }
 /* Spoiler-safe spectator viewer, composed from the shared dashboard components. */
+.replay-viewer { --primary: var(--info-text); --text-muted: var(--ui-muted); }
+.replay-workspace, .replay-playback, .replay-details { min-width: 0; }
+.replay-playback { align-self: start; }
+.replay-viewer .replay-details .section-title:first-child { margin-top: 0; }
+.replay-viewer .stat-card { border-radius: 12px; box-shadow: none; }
+.replay-viewer .back-link, .replay-viewer .replay-back-nav a,
+.replay-viewer .replay-detail-note a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+}
+.replay-viewer .replay-back-nav a { color: var(--card-bg) !important; box-sizing: border-box; }
+.replay-viewer .section-title:focus-visible { outline: 3px solid var(--primary); outline-offset: 3px; }
+.replay-viewer .section-title { min-height: 44px; box-sizing: border-box; }
 .replay-viewer .report-header { margin-bottom: 16px; }
 .replay-viewer .report-header h1 { overflow-wrap: anywhere; }
-.replay-subtitle { color: var(--text-muted); margin: 5px 0 0; }
 .replay-scoreboard { margin: 0 0 18px; padding: 16px; }
 .replay-scoreboard-row {
     display: grid;
@@ -161,7 +174,8 @@
 .replay-side-label:first-child { text-align: right; }
 .replay-side-label:last-child { text-align: left; }
 .replay-score { white-space: nowrap; font-size: 2rem; }
-.replay-current { margin: 10px 0 0; }
+.replay-context { margin: 0 0 18px; text-align: center; }
+.replay-current { margin: 0; }
 .replay-start-note { color: var(--text-muted); font-size: 0.8rem; margin: 8px 0 0; }
 .replay-video { margin: 0 0 14px; padding: 10px; }
 .replay-video-frame {
@@ -172,19 +186,22 @@
     width: 100%;
 }
 .replay-video-frame > *, .replay-video-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
-.replay-controls { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; }
+.replay-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .replay-control-set { display: flex; align-items: center; gap: 8px; flex: 0 1 auto; min-width: 0; }
 .replay-viewer .replay-label-short { display: none; }
-.replay-viewer .replay-controls > button { min-height: 40px; }
 .replay-viewer button, .replay-viewer select, .replay-viewer .replay-link {
     background: var(--surface-2);
     color: var(--text-main);
-    border: 1px solid var(--border);
+    border: 1px solid var(--text-soft);
     border-radius: 8px;
     padding: 9px 12px;
     font: inherit;
     text-decoration: none;
+    box-sizing: border-box;
+    min-width: 44px;
+    min-height: 44px;
 }
+.replay-viewer .replay-link:not([hidden]) { display: inline-flex; align-items: center; }
 .replay-viewer button:not(:disabled), .replay-viewer select, .replay-viewer .replay-link { cursor: pointer; }
 .replay-viewer button:disabled { opacity: 0.55; cursor: not-allowed; }
 .replay-viewer .replay-link { color: var(--primary); border-color: var(--primary); }
@@ -212,11 +229,13 @@
 .replay-detail-note { margin-top: 12px; }
 .replay-viewer .replay-detail-note a { color: var(--primary); font-weight: 600; text-decoration: none; }
 .replay-viewer .replay-detail-note a:hover { text-decoration: underline; }
-.replay-spotlight-control { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; }
+.replay-spotlight-control { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; }
+.replay-spotlight-control select { min-width: 0; max-width: 100%; }
 .replay-spotlight-control label { color: var(--text-main); font-weight: 600; }
 .replay-spotlight[hidden] { display: none; }
 .replay-spotlight { margin: 0 0 14px; }
-.replay-spotlight .card-header { background: var(--primary); }
+.replay-spotlight .card-header { background: var(--surface-2); color: var(--text-main); }
+.replay-spotlight .card-header .player-rating { color: var(--text-main); border-color: var(--text-soft); }
 .replay-spotlight .card-body { padding: 12px; }
 .replay-spotlight-values { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .replay-spotlight-value { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 6px; text-align: center; }
@@ -227,8 +246,11 @@
 .replay-table-wrap tr[aria-current="true"] td { background: var(--primary-soft); font-weight: 700; }
 .replay-table-wrap tr[aria-current="true"] td:first-child { box-shadow: inset 3px 0 0 var(--primary); }
 .replay-rallies { gap: 8px; padding: 0; margin: 0; }
-.replay-rallies button { min-width: 36px; justify-content: center; padding: 5px 11px; }
-.replay-rallies button[aria-current="true"] { background: var(--primary); border-color: var(--primary); color: var(--card-bg); font-weight: 800; }
+.replay-rallies button { justify-content: center; padding: 8px 10px; }
+.replay-rallies button.replay-rally--won { background: var(--good-bg); color: var(--good-text); border-color: var(--good-text); }
+.replay-rallies button.replay-rally--lost { background: var(--bad-bg); color: var(--ui-loss-text); border-color: var(--ui-loss-text); }
+.replay-rallies button[aria-current="true"] { box-shadow: inset 0 0 0 2px var(--primary); font-weight: 800; }
+.replay-viewer .replay-rallies button:focus-visible { outline: 3px solid var(--text-strong); outline-offset: 3px; }
 .replay-notice { margin: 20px 0; padding: 16px; background: var(--surface-2); border-radius: 8px; }
 .replay-notice details { margin-top: 14px; }
 .replay-viewer .section-title { margin-top: 18px; }
@@ -241,6 +263,18 @@
 @keyframes replay-value-pulse {
     0% { background: var(--primary-soft); }
     100% { background: var(--surface-2); }
+}
+@media (min-width: 1200px) {
+    .container.replay-viewer { max-width: 1600px; }
+    .replay-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+        gap: 24px;
+        align-items: start;
+    }
+}
+@media (min-width: 1200px) and (min-height: 800px) {
+    .replay-playback { position: sticky; top: 16px; }
 }
 @media (max-width: 600px) {
     /* The shared mobile .stat-card rule uses !important padding; override it here. */
@@ -260,10 +294,10 @@
         clip: rect(0 0 0 0);
         white-space: nowrap;
     }
-    .replay-viewer .replay-control-set select { min-width: 0; min-height: 40px; padding: 9px 4px; }
+    .replay-viewer .replay-control-set select { padding: 9px 4px; }
     .replay-viewer .replay-controls > button {
         flex: 1 1 0;
-        min-width: 0;
+        min-width: max-content;
         padding: 9px 4px;
         white-space: nowrap;
     }
@@ -296,6 +330,8 @@
     --border-strong: #e5e7eb;
     --text-main: #1f2937;
     --text-muted: #6b7280;
+    --ui-muted: #475569;
+    --ui-loss-text: #b91c1c;
     --text-soft: #64748b;
     --text-faint: #94a3b8;
     --text-strong: #0f172a;
@@ -342,6 +378,8 @@
     --border-strong: #3b4a63;
     --text-main: #e5e7eb;
     --text-muted: #94a3b8;
+    --ui-muted: #94a3b8;
+    --ui-loss-text: #fca5a5;
     --text-soft: #94a3b8;
     --text-faint: #64748b;
     --text-strong: #f1f5f9;
@@ -387,6 +425,8 @@
         --border-strong: #3b4a63;
         --text-main: #e5e7eb;
         --text-muted: #94a3b8;
+        --ui-muted: #94a3b8;
+        --ui-loss-text: #fca5a5;
         --text-soft: #94a3b8;
         --text-faint: #64748b;
         --text-strong: #f1f5f9;
@@ -542,12 +582,12 @@ button:active { transform: translateY(0); }
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 14px;
+    gap: 12px;
     margin-top: 12px;
     padding: 10px 16px;
-    background: linear-gradient(135deg, #fff5f5 0%, #fff 100%);
-    border: 1px solid #fecaca;
-    border-radius: 10px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-strong);
+    border-radius: 12px;
     flex-wrap: wrap;
 }
 
@@ -555,7 +595,7 @@ button:active { transform: translateY(0); }
     display: flex;
     align-items: center;
     gap: 6px;
-    color: #dc2626;
+    color: var(--text-main);
     font-size: 0.8rem;
     font-weight: 700;
     text-transform: uppercase;
@@ -573,7 +613,22 @@ button:active { transform: translateY(0); }
 .youtube-banner__links {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
+    max-width: 100%;
+}
+
+.youtube-banner__sets {
+    display: flex;
+    flex-wrap: wrap;
+    flex: 0 1 max-content;
+    max-width: 100%;
+    gap: 8px;
+}
+
+@media (max-width: 767px) {
+    .youtube-banner__links { width: 100%; justify-content: center; }
+    .youtube-banner__sets { flex-basis: 100%; justify-content: center; }
 }
 
 .youtube-set-link {
@@ -587,6 +642,10 @@ button:active { transform: translateY(0); }
     font-weight: 600;
     border-radius: 20px;
     text-decoration: none !important;
+    box-sizing: border-box;
+    min-width: 44px;
+    min-height: 44px;
+    white-space: nowrap;
     transition: background 0.15s ease, transform 0.1s ease;
     box-shadow: 0 2px 6px rgba(220, 38, 38, 0.3);
 }
@@ -1026,20 +1085,6 @@ button:active { transform: translateY(0); }
 
 @media print {
     .theme-toggle { display: none !important; }
-}
-
-/* Targeted overrides for gradient/tinted panels that cannot be cleanly
-   tokenized; darken them so they read on a dark background. */
-:root[data-theme="dark"] .youtube-banner {
-    background: linear-gradient(135deg, #2a1416 0%, #1e293b 100%);
-    border-color: #7f1d1d;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .youtube-banner {
-        background: linear-gradient(135deg, #2a1416 0%, #1e293b 100%);
-        border-color: #7f1d1d;
-    }
 }
 
 /* --- Season Objectives (progress rings) --- */

@@ -705,9 +705,12 @@ def render_match_page(
             if watch_href
             else ''
         )
-        links = stats_link + ''.join(
-            f'<a href="{url}" target="_blank" rel="noopener noreferrer" class="youtube-set-link">Set {i + 1}</a>'
+        set_links = ''.join(
+            f'<a href="{_html_escape(url, quote=True)}" target="_blank" rel="noopener noreferrer" class="youtube-set-link">Set {i + 1}</a>'
             for i, url in enumerate(youtube_urls)
+        )
+        links = stats_link + (
+            f'<div class="youtube-banner__sets">{set_links}</div>' if set_links else ''
         )
         yt_html = (
             '<div class="youtube-banner" style="display:flex;">'
@@ -929,6 +932,8 @@ def render_watch_page(
     )
     rally_section = _section(
         'Jugadas del set',
+        '<p class="replay-muted replay-rally-legend">'
+        '+ Punto ganado \u00b7 - Punto perdido \u00b7 Solo jugadas completadas</p>'
         '<div class="replay-rallies action-grid" id="replay-rallies"></div>',
         collapsed=True,
     )
@@ -955,7 +960,6 @@ def render_watch_page(
   {top_back}
   <header class="report-header">
     <h1>{title}</h1>
-    <p class="replay-subtitle">Ver con estad\u00edsticas</p>
   </header>
   <div class="stat-card replay-scoreboard" aria-label="Marcador del set">
     <div class="replay-scoreboard-row">
@@ -963,10 +967,14 @@ def render_watch_page(
       <span id="replay-score" class="stat-value replay-score" aria-live="polite">{initial_score}</span>
       <span class="replay-side-label">{_html_escape(opponent_name)}</span>
     </div>
+  </div>
+  <div class="replay-workspace">
+  <div class="replay-playback">
+  <div class="replay-video stat-card"><div class="replay-video-frame"><div id="replay-player"></div></div></div>
+  <div class="replay-context">
     <p id="replay-current" class="stat-label replay-current">Antes de la primera jugada</p>
     <p id="replay-start-note" class="replay-start-note"{' ' if offset else ' hidden'}>{start_note}</p>
   </div>
-  <div class="replay-video stat-card"><div class="replay-video-frame"><div id="replay-player"></div></div></div>
   <nav class="replay-controls" aria-label="Controles de reproducci\u00f3n">
     <div class="replay-control-set"><label for="replay-set">Set</label><select id="replay-set">{options}</select></div>
     <button type="button" data-replay="repeat" aria-label="\u25c0 Repetir jugada" title="Repetir jugada" disabled><span class="replay-label-full">\u25c0 Repetir jugada</span><span class="replay-label-short" aria-hidden="true">\u25c0 Repetir</span></button>
@@ -975,11 +983,15 @@ def render_watch_page(
   <p id="replay-status" class="replay-status" role="status" aria-live="polite">Esperando al reproductor; estad\u00edsticas en cero.</p>
   <a id="replay-youtube" class="replay-link" hidden href="https://www.youtube.com/watch?v={_html_escape(first_video, quote=True)}"
       target="_blank" rel="noopener noreferrer">Abrir el video en YouTube \u2197</a>
+  </div>
+  <div class="replay-details">
   {players_section}
   {stats_section}
   {rally_section}
+  </div>
+  </div>
   {exclusions}
-  {bottom_back}
+  <div class="replay-back-nav">{bottom_back}</div>
   <noscript>La sincronizaci\u00f3n requiere JavaScript y una conexi\u00f3n a YouTube. Los controles no est\u00e1n disponibles.</noscript>
 </main>
 <script id="replay-data" type="application/json">{payload}</script>

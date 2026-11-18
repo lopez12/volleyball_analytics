@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from analytics import parse_log  # noqa: E402
-from renderer import render_watch_page  # noqa: E402
+from renderer import render_match_page, render_watch_page  # noqa: E402
 
 
 def main():
@@ -42,6 +42,17 @@ def main():
             + '@start: 7-4\n'
             + log.replace('7A#', '8A#').replace('abcdefghijk', 'ABCDEFGHIJK')
         )['replay']
+        boundaries = parse_log(
+            '@youtube: https://youtu.be/abcdefghijk\n@start: 3-6\n'
+            '7A# @won @t:10-15\n7A- @lost @t:15-20\n@won:se @t:20-20'
+        )['replay']['sets'][0]
+        boundaries['id'] = 'boundaries'
+        boundaries['number'] = 3
+        inconsistent = parse_log(log)['replay']['sets'][0]
+        inconsistent['id'] = 'inconsistent'
+        inconsistent['number'] = 4
+        inconsistent['snapshots'][2]['score'] = [0, 2]
+        mixed['sets'].extend([boundaries, inconsistent])
         page = render_watch_page('Synthetic test', mixed, {'7': '<img src=x>'}, 'report.html')
         page = page.replace(
             '<script src="viewer.js" defer></script>',
@@ -80,6 +91,8 @@ window.addEventListener('message', function (event) {
             'Cuervas',
         )
         real_test = """<script>
+var theme = new URLSearchParams(location.search).get('theme');
+if (theme) document.documentElement.dataset.theme = theme;
 localStorage.setItem('va-replay-player', '5');
 var append = document.head.append.bind(document.head);
 document.head.append = function (node) {
@@ -106,11 +119,16 @@ window.YT = {Player: function (id, options) {
         - document.querySelector('[data-replay="repeat"]').getBoundingClientRect().top) <= 6
       && Math.abs(document.querySelector('[data-replay="repeat"]').getBoundingClientRect().top
         - document.querySelector('[data-replay="next"]').getBoundingClientRect().top) <= 2
-      && wrap.scrollWidth <= wrap.clientWidth && pinned && pinned.dataset.player === '5'
+      && (innerWidth < 375 || wrap.scrollWidth <= wrap.clientWidth) && pinned && pinned.dataset.player === '5'
       && document.getElementById('replay-current').textContent.includes('23');
     var result = document.createElement('p');
     result.id = 'browser-smoke-result';
-    result.textContent = pass ? 'PASS' : 'FAIL: real roster table overflow or wrong snapshot';
+    result.textContent = pass ? 'PASS' : 'FAIL: real roster layout ' + JSON.stringify({
+      table:[wrap.scrollWidth,wrap.clientWidth], controls:[controls.scrollWidth,controls.clientWidth],
+      set:document.getElementById('replay-set').getBoundingClientRect().toJSON(),
+      repeat:document.querySelector('[data-replay="repeat"]').getBoundingClientRect().toJSON(),
+      current:document.getElementById('replay-current').textContent
+    });
     document.body.append(result);
     document.body.dataset.testViewport = String(window.innerWidth);
     window.parent.postMessage({type: 'replay-smoke', message: result.textContent,
@@ -124,6 +142,20 @@ window.YT = {Player: function (id, options) {
             real_page.replace(
                 '<script src="viewer.js" defer></script>',
                 real_test + '<script src="viewer.js" defer></script>',
+            ),
+            encoding='utf-8',
+        )
+        report = parse_log((log + '\n---\n') * 5 + log)
+        report_page = render_match_page(
+            'Equipo vs Rival', report, '17/11/2026', report['replay'], 'real-watch.html'
+        )
+        (root / 'report.html').write_text(
+            report_page.replace(
+                '</body>',
+                """<script>
+document.documentElement.dataset.theme = new URLSearchParams(location.search).get('theme') || 'light';
+window.parent.postMessage({type:'replay-smoke', message:'PASS'}, location.origin);
+</script></body>""",
             ),
             encoding='utf-8',
         )
@@ -162,6 +194,99 @@ window.YT = {Player: function (id, options) {
             .replace('src="watch.html"', 'src="logger/index.html"'),
             encoding='utf-8',
         )
+        (root / 'layout-matrix.html').write_text(
+            """<!DOCTYPE html><html><meta charset="utf-8"><title>Responsive matrix</title>
+<body><p id="browser-smoke-result">RUNNING</p><pre id="measurements"></pre>
+<iframe title="Measured application viewport" style="border:0"></iframe>
+<script>
+var frame = document.querySelector('iframe');
+var result = document.getElementById('browser-smoke-result');
+var sizes = [[320,740],[375,812],[390,844],[768,1024],[1023,768],[1024,600],
+  [1279,768],[1280,800],[1366,768],[1920,1080],[844,390],[683,384]];
+var cases = [];
+['light','dark'].forEach(function(theme) {
+  sizes.forEach(function(size) {
+    ['real-watch.html','report.html','logger/index.html'].forEach(function(path) {
+      cases.push({theme:theme, width:size[0], height:size[1], path:path});
+    });
+  });
+});
+var current = -1;
+function assert(value, message) { if (!value) throw new Error(message); }
+function next() {
+  if (++current === cases.length) {
+    result.textContent = 'PASS';
+    return;
+  }
+  var item = cases[current];
+  frame.style.width = item.width + 'px';
+  frame.style.height = item.height + 'px';
+  frame.src = item.path + '?layout=1&theme=' + item.theme;
+}
+window.addEventListener('message', function(event) {
+  if (event.origin !== location.origin || event.source !== frame.contentWindow ||
+      event.data.type !== 'replay-smoke') return;
+  var item = cases[current];
+  try {
+    assert(event.data.message === 'PASS', event.data.message);
+    var win = frame.contentWindow;
+    var doc = win.document;
+    var box = function(selector) { return doc.querySelector(selector).getBoundingClientRect(); };
+    assert(win.innerWidth === item.width && win.innerHeight === item.height, 'Wrong CSS viewport');
+    assert(doc.documentElement.scrollWidth <= doc.documentElement.clientWidth + 1, 'Page overflow');
+    if (item.path === 'real-watch.html') {
+      var video = box('.replay-video-frame');
+      var playback = box('.replay-playback');
+      var details = box('.replay-details');
+      assert(Math.abs(video.width / video.height - 16/9) < 0.02, 'Video aspect ratio');
+      assert(box('.replay-scoreboard').bottom <= playback.top, 'Score not above workspace');
+      assert(box('.replay-context').top >= video.bottom, 'Context above video');
+      assert(box('.replay-context').bottom <= box('.replay-controls').top, 'Context below controls');
+      assert(!doc.querySelector('.replay-subtitle'), 'Visible viewer subtitle');
+      if (item.width >= 1200) {
+        assert(details.left >= playback.right, 'Viewer not split');
+        assert(Math.abs(playback.width / details.width - 1.5) < 0.01, 'Viewer track ratio');
+      } else assert(details.top >= playback.bottom, 'Viewer not stacked');
+      assert(win.getComputedStyle(doc.querySelector('.replay-playback')).position ===
+        (item.width >= 1200 && item.height >= 800 ? 'sticky' : 'static'), 'Wrong sticky mode');
+      ['#replay-set','[data-replay="repeat"]','[data-replay="next"]'].forEach(function(selector) {
+        var target = box(selector);
+        assert(target.width >= 44 && target.height >= 44, 'Small playback target');
+      });
+    } else if (item.path === 'report.html') {
+      var primary = box('.youtube-set-link--stats');
+      var group = box('.youtube-banner__sets');
+      if (item.width <= 767) {
+        assert(group.top >= primary.bottom, 'Set links not on next row');
+        var linkArea = box('.youtube-banner__links');
+        assert(Math.abs(primary.left + primary.width/2 - linkArea.left - linkArea.width/2) < 1,
+          'Viewer link not centered');
+        assert(primary.width < linkArea.width - 1, 'Viewer link stretched');
+      }
+      var primaryStyle = win.getComputedStyle(doc.querySelector('.youtube-set-link--stats'));
+      var setStyle = win.getComputedStyle(doc.querySelector('.youtube-banner__sets a'));
+      assert(primaryStyle.backgroundColor === setStyle.backgroundColor &&
+        primaryStyle.color === setStyle.color, 'Report link colors differ');
+      var links = doc.querySelectorAll('.youtube-set-link');
+      links.forEach(function(link) {
+        assert(link.clientHeight >= 42 && link.scrollWidth <= link.clientWidth, 'Clipped report link');
+      });
+    } else {
+      var grid = win.getComputedStyle(doc.querySelector('.lg-analysis')).gridTemplateColumns.split(' ');
+      if (item.width >= 1024) assert(Math.abs(parseFloat(grid[0]) / parseFloat(grid[1]) -
+        (item.width >= 1280 ? 2 : 1.4)) < 0.01, 'Logger track ratio');
+    }
+    document.getElementById('measurements').textContent +=
+      item.path + ' ' + item.width + 'x' + item.height + ' ' + item.theme + ' PASS\\n';
+    next();
+  } catch(error) {
+    result.textContent = 'FAIL: ' + JSON.stringify(item) + ': ' + error.message;
+  }
+});
+next();
+</script></body></html>""",
+            encoding='utf-8',
+        )
         handler = functools.partial(SimpleHTTPRequestHandler, directory=directory)
         server = ThreadingHTTPServer(('127.0.0.1', 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -172,8 +297,15 @@ window.YT = {Player: function (id, options) {
                 ('mobile.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
                 ('real-mobile.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
                 ('watch.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
+                ('watch.html?scenario=boundaries', 1440, '<p id="browser-smoke-result">PASS</p>'),
+                (
+                    'watch.html?scenario=invalid-delta',
+                    1440,
+                    '<p id="browser-smoke-result">PASS</p>',
+                ),
                 ('logger/index.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
                 ('logger-mobile.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
+                ('layout-matrix.html', 1440, '<p id="browser-smoke-result">PASS</p>'),
             ):
                 url = f'http://127.0.0.1:{server.server_port}/{path}'
                 result = subprocess.run(
@@ -183,17 +315,19 @@ window.YT = {Player: function (id, options) {
                         '--disable-gpu',
                         '--no-first-run',
                         '--no-default-browser-check',
-                        f'--user-data-dir={root / ("profile-" + path.replace("/", "-"))}',
+                        f'--user-data-dir={root / ("profile-" + re.sub(r"[^a-zA-Z0-9-]", "-", path))}',
                         f'--window-size={width},1000',
                         '--dump-dom',
-                        '--virtual-time-budget=5000',
+                        '--virtual-time-budget=90000'
+                        if path == 'layout-matrix.html'
+                        else '--virtual-time-budget=5000',
                         url,
                     ],
                     capture_output=True,
                     text=True,
                     encoding='utf-8',
                     errors='replace',
-                    timeout=45,
+                    timeout=180 if path == 'layout-matrix.html' else 45,
                     check=False,
                 )
                 if result.returncode or marker not in result.stdout:
@@ -203,7 +337,10 @@ window.YT = {Player: function (id, options) {
                     print(f'Browser result: {findings!a}; process exit: {result.returncode}')
                     if not findings:
                         print(result.stderr.encode('ascii', errors='replace').decode())
+                    print(result.stdout[-3000:].encode('ascii', errors='replace').decode())
                     raise SystemExit(f'Browser tests failed: {path}, width {width}.')
+                if path == 'layout-matrix.html':
+                    print('PASS: responsive matrix, 72 view/viewport/theme combinations.')
                 actual = re.search(r'data-test-viewport="(\d+)"', result.stdout)
                 viewport = actual.group(1) if actual else str(width)
                 print(
