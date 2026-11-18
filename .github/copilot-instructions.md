@@ -41,14 +41,14 @@ One line per rally; space-separated, chronological tokens.
 
 ## Rating
 
-- **Shared grade values:** team ratings, player ratings and per-action "Notas" all use `PLAYER_GRADE_VALUES[action][grade]`. `WEIGHTS` feeds only the legacy `score_sum` total, not any rating.
-- **Team rating** (`analytics.calculate_rating`): `raw = (Σ_action Σ_grade grade_count[grade][action] * PLAYER_GRADE_VALUES[action][grade]) / total`, then `round(clamp(RATING_CENTER + (raw - TEAM_RATING_RAW_MEAN) * TEAM_RATING_SCALE, 1.0, 10.0), 1)`. Reuses `RATING_CENTER = 7.0`; `TEAM_RATING_RAW_MEAN = 0.114`, `TEAM_RATING_SCALE = 17.6`. No role weights or shrinkage; no touches returns 0.0.
-- **Per-action Nota** (`analytics.calculate_action_stats`): each action's plain-touch average `avg` over the same grade values maps to `round(clamp(RATING_CENTER + (avg - ACTION_NOTA_CENTER[action]) * ACTION_NOTA_SCALE[action], 1.0, 10.0), 1)`, without shrinkage. 7.0 means average quality for that action in the calibration data, not a common absolute scale; no attempts keeps `rating = None`.
-  - `ACTION_NOTA_CENTER = {'S': 0.206, 'R': 0.023, 'E': 0.071, 'A': 0.1, 'D': 0.069, 'B': 0.155}`.
-  - `ACTION_NOTA_SCALE = {'S': 4.8, 'R': 5.3, 'E': 7.3, 'A': 4.3, 'D': 5.8, 'B': 4.0}`.
+- **Shared grade values:** team ratings and player ratings use `PLAYER_GRADE_VALUES[action][grade]`. Per-action Notas use their own `ACTION_NOTA_GRADE_VALUES`. `WEIGHTS` feeds only the legacy `score_sum` total, not any rating.
+- **Team rating** (`analytics.calculate_rating`): `raw = (Σ_action Σ_grade grade_count[grade][action] * PLAYER_GRADE_VALUES[action][grade]) / total`, then `round(clamp(RATING_CENTER + (raw - TEAM_RATING_RAW_MEAN) * TEAM_RATING_SCALE, 1.0, 10.0), 1)`. Reuses `RATING_CENTER = 7.0`; `TEAM_RATING_RAW_MEAN = 0.114`, `TEAM_RATING_SCALE = 17.6`. No role weights or shrinkage, on purpose: a match has hundreds of team touches. No touches returns 0.0.
+- **Per-action Nota** (`analytics.calculate_action_stats`): one fixed grade table for all six actions, `ACTION_NOTA_GRADE_VALUES = {'#': 1.0, '+': 0.4, '!': -0.3, '-': -1.0}` (a separate object from `WEIGHTS`), with `ACTION_NOTA_SHRINK = 3` neutral pseudo-attempts: `avg = Σ_grade grade_count[grade][action] * ACTION_NOTA_GRADE_VALUES[grade] / (tot + ACTION_NOTA_SHRINK)`, then `round(clamp(ACTION_NOTA_BASE + ACTION_NOTA_SPAN * avg, 1.0, 10.0), 1)` with `ACTION_NOTA_BASE = 6.0` and `ACTION_NOTA_SPAN = 4.0`. A single touch scores `#` 7.0, `+` 6.4, `!` 5.7, `-` 5.0. More attempts raise confidence but can't exceed the grade's limit (10.0 / 7.6 / 4.8 / 2.0). Position doesn't affect it, and it is not the overall player or team rating. No attempts keeps `rating = None`.
+  - Keep three numbers apart: positive percentage `good / tot` (`#`/`+` share), the Nota, and attack efficiency `(A# - A-) / A_tot`. Omega #7 (`07_omega.txt`): 5 `A+`, `A!`, `A-` → `5/7` (71%), Nota `6.0 + 4.0 * (5*0.4 - 0.3 - 1.0) / (7 + 3)` = 6.3, attack efficiency -1/7. Serves: #7 `4 * 0.4 / 7` → 6.9, #12 `6 * 0.4 / 9` → 7.1.
+  - This model replaced the earlier fitted per-action centers and scales, so historical action Notas change on rebuild. Overall ratings and efficiency don't change.
 - **Player rating** (`analytics.calculate_player_rating(stats, position)`): per-action grade values (`PLAYER_GRADE_VALUES`) with shrinkage (`RATING_SHRINK`), mixed by role weights (`ROLE_ACTION_WEIGHTS`). The role is resolved per `---` set block from `@role:` or inferred from the set share in that block (`SETTER_SHARE_LOW`/`HIGH`, roster position as base), then touch-weighted across the match. Setters add an assist term (`ASSIST_WEIGHT`). Fixed scale `RATING_CENTER + (raw - RATING_RAW_MEAN) * RATING_SCALE`, clamped to `[1.0, 10.0]`. The constants are frozen (#56); don't recompute them per dataset.
 
-The team and per-action scale constants were fitted on 2026-11-11 data (#57) and are frozen; never recompute them per dataset.
+The team scale constants were fitted on 2026-11-11 data (#57). They and the action-Nota constants are frozen; never recompute them per dataset.
 
 ## Workflow
 
