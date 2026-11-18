@@ -176,7 +176,7 @@ Each line is one rally. Tokens within a line are space-separated.
 | `!`  | Regular (Regular)   |
 | `-`  | Error (Error)       |
 
-Team ratings, player ratings and per-action "Notas" all use one shared grade-value table, `PLAYER_GRADE_VALUES` in `analytics.py`:
+Team ratings and player ratings use one shared grade-value table, `PLAYER_GRADE_VALUES` in `analytics.py`:
 
 | Action | `#` | `+`  | `!`  | `-`  |
 | ------ | --- | ---- | ---- | ---- |
@@ -187,7 +187,7 @@ Team ratings, player ratings and per-action "Notas" all use one shared grade-val
 | `D`    | 0.5 | 0.25 | 0.0  | −0.8 |
 | `B`    | 1.0 | 0.2  | −0.3 | −0.8 |
 
-`WEIGHTS` feeds only the legacy `score_sum` total; it is not used by any rating.
+`WEIGHTS` feeds only the legacy `score_sum` total; it is not used by any rating. Per-action Notas use their own fixed table (see [Per-action Nota](#per-action-nota)).
 
 ### Team rating
 
@@ -212,22 +212,60 @@ Team ratings, player ratings and per-action "Notas" all use one shared grade-val
 
 ### Per-action Nota
 
-`calculate_action_stats()` keeps each action's attempts and positive percentage (`#` or `+` / attempts). Its "Nota" uses that action's plain touch average `avg` over `PLAYER_GRADE_VALUES`, with no shrinkage:
+The action card shows three distinct measurements; the positive-touch rate is not
+attack efficiency, and neither value is the action's "Nota":
 
-`rating = round(clamp(RATING_CENTER + (avg − ACTION_NOTA_CENTER[action]) × ACTION_NOTA_SCALE[action], 1.0, 10.0), 1)`
+- **Positive count / percentage:** `good` counts touches graded `#` or `+`;
+  the percentage is `good / attempts`. It describes the share of positive
+  touches, not kills. Season trend headings label it "Acciones positivas (#/+)".
+- **Per-action Nota:** `calculate_action_stats()` averages the action's full
+  grade distribution over one fixed grade table, `ACTION_NOTA_GRADE_VALUES`,
+  identical for all six actions (`#` 1.0, `+` 0.4, `!` −0.3, `-` −1.0), adding
+  `ACTION_NOTA_SHRINK = 3` neutral pseudo-attempts (value 0):
 
-Each action has its own frozen center and scale, fitted on 2026-11-11 data (#57):
+`avg = Σ_grade grade_count[grade][action] × ACTION_NOTA_GRADE_VALUES[grade] / (attempts + 3)`
 
-| Action | `ACTION_NOTA_CENTER` | `ACTION_NOTA_SCALE` |
-| ------ | -------------------- | ------------------- |
-| `S`    | 0.206                | 4.8                 |
-| `R`    | 0.023                | 5.3                 |
-| `E`    | 0.071                | 7.3                 |
-| `A`    | 0.1                  | 4.3                 |
-| `D`    | 0.069                | 5.8                 |
-| `B`    | 0.155                | 4.0                 |
+`rating = round(clamp(ACTION_NOTA_BASE + ACTION_NOTA_SPAN × avg, 1.0, 10.0), 1)` with `ACTION_NOTA_BASE = 6.0` and `ACTION_NOTA_SPAN = 4.0`.
 
-**7.0 means average quality for that action in the calibration data**, not a common absolute score across actions. An action with no attempts keeps `None` for its percentage and Nota.
+- **Attack efficiency:** `calculate_efficiency()` reports `(A# − A-) / A_tot`;
+  this is a separate attack metric and is not `good / attempts`.
+
+How to read the Nota:
+
+- **Fixed anchors.** A single touch scores `#` 7.0, `+` 6.4, `!` 5.7, `-` 5.0
+  for every action; repeating one grade approaches its limit — 10.0 / 7.6 /
+  4.8 / 2.0 — without exceeding it. It is the same scale for team and player
+  cards and for match and season aggregates, and is never re-fitted per dataset,
+  position or season. The constants are frozen.
+- **Shrinkage = confidence, not a volume bonus.** Few attempts are pulled toward
+  6.0; more attempts of the same quality move the Nota toward that grade's
+  limit. No number of `S+` can exceed the `S+` limit of 7.6
+  (`1/4/6/50 × S+` → 6.4 / 6.9 / 7.1 / 7.5). Trade-off: every small sample sits
+  close to 6.0.
+- **Full grade mix, not the positive percentage.** `5×A+ A! A-` and
+  `5×A# A! A-` share `5/7` positive, but score 6.3 and 7.5; errors weigh more
+  than regular touches.
+- **Not the overall rating.** Position does not affect the action Nota, and it
+  is neither the player rating nor the team rating. The player rating has its
+  own shrinkage (`RATING_SHRINK = 3`) and role weights; the team rating
+  intentionally has no shrinkage (a match has hundreds of team touches).
+- **History.** This model replaced the earlier per-action fitted centers and
+  scales; rebuilding the site changes historical action Notas, but no overall
+  rating or efficiency metric.
+
+For example, in
+[`07_omega.txt`](teams/nova/atlas-chapalita-cup-2026/matches/07_omega.txt):
+
+- Player #7 has seven attacks: five `A+`, one `A!`, and one `A-`. The
+  positive-touch count is `5/7` (71%) and the attack Nota is 6.3:
+  `avg = (5 × 0.4 − 0.3 − 1.0) / (7 + 3) = 0.07`, `6.0 + 4.0 × 0.07 = 6.28 → 6.3`.
+  Attack efficiency for the same mix is separately `(0 − 1) / 7 = −1/7`.
+- Player #7 serves four `S+`: `avg = 4 × 0.4 / 7`, Nota 6.9.
+- Player #12 serves six `S+`: `avg = 6 × 0.4 / 9`, Nota 7.1 — the same quality
+  with more evidence ranks higher.
+
+The card's **Resumen por Calidad y Acción** table shows the grade counts used
+for the Nota. An action with no attempts keeps `None` for its percentage and Nota.
 
 ### Special lines
 
@@ -439,7 +477,7 @@ After that, every `git push` to `main` triggers an automatic rebuild.
 1. `generate.py` discovers every dataset folder under `teams/` that contains a `team.json`
 2. For each dataset it parses the `matches/*.txt` logs into a dedicated `data/<team>/<tournament>/volleyball.db`
 3. `parse_log()` tokenizes lines into rallies and records per-player and team stats
-4. `calculate_rating()` computes the team's plain-touch raw average over `PLAYER_GRADE_VALUES`, then `round(clamp(7.0 + (raw − 0.114) × 17.6, 1.0, 10.0), 1)`. Per-action Notas use their own action-centered scales. Player ratings use `calculate_player_rating()` (see [Player rating](#player-rating-role-based)). `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
+4. `calculate_rating()` computes the team's plain-touch raw average over `PLAYER_GRADE_VALUES`, then `round(clamp(7.0 + (raw − 0.114) × 17.6, 1.0, 10.0), 1)`. Per-action Notas use the fixed `ACTION_NOTA_GRADE_VALUES` anchors with 3 neutral pseudo-attempts (see [Per-action Nota](#per-action-nota)). Player ratings use `calculate_player_rating()` (see [Player rating](#player-rating-role-based)). `calculate_efficiency()` derives per-skill metrics: attack efficiency `(A# − A-) / A_tot`, reception positivity, serve ace/error %, set positivity, and block kills. (Attack efficiency still counts rival-error points as kills until the Phase 2 grade-integrity work lands.)
 5. `calculate_phase_stats()` tracks Side-Out and Transition kill sequences
 6. `calculate_point_stats()` infers Break Point / Side-Out outcomes from rally order
 7. Static HTML is written to `docs/<team>/<tournament>/`, and a root `docs/index.html` selector links to every dataset

@@ -1,35 +1,44 @@
 from copy import deepcopy
+from pathlib import Path
 
 import pytest
 
 from analytics import (
-    ACTION_NOTA_CENTER,
-    ACTION_NOTA_SCALE,
+    ACTION_NOTA_BASE,
+    ACTION_NOTA_GRADE_VALUES,
+    ACTION_NOTA_SHRINK,
+    ACTION_NOTA_SPAN,
     ACTIONS,
+    PLAYER_GRADE_VALUES,
     POSITION_LABELS,
     RATING_CENTER,
+    RATING_SHRINK,
     ROLE_ACTION_WEIGHTS,
     TEAM_RATING_RAW_MEAN,
     TEAM_RATING_SCALE,
+    WEIGHTS,
     calculate_action_stats,
+    calculate_efficiency,
     calculate_player_rating,
     calculate_rating,
+    parse_log,
 )
+
+OMEGA_LOG = Path(__file__).parents[1] / 'teams/nova/atlas-chapalita-cup-2026/matches/07_omega.txt'
 
 
 def test_frozen_team_and_action_rating_constants():
     assert RATING_CENTER == 7.0
+    assert RATING_SHRINK == 3
     assert TEAM_RATING_RAW_MEAN == 0.114
     assert TEAM_RATING_SCALE == 17.6
-    assert ACTION_NOTA_CENTER == {
-        'S': 0.206,
-        'R': 0.023,
-        'E': 0.071,
-        'A': 0.1,
-        'D': 0.069,
-        'B': 0.155,
-    }
-    assert ACTION_NOTA_SCALE == {'S': 4.8, 'R': 5.3, 'E': 7.3, 'A': 4.3, 'D': 5.8, 'B': 4.0}
+    assert ACTION_NOTA_GRADE_VALUES == {'#': 1.0, '+': 0.4, '!': -0.3, '-': -1.0}
+    assert ACTION_NOTA_BASE == 6.0
+    assert ACTION_NOTA_SPAN == 4.0
+    assert ACTION_NOTA_SHRINK == 3
+    # Independent tables: same values as WEIGHTS, but never the same object.
+    assert ACTION_NOTA_GRADE_VALUES is not WEIGHTS
+    assert all(ACTION_NOTA_GRADE_VALUES is not v for v in PLAYER_GRADE_VALUES.values())
 
 
 @pytest.mark.parametrize(
@@ -48,24 +57,16 @@ def test_team_rating_shared_values_and_plain_touch_average(stats_factory, touche
     assert calculate_rating(stats_factory(touches)) == expected
 
 
+@pytest.mark.parametrize('action', list('SREADB'))
 @pytest.mark.parametrize(
-    'action,ratings',
-    [
-        ('S', [10.0, 6.5, 5.1, 1.2]),
-        ('R', [9.5, 8.2, 5.8, 1.6]),
-        ('E', [9.4, 7.9, 3.6, 1.0]),
-        ('A', [10.0, 6.6, 5.7, 2.3]),
-        ('D', [9.5, 8.0, 6.6, 2.0]),
-        ('B', [10.0, 7.2, 5.2, 3.2]),
-    ],
+    'grade,rating,good', [('#', 7.0, 1), ('+', 6.4, 1), ('!', 5.7, 0), ('-', 5.0, 0)]
 )
-@pytest.mark.parametrize('grade,index,good', [('#', 0, 1), ('+', 1, 1), ('!', 2, 0), ('-', 3, 0)])
-def test_action_stats_single_touch_nota(stats_factory, action, ratings, grade, index, good):
+def test_action_stats_single_touch_nota(stats_factory, action, grade, rating, good):
     result = calculate_action_stats(stats_factory(action + grade))
     assert list(result) == list('SREADB')
     assert result == {
         a: (
-            {'tot': 1, 'good': good, 'pos_pct': float(good), 'rating': ratings[index]}
+            {'tot': 1, 'good': good, 'pos_pct': float(good), 'rating': rating}
             if a == action
             else {'tot': 0, 'good': 0, 'pos_pct': None, 'rating': None}
         )
@@ -73,12 +74,49 @@ def test_action_stats_single_touch_nota(stats_factory, action, ratings, grade, i
     }
 
 
-@pytest.mark.parametrize(
-    'action,expected', [('S', 5.7), ('R', 5.6), ('E', 4.0), ('A', 6.3), ('D', 6.0), ('B', 6.2)]
-)
-def test_action_stats_mixed_grade_nota(stats_factory, action, expected):
+@pytest.mark.parametrize('action', list('SREADB'))
+def test_action_stats_mixed_grade_nota(stats_factory, action):
+    # (1.0 - 0.3 - 1.0) / (3 + 3) = -0.05 -> 6.0 - 0.2 = 5.8, the same for every action.
     touches = f'{action}# {action}! {action}-'
-    assert calculate_action_stats(stats_factory(touches))[action]['rating'] == expected
+    assert calculate_action_stats(stats_factory(touches))[action]['rating'] == 5.8
+
+
+@pytest.mark.parametrize('count,expected', [(1, 6.4), (4, 6.9), (6, 7.1), (50, 7.5)])
+def test_action_stats_shrinkage_volume_series(stats_factory, count, expected):
+    serve = calculate_action_stats(stats_factory(' '.join(['S+'] * count)))['S']
+    assert serve['rating'] == expected
+    assert serve['pos_pct'] == 1.0
+    assert serve['good'] == count
+
+
+def test_action_stats_repeated_grade_never_exceeds_its_limit(stats_factory):
+    limits = {'#': 10.0, '+': 7.6, '!': 4.8, '-': 2.0}
+    for grade, limit in limits.items():
+        ratings = [
+            calculate_action_stats(stats_factory(' '.join(['S' + grade] * n)))['S']['rating']
+            for n in (1, 10, 100, 1000)
+        ]
+        if grade in '#+':
+            assert ratings == sorted(ratings)
+            assert ratings[-1] <= limit
+        else:
+            assert ratings == sorted(ratings, reverse=True)
+            assert ratings[-1] >= limit
+
+
+def test_action_stats_equal_positive_rate_differs_by_grade(stats_factory):
+    plus = calculate_action_stats(stats_factory('A+ A+ A+ A+ A+ A! A-'))['A']
+    kill = calculate_action_stats(stats_factory('A# A# A# A# A# A! A-'))['A']
+    assert plus['good'] == kill['good'] == 5
+    assert plus['pos_pct'] == kill['pos_pct'] == pytest.approx(5 / 7)
+    assert plus['rating'] == 6.3
+    assert kill['rating'] == 7.5
+
+
+def test_action_stats_error_instead_of_regular_lowers_nota(stats_factory):
+    # (0.4 - 0.3) / 5 = 0.02 -> 6.1; (0.4 - 1.0) / 5 = -0.12 -> 5.5
+    assert calculate_action_stats(stats_factory('R+ R!'))['R']['rating'] == 6.1
+    assert calculate_action_stats(stats_factory('R+ R-'))['R']['rating'] == 5.5
 
 
 def test_action_stats_empty_and_unrounded_fraction(stats_factory):
@@ -90,7 +128,24 @@ def test_action_stats_empty_and_unrounded_fraction(stats_factory):
     assert attack['tot'] == 3
     assert attack['good'] == 1
     assert attack['pos_pct'] == pytest.approx(1 / 3)
+    assert attack['rating'] == 5.8
+
+
+def test_omega_source_log_action_notas():
+    """Keep the documented Omega examples tied to their source match log."""
+    parsed = parse_log(OMEGA_LOG.read_text(encoding='utf-8'))
+    seven = calculate_action_stats(parsed['players']['7'])
+    twelve = calculate_action_stats(parsed['players']['12'])
+
+    attack = seven['A']
+    assert attack['good'] == 5
+    assert attack['tot'] == 7
+    assert attack['pos_pct'] == pytest.approx(5 / 7)
     assert attack['rating'] == 6.3
+    assert calculate_efficiency(parsed['players']['7'])['attack_eff'] == pytest.approx(-1 / 7)
+
+    assert (seven['S']['good'], seven['S']['tot'], seven['S']['rating']) == (4, 4, 6.9)
+    assert (twelve['S']['good'], twelve['S']['tot'], twelve['S']['rating']) == (6, 6, 7.1)
 
 
 @pytest.mark.parametrize('calculator', [calculate_rating, calculate_action_stats])
@@ -121,4 +176,3 @@ def test_mb_reception_and_opp_defense_affect_player_rating(stats_factory):
     opp_good_a = calculate_player_rating(stats_factory('D# D+ A# A#'), 'OPP')
     opp_bad_a = calculate_player_rating(stats_factory('D# D+ A- A-'), 'OPP')
     assert opp_good_a > opp_bad_a
-

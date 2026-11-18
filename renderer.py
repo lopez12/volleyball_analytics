@@ -224,7 +224,7 @@ def _action_efficiency_charts(
         season_pct = round(season_actions[action]['pos_pct'] * 100)
         season_rating = season_actions[action]['rating']
         charts_html += _section(
-            f'{action_name} - Eficiencia · {season_pct}% · Nota {season_rating}',
+            f'{action_name} - Acciones positivas (#/+) · {season_pct}% · Nota {season_rating}',
             chart_html,
             collapsed=(action in collapsed_actions),
         )
@@ -361,7 +361,10 @@ def build_card_html(title, data, rating, extra_class=''):
             f'<span class="action-count">{good}/{tot}</span>'
             f'<span class="action-pct">{round(eff * 100)}%</span>'
             f'<span class="action-rating" style="color:{_rating_color(a_rating)};" '
-            f'title="Nota de la acción (1-10)">{a_rating}</span>'
+            f'title="Nota: promedio de los grados de esta acción en una escala fija, '
+            f'ajustado hacia el centro cuando hay pocos intentos; '
+            f'desglose en Resumen por Calidad y Acción">'
+            f'{a_rating}</span>'
             f'</div>'
         )
     pills_html = ''.join(pills)
@@ -408,7 +411,7 @@ def build_card_html(title, data, rating, extra_class=''):
         f'<div class="metric-row"><span>Error (-)</span><span style="color:var(--danger);">{error_pct}%</span></div>'
         f'<div class="bar-container"><div class="bar-fill" style="width:{error_pct}%;background-color:var(--danger);"></div></div>'
         f'<div class="action-section">'
-        f'<div class="action-title">Efectividad por Acción (Buenos/Total · % · Nota)</div>'
+        f'<div class="action-title">Acciones positivas (#/+) / Total · % · Nota</div>'
         f'<div class="action-grid">{pills_html}</div>'
         f'</div>'
         f'<div class="action-section" style="margin-top:16px;">'
@@ -1510,7 +1513,7 @@ def render_team_season_page(
     chart_labels = json.dumps([m['match_title'].replace(team_prefix, '') for m in team_stats])
     chart_ratings = json.dumps(ratings)
 
-    # Action efficiency trends
+    # Positive-touch rate trends
     action_charts_html = _action_efficiency_charts(team_stats, chart_labels, 'chart-team-action')
 
     # Phase stats trends (BP%, SO%)
@@ -1679,7 +1682,7 @@ def render_team_season_page(
         )
     }
 
-  {_section('Eficiencia por Acción (Tendencia)', action_charts_html)}
+  {_section('Acciones positivas por Acción (Tendencia)', action_charts_html)}
 
   {_section('Estadísticas Acumuladas', f'<div class="players-grid">{season_card}</div>')}
 

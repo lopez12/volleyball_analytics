@@ -28,7 +28,7 @@ GRADES = ['#', '+', '!', '-']
 
 # Shared grade values and player-rating constants. Derived from the
 # 2026-11-11 analysis (#56) and frozen: never recomputed per dataset.
-# Per-action value of each grade for team, player and per-action ratings.
+# Per-action value of each grade for team and player ratings.
 PLAYER_GRADE_VALUES = {
     'S': {'#': 1.0, '+': 0.1, '!': -0.2, '-': -1.0},
     'R': {'#': 0.5, '+': 0.25, '!': -0.2, '-': -1.0},
@@ -54,27 +54,17 @@ RATING_CENTER = 7.0  # rating of an average raw score
 RATING_RAW_MEAN = 0.066  # raw score mapped to RATING_CENTER
 RATING_SCALE = 11.6  # rating points per unit of raw score
 
-# Team and per-action scales fitted on 2026-11-11 data (#57) and frozen.
+# Team scale fitted on 2026-11-11 data (#57) and frozen.
 TEAM_RATING_RAW_MEAN = 0.114  # team raw score mapped to RATING_CENTER
 TEAM_RATING_SCALE = 17.6  # team rating points per unit of raw score
-# Per-action average raw score mapped to RATING_CENTER.
-ACTION_NOTA_CENTER = {
-    'S': 0.206,
-    'R': 0.023,
-    'E': 0.071,
-    'A': 0.1,
-    'D': 0.069,
-    'B': 0.155,
-}
-# Per-action Nota points per unit of raw score.
-ACTION_NOTA_SCALE = {
-    'S': 4.8,
-    'R': 5.3,
-    'E': 7.3,
-    'A': 4.3,
-    'D': 5.8,
-    'B': 4.0,
-}
+
+# Per-action Nota: fixed grade anchors (the BRIEF-12 values), shared by all six
+# actions and frozen. Deliberately a separate table from WEIGHTS and
+# PLAYER_GRADE_VALUES so changing one never changes score_sum or any rating.
+ACTION_NOTA_GRADE_VALUES = {'#': 1.0, '+': 0.4, '!': -0.3, '-': -1.0}
+ACTION_NOTA_BASE = 6.0  # Nota of a neutral (value 0) average
+ACTION_NOTA_SPAN = 4.0  # Nota points per unit of average grade value
+ACTION_NOTA_SHRINK = 3  # pseudo-attempts at value 0 per action (independent of RATING_SHRINK)
 
 # ---------------------------------------------------------------------------
 # Player position config
@@ -946,15 +936,17 @@ def calculate_player_rating(data, position='U'):
 def calculate_action_stats(data):
     """Compute the positive percentage and 1-10 grade ("Nota") for every action.
 
-    Each action's plain touch average uses PLAYER_GRADE_VALUES, without shrinkage:
+    Every action uses the same fixed grade anchors, shrunk toward the neutral
+    midpoint by ACTION_NOTA_SHRINK pseudo-attempts valued 0:
 
         avg = Σ_grade grade_count[grade][action]
-                      * PLAYER_GRADE_VALUES[action][grade] / tot
-        rating = round(clamp(RATING_CENTER + (avg - ACTION_NOTA_CENTER[action])
-                             * ACTION_NOTA_SCALE[action], 1.0, 10.0), 1)
+                      * ACTION_NOTA_GRADE_VALUES[grade] / (tot + ACTION_NOTA_SHRINK)
+        rating = round(clamp(ACTION_NOTA_BASE + ACTION_NOTA_SPAN * avg, 1.0, 10.0), 1)
 
-    The frozen centers and scales make 7.0 the average quality for that action
-    in the calibration data, not a common absolute scale across actions.
+    The Nota measures quality per touch: a single touch scores # 7.0, + 6.4,
+    ! 5.7, - 5.0, and repeating one grade approaches its limit (10.0 / 7.6 /
+    4.8 / 2.0) without exceeding it. Position plays no part, and 'good' and
+    'pos_pct' stay unshrunk.
 
     Args:
         data (dict): A stats dict with 'actions' and 'grade_count' keys (from
@@ -975,19 +967,10 @@ def calculate_action_stats(data):
         tot = actions[action]['tot']
         good = actions[action]['good']
         if tot:
-            avg = (
-                sum(gc[grade][action] * PLAYER_GRADE_VALUES[action][grade] for grade in GRADES)
-                / tot
-            )
+            value = sum(gc[grade][action] * ACTION_NOTA_GRADE_VALUES[grade] for grade in GRADES)
+            avg = value / (tot + ACTION_NOTA_SHRINK)
             pos_pct = good / tot
-            rating = round(
-                _clamp(
-                    RATING_CENTER + (avg - ACTION_NOTA_CENTER[action]) * ACTION_NOTA_SCALE[action],
-                    1.0,
-                    10.0,
-                ),
-                1,
-            )
+            rating = round(_clamp(ACTION_NOTA_BASE + ACTION_NOTA_SPAN * avg, 1.0, 10.0), 1)
         else:
             pos_pct = None
             rating = None
