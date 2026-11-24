@@ -636,9 +636,15 @@ function checkActionPills(doc) {
   var grid = doc.querySelector('.action-grid--summary');
   var pills = Array.from(grid.querySelectorAll('.action-pill'));
   var expected = {
-    high: ['--good-bg', '--good-text'],
-    mid: ['--regular-bg', '--rating-mid-text'],
-    low: ['--bad-bg', '--ui-loss-text']
+    high: {background: '--good-bg', border: '--good-border', text: {
+      '.action-name': '--good-text', '.action-count': '--good-text', '.action-pct': '--good-text'
+    }},
+    mid: {background: '--surface-2', border: '--border', text: {
+      '.action-name': '--text-soft', '.action-count': '--text-strong', '.action-pct': '--text-soft'
+    }},
+    low: {background: '--bad-bg', border: '--bad-border', text: {
+      '.action-name': '--ui-loss-text', '.action-count': '--ui-loss-text', '.action-pct': '--ui-loss-text'
+    }}
   };
   var found = new Set();
   pills.forEach(function(pill) {
@@ -650,23 +656,22 @@ function checkActionPills(doc) {
       'Action pill class does not match its Nota tier');
     found.add(tier);
     var styles = doc.defaultView.getComputedStyle(pill);
-    function token(name) {
+    function token(name, property) {
       var swatch = doc.createElement('span');
-      swatch.style.color = 'var(' + name + ')';
-      swatch.style.backgroundColor = 'var(' + name + ')';
+      property = property || 'color';
+      swatch.style[property] = 'var(' + name + ')';
       doc.body.append(swatch);
-      var value = doc.defaultView.getComputedStyle(swatch).color;
-      var background = doc.defaultView.getComputedStyle(swatch).backgroundColor;
+      var value = doc.defaultView.getComputedStyle(swatch)[property];
       swatch.remove();
-      return name.endsWith('-bg') ? background : value;
+      return value;
     }
-    assert(styles.backgroundColor === token(expected[tier][0]),
+    assert(styles.backgroundColor === token(expected[tier].background, 'backgroundColor'),
       'Action pill surface does not match its tier: ' + tier);
-    assert(styles.borderColor !== 'rgba(0, 0, 0, 0)',
-      'Action pill tier boundary is not visible: ' + tier);
+    assert(styles.borderColor === token(expected[tier].border, 'borderColor'),
+      'Action pill border does not match its tier: ' + tier);
     ['.action-name', '.action-count', '.action-pct'].forEach(function(selector) {
       var text = doc.defaultView.getComputedStyle(pill.querySelector(selector));
-      assert(text.color === token(expected[tier][1]),
+      assert(text.color === token(expected[tier].text[selector]),
         'Action pill text color does not match its tier: ' + tier);
       assert(contrastRatio(text.color, styles.backgroundColor, doc) >= 4.5,
         'Action pill text contrast below 4.5:1: ' + tier + ' ' + selector);

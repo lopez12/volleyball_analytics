@@ -1476,11 +1476,6 @@ button:active { transform: translateY(0); }
     background-color: var(--good-bg);
     color: var(--good-text);
 }
-.action-grid--summary .action-pill.action-pill--mid {
-    border-color: var(--regular-border);
-    background-color: var(--regular-bg);
-    color: var(--rating-mid-text);
-}
 .action-grid--summary .action-pill.action-pill--low {
     border-color: var(--bad-border);
     background-color: var(--bad-bg);
@@ -1489,9 +1484,6 @@ button:active { transform: translateY(0); }
 .action-grid--summary .action-pill.action-pill--high .action-name,
 .action-grid--summary .action-pill.action-pill--high .action-count,
 .action-grid--summary .action-pill.action-pill--high .action-pct { color: var(--good-text); }
-.action-grid--summary .action-pill.action-pill--mid .action-name,
-.action-grid--summary .action-pill.action-pill--mid .action-count,
-.action-grid--summary .action-pill.action-pill--mid .action-pct { color: var(--rating-mid-text); }
 .action-grid--summary .action-pill.action-pill--low .action-name,
 .action-grid--summary .action-pill.action-pill--low .action-count,
 .action-grid--summary .action-pill.action-pill--low .action-pct { color: var(--ui-loss-text); }

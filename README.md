@@ -301,11 +301,13 @@ the percentage about two thirds across and the Nota’s rating pill inset from t
 right edge. The numbers are centered in aligned columns, including season counts
 such as `123/456`. Wider screens keep the equal-width grid, with right-aligned counts
 and percentages and the rating pill centered in the last column. Each outer
-action pill's theme-aware green, amber or red tint follows its embedded Nota:
-green at 8.0 or above, amber from 6.0 up to (but not including) 8.0, and red
-below 6.0. The positive-touch percentage remains a separate measurement and
-does not determine the tint. All four grades remain in the separate quality
-breakdown. Both the pills and the table use **Recepción** without
+action pill's theme-aware green highlight follows its embedded Nota at 8.0 or
+above, and its red highlight applies below 6.0. From 6.0 up to (but not
+including) 8.0, the outer action pill keeps its default neutral background,
+border and text; the inner Nota rating pill remains amber. The positive-touch
+percentage remains a separate measurement and does not determine the tint. All
+four grades remain in the separate quality breakdown. Both the pills and the
+table use **Recepción** without
 an asterisk. An unmarked note at the bottom of each card page explains how
 **Recepción** differs from **Defensa**; charts keep the full **Recepción de Saque** heading.
 
