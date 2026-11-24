@@ -5,6 +5,7 @@ No knowledge of SQLite or file I/O.
 """
 
 import json
+import math
 import re
 import statistics
 from html import escape as _html_escape
@@ -32,6 +33,149 @@ function toggleSection(el) {
   var content = el.nextElementSibling;
   content.classList.toggle('collapsed');
 }
+</script>"""
+
+
+_CHART_INTERACTION_JS = """<script>
+(function () {
+  var charts = [];
+  var selected = null;
+  var touchStart = null;
+
+  function chartForTarget(target) {
+    return charts.find(function (chart) {
+      return chart.canvas === target || chart.canvas.contains(target);
+    }) || null;
+  }
+  function clearChart(chart) {
+    if (!chart || chart.destroyed) return;
+    chart.setActiveElements([]);
+    if (chart.tooltip) chart.tooltip.setActiveElements([], {x: 0, y: 0});
+    chart.update('none');
+  }
+  function dismiss() {
+    if (!selected) return;
+    clearChart(selected.chart);
+    selected = null;
+  }
+  function activeAt(chart, index) {
+    return chart.data.datasets.reduce(function (active, dataset, datasetIndex) {
+      if (chart.isDatasetVisible(datasetIndex) &&
+          dataset.data[index] !== null && dataset.data[index] !== undefined) {
+        active.push({datasetIndex: datasetIndex, index: index});
+      }
+      return active;
+    }, []);
+  }
+  function selectPoint(chart, event) {
+    var hits = chart.getElementsAtEventForMode(
+      event, 'nearest', {intersect: true}, false
+    );
+    if (!hits.length) {
+      dismiss();
+      return;
+    }
+    var index = hits[0].index;
+    if (selected && selected.chart === chart && selected.index === index) {
+      dismiss();
+      return;
+    }
+    dismiss();
+    var active = activeAt(chart, index);
+    var point = chart.getDatasetMeta(hits[0].datasetIndex).data[index];
+    var position = point.getCenterPoint();
+    chart.setActiveElements(active);
+    if (chart.tooltip) chart.tooltip.setActiveElements(active, position);
+    chart.update('none');
+    selected = {chart: chart, index: index};
+  }
+  window.registerSeasonChart = function (chart) {
+    if (!chart || !chart.canvas) return chart;
+    charts.push(chart);
+    chart.canvas.addEventListener('pointerleave', function (event) {
+      if (event.pointerType === 'mouse') {
+        if (selected && selected.chart === chart) dismiss();
+      }
+    });
+    return chart;
+  };
+  document.addEventListener('pointerdown', function (event) {
+    if (event.pointerType === 'touch') {
+      touchStart = {
+        chart: chartForTarget(event.target),
+        x: event.clientX,
+        y: event.clientY,
+        id: event.pointerId
+      };
+    }
+  }, {passive: true});
+  document.addEventListener('pointerup', function (event) {
+    if (!touchStart || event.pointerType !== 'touch' || touchStart.id !== event.pointerId) return;
+    var start = touchStart;
+    touchStart = null;
+    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) {
+      dismiss();
+      return;
+    }
+    var chart = start.chart;
+    if (!chart || chartForTarget(event.target) !== chart) {
+      dismiss();
+      return;
+    }
+    selectPoint(chart, event);
+  }, {passive: true});
+  document.addEventListener('pointermove', function (event) {
+    if (!touchStart || event.pointerType !== 'touch' || touchStart.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - touchStart.x, event.clientY - touchStart.y) > 10) {
+      touchStart = null;
+      dismiss();
+    }
+  }, {passive: true});
+  document.addEventListener('touchmove', function () {
+    touchStart = null;
+    dismiss();
+  }, {passive: true});
+  document.addEventListener('pointercancel', function () {
+    touchStart = null;
+    dismiss();
+  }, {passive: true});
+  document.addEventListener('touchcancel', function () {
+    touchStart = null;
+    dismiss();
+  }, {passive: true});
+  document.addEventListener('scroll', dismiss, true);
+  document.addEventListener('wheel', dismiss, {passive: true});
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') dismiss();
+  });
+  function refreshChartTheme(chart) {
+    var style = getComputedStyle(document.documentElement);
+    chart.data.datasets.forEach(function (dataset) {
+      if (dataset._themeToken) {
+        dataset.borderColor = style.getPropertyValue(dataset._themeToken).trim();
+        dataset.pointBackgroundColor = dataset.borderColor;
+      }
+    });
+    if (chart._themeLegendToken && chart.options.plugins.legend) {
+      chart.options.plugins.legend.labels.color =
+        style.getPropertyValue(chart._themeLegendToken).trim();
+    }
+    chart.update('none');
+  }
+  var themeObserver = new MutationObserver(function () {
+    charts.forEach(refreshChartTheme);
+  });
+  themeObserver.observe(document.documentElement, {
+    attributes: true, attributeFilter: ['data-theme']
+  });
+  var systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+  if (systemTheme.addEventListener) {
+    systemTheme.addEventListener('change', function () {
+      themeObserver.takeRecords();
+      charts.forEach(refreshChartTheme);
+    });
+  }
+})();
 </script>"""
 
 
@@ -105,6 +249,20 @@ def _date_span(isos):
     return lo if lo == hi else f'{lo} – {hi}'
 
 
+def _json_for_script(value):
+    """Serialize JSON so data cannot terminate or alter an inline script element."""
+    payload = json.dumps(value, ensure_ascii=False)
+    for char, replacement in (
+        ('&', '\\u0026'),
+        ('<', '\\u003c'),
+        ('>', '\\u003e'),
+        ('\u2028', '\\u2028'),
+        ('\u2029', '\\u2029'),
+    ):
+        payload = payload.replace(char, replacement)
+    return payload
+
+
 def _back_link(href='index.html', label='\u2190 Inicio', title=None):
     """Return a top-of-page back-link div, optionally with an accessible title."""
     title_attr = f' title="{_html_escape(title, quote=True)}"' if title else ''
@@ -161,7 +319,7 @@ _POSITION_COLLAPSED_ACTIONS = {
 def _action_efficiency_charts(
     match_stats, chart_labels_json, canvas_prefix, collapsed_actions=None
 ):
-    """Build collapsible dual-line (Perfecto / Positivo) efficiency charts for each action.
+    """Build collapsible complementary positive/regular-error touch charts.
 
     Args:
         match_stats (list[dict]): Per-match stat rows (player or team).
@@ -182,15 +340,24 @@ def _action_efficiency_charts(
         if season_total < 5:
             continue
         positive_pcts = []
-        perfect_pcts = []
+        other_pcts = []
+        positive_counts = []
+        other_counts = []
+        totals = []
         for m in match_stats:
             tot = m[f'{a_lower}_tot']
             good = m[f'{a_lower}_good']
-            perf = m[f'perfect_{a_lower}']
-            positive_pcts.append(round((good / tot) * 100) if tot > 0 else None)
-            perfect_pcts.append(round((perf / tot) * 100) if tot > 0 else None)
-        positive_json = json.dumps(positive_pcts)
-        perfect_json = json.dumps(perfect_pcts)
+            positive_pct = round(100 * good / tot) if tot > 0 else None
+            positive_pcts.append(positive_pct)
+            other_pcts.append(100 - positive_pct if positive_pct is not None else None)
+            positive_counts.append(good if tot > 0 else None)
+            other_counts.append(tot - good if tot > 0 else None)
+            totals.append(tot if tot > 0 else None)
+        positive_json = _json_for_script(positive_pcts)
+        other_json = _json_for_script(other_pcts)
+        positive_counts_json = _json_for_script(positive_counts)
+        other_counts_json = _json_for_script(other_counts)
+        totals_json = _json_for_script(totals)
         action_name = FULL_NAMES[action]
         canvas_id = f'{canvas_prefix}-{a_lower}'
         chart_html = f'''
@@ -200,13 +367,18 @@ def _action_efficiency_charts(
     <script>
     (function() {{
       const labels = {chart_labels_json};
-      new Chart(document.getElementById('{canvas_id}'), {{
+      const positiveCounts = {positive_counts_json};
+      const otherCounts = {other_counts_json};
+      const totals = {totals_json};
+      const positiveColor = getComputedStyle(document.documentElement).getPropertyValue('--success').trim();
+      const otherColor = getComputedStyle(document.documentElement).getPropertyValue('--danger').trim();
+      const chart = new Chart(document.getElementById('{canvas_id}'), {{
         type: 'line',
         data: {{
           labels: labels,
           datasets: [
-            {{ label: 'Positivo (#+ %)', data: {positive_json}, borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.08)', fill: true, tension: 0.3, spanGaps: true }},
-            {{ label: 'Perfecto (# %)',  data: {perfect_json},  borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.12)', fill: true, tension: 0.3, spanGaps: true }}
+            {{ label: 'Positivas (#/+)', data: {positive_json}, borderColor: positiveColor, pointBackgroundColor: positiveColor, pointStyle: 'circle', borderWidth: 2, fill: false, tension: 0.3, cubicInterpolationMode: 'monotone', spanGaps: false, _themeToken: '--success' }},
+            {{ label: 'Regulares y errores (!/-)', data: {other_json}, borderColor: otherColor, pointBackgroundColor: otherColor, pointStyle: 'rectRot', borderDash: [6, 3], borderWidth: 2, fill: false, tension: 0.3, cubicInterpolationMode: 'monotone', spanGaps: false, _themeToken: '--danger' }}
           ]
         }},
         options: {{
@@ -214,17 +386,28 @@ def _action_efficiency_charts(
           interaction: {{ mode: 'index', intersect: false }},
           scales: {{ y: {{ min: 0, max: 100, ticks: {{ callback: v => v + '%' }} }} }},
           plugins: {{
-            legend: {{ display: true, position: 'bottom', labels: {{ boxWidth: 12, font: {{ size: 11 }} }} }},
-            tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '-') }} }}
+            legend: {{ display: true, position: 'bottom', labels: {{
+              color: getComputedStyle(document.documentElement).getPropertyValue('--text-main').trim(),
+              boxWidth: 12, font: {{ size: 11 }}
+            }} }},
+            tooltip: {{ callbacks: {{ label: function(ctx) {{
+              var value = ctx.parsed.y;
+              var count = ctx.datasetIndex === 0 ? positiveCounts[ctx.dataIndex] : otherCounts[ctx.dataIndex];
+              var total = totals[ctx.dataIndex];
+              return ctx.dataset.label + ': ' + (value !== null
+                ? value + '% (' + count + '/' + total + ')' : '—');
+            }} }} }}
           }}
         }}
       }});
+      chart._themeLegendToken = '--text-main';
+      window.registerSeasonChart(chart);
     }})();
     </script>'''
         season_pct = round(season_actions[action]['pos_pct'] * 100)
         season_rating = season_actions[action]['rating']
         charts_html += _section(
-            f'{action_name} - Acciones positivas (#/+) · {season_pct}% · Nota {season_rating}',
+            f'{action_name} - Toques positivos (#/+) · {season_pct}% · Nota {season_rating}',
             chart_html,
             collapsed=(action in collapsed_actions),
         )
@@ -282,6 +465,29 @@ def _pct(n, total):
     return round((n / total) * 100) if total > 0 else 0
 
 
+def _rating_tier(rating):
+    """Use the same high/mid/low cutoffs for themed and legacy rating colors."""
+    if rating >= 8:
+        return 'high'
+    if rating >= 6:
+        return 'mid'
+    return 'low'
+
+
+def _rating_pill(value, *, title=None):
+    """Render a numeric rating without reformatting it; leave other text unboxed."""
+    text = _html_escape(str(value))
+    try:
+        tier = _rating_tier(float(value))
+    except (TypeError, ValueError):
+        return text
+    tooltip = f' title="{_html_escape(title)}"' if title is not None else ''
+    return f'<span class="rating-pill" data-tier="{tier}"{tooltip}>{text}</span>'
+
+
+_RATING_COLORS = {'high': '#16a34a', 'mid': '#ca8a04', 'low': '#dc2626'}
+
+
 def _rating_color(rating):
     """Return a CSS hex colour string that encodes the performance rating tier.
 
@@ -296,16 +502,19 @@ def _rating_color(rating):
     Returns:
         str: A CSS-compatible hex colour string.
     """
-    if rating >= 8:
-        return '#16a34a'
-    if rating >= 6:
-        return '#ca8a04'
-    return '#dc2626'
+    return _RATING_COLORS[_rating_tier(rating)]
 
 
 # ---------------------------------------------------------------------------
 # Card HTML builders
 # ---------------------------------------------------------------------------
+
+# Keep the short reception label local to cards; charts use FULL_NAMES.
+_CARD_ACTION_NAMES = {**FULL_NAMES, 'R': 'Recepción'}
+_ACTION_FOOTNOTE_HTML = (
+    '<p class="action-footnote">Recepción: recepción del saque rival. '
+    'Defensa: defensa del resto de balones del rival (ataques y balones libres).</p>'
+)
 
 
 def build_card_html(title, data, rating, extra_class=''):
@@ -313,12 +522,11 @@ def build_card_html(title, data, rating, extra_class=''):
 
     The card is composed of four sections:
         1. Header: displays the title (e.g. '#7' or 'Equipo') and a colour-coded
-           rating badge using _rating_color().
+           rating pill.
         2. Grade bars: four metric rows (Perfecto, Positivo, Regular, Error) showing
            each grade's share of total actions as a percentage bar.
-        3. Action-efficiency pills: one pill per action type that has at least one
-           occurrence, showing 'good/total'. Pills are highlighted green if
-           efficiency == 100 % or red if efficiency < 40 %.
+        3. Action pills: one aligned pill per recorded action with positive count,
+           positive percentage and its distinct Nota.
         4. Grade × action cross-tab table: rows are action types, columns are grades.
            The highest value in the good columns (# and +) is highlighted green;
            the highest in Regular is highlighted amber; the highest in Error is red.
@@ -342,32 +550,36 @@ def build_card_html(title, data, rating, extra_class=''):
     positive_pct = _pct(grades['+'], total)
     regular_pct = _pct(grades['!'], total)
     error_pct = _pct(grades['-'], total)
-    r_color = _rating_color(rating)
 
-    # Action pills
-    pills = []
+    # Aligned action pills (scoped grid modifier); the four-grade mix remains below.
+    nota_title = (
+        'Promedio de los grados de la acción en escala fija; se ajusta al centro '
+        'cuando hay pocos intentos, excepto en bloqueo.'
+    )
+    action_pills = []
     for action, a in calculate_action_stats(data).items():
         if a['tot'] == 0:
             continue
         eff = a['pos_pct']
-        pill_class = 'high-perf' if eff == 1.0 else ('low-perf' if eff < 0.4 else '')
-        name = FULL_NAMES[action]
-        good = a['good']
-        tot = a['tot']
-        a_rating = a['rating']
-        pills.append(
-            f'<div class="action-pill {pill_class}">'
-            f'<span class="action-name">{name}</span>'
-            f'<span class="action-count">{good}/{tot}</span>'
+        rate_class = 'high-perf' if eff == 1.0 else ('low-perf' if eff < 0.4 else '')
+        pill_class = f'action-pill {rate_class}'.strip()
+        action_pills.append(
+            f'<div class="{pill_class}">'
+            f'<span class="action-name">{_CARD_ACTION_NAMES[action]}</span>'
+            f'<span class="action-count">{a["good"]}/{a["tot"]}</span>'
             f'<span class="action-pct">{round(eff * 100)}%</span>'
-            f'<span class="action-rating" style="color:{_rating_color(a_rating)};" '
-            f'title="Nota: promedio de los grados de esta acción en una escala fija, '
-            f'ajustado hacia el centro cuando hay pocos intentos, excepto en bloqueo; '
-            f'desglose en Resumen por Calidad y Acción">'
-            f'{a_rating}</span>'
+            f'{_rating_pill(a["rating"], title=nota_title)}'
             f'</div>'
         )
-    pills_html = ''.join(pills)
+    action_pills_html = (
+        ''.join(action_pills)
+        if action_pills
+        else '<span class="action-empty">Sin acciones registradas</span>'
+    )
+    action_table = (
+        '<div class="action-title">Acciones positivas (#/+) / Total · % · Nota</div>'
+        f'<div class="action-grid action-grid--summary">{action_pills_html}</div>'
+    )
 
     # Summary table – highlight max values per column
     max_good = max((max(grade_count['#'][a], grade_count['+'][a]) for a in ACTIONS), default=0)
@@ -380,7 +592,7 @@ def build_card_html(title, data, rating, extra_class=''):
         positive = grade_count['+'][action]
         regular = grade_count['!'][action]
         error = grade_count['-'][action]
-        action_name = FULL_NAMES[action]
+        action_name = _CARD_ACTION_NAMES[action]
         pc = 'highlight-good' if perfect == max_good and max_good > 0 else ''
         posc = 'highlight-good' if positive == max_good and max_good > 0 else ''
         rc = 'highlight-regular' if regular == max_regular and max_regular > 0 else ''
@@ -398,8 +610,8 @@ def build_card_html(title, data, rating, extra_class=''):
     return (
         f'<div class="{card_class}">'
         f'<div class="card-header">'
-        f'<span class="player-number">{title}</span>'
-        f'<span class="player-rating" style="color:{r_color};background:white;">{rating}</span>'
+        f'<span class="player-number">{_html_escape(str(title))}</span>'
+        f'{_rating_pill(rating)}'
         f'</div>'
         f'<div class="card-body">'
         f'<div class="metric-row"><span>Perfecto (#)</span><span style="color:var(--success);">{perfect_pct}%</span></div>'
@@ -411,8 +623,7 @@ def build_card_html(title, data, rating, extra_class=''):
         f'<div class="metric-row"><span>Error (-)</span><span style="color:var(--danger);">{error_pct}%</span></div>'
         f'<div class="bar-container"><div class="bar-fill" style="width:{error_pct}%;background-color:var(--danger);"></div></div>'
         f'<div class="action-section">'
-        f'<div class="action-title">Acciones positivas (#/+) / Total · % · Nota</div>'
-        f'<div class="action-grid">{pills_html}</div>'
+        f'{action_table}'
         f'</div>'
         f'<div class="action-section" style="margin-top:16px;">'
         f'<div class="action-title" style="margin-bottom:8px;">Resumen por Calidad y Acción</div>'
@@ -704,12 +915,14 @@ def render_match_page(
     if youtube_urls or watch_href:
         stats_link = (
             '<a class="youtube-set-link youtube-set-link--stats" '
-            f'href="{_html_escape(watch_href, quote=True)}">Ver con estadísticas</a>'
+            f'href="{_html_escape(watch_href, quote=True)}">'
+            '<span class="youtube-set-link__surface">▶ Ver con estadísticas</span></a>'
             if watch_href
             else ''
         )
         set_links = ''.join(
-            f'<a href="{_html_escape(url, quote=True)}" target="_blank" rel="noopener noreferrer" class="youtube-set-link">Set {i + 1}</a>'
+            f'<a href="{_html_escape(url, quote=True)}" target="_blank" rel="noopener noreferrer" class="youtube-set-link">'
+            f'<span class="youtube-set-link__surface">▶ Set {i + 1}</span></a>'
             for i, url in enumerate(youtube_urls)
         )
         links = stats_link + (
@@ -814,6 +1027,7 @@ def render_match_page(
 
   {_section('Detalle por Jugador', f'<div class="players-grid">{player_cards}</div>')}
 
+  {_ACTION_FOOTNOTE_HTML}
   {_back_nav('matches.html', '← Todos los partidos')}
 </div>
 </body>
@@ -893,11 +1107,14 @@ def render_watch_page(
     start_score = sets[0]['start_score'] if sets else [0, 0]
     initial_score = ' \u2013 '.join(str(value) for value in start_score)
     offset = start_score != [0, 0]
-    scope = (
-        'Estad\u00edsticas registradas en la grabaci\u00f3n'
-        if offset
-        else 'Estad\u00edsticas del set hasta este momento'
+    scope = 'Estad\u00edsticas registradas en la grabaci\u00f3n' if offset else ''
+    scope_hidden = '' if offset else ' hidden'
+    reconciliation = (
+        ''
+        if not sets or sets[0]['reconciled']
+        else 'Sin marcador final registrado; no hay reconciliaci\u00f3n independiente del resultado.'
     )
+    reconciliation_hidden = '' if reconciliation else ' hidden'
     start_note = (
         f'La grabaci\u00f3n inicia con el marcador {start_score[0]}\u2013{start_score[1]}.'
         if offset
@@ -911,8 +1128,9 @@ def render_watch_page(
     bottom_back = _back_nav(safe_report_href, '\u2190 Reporte completo')
     stats_section = _section(
         'Estad\u00edsticas del set',
-        f'<p id="replay-scope" class="replay-muted">{scope}</p>'
-        '<p id="replay-reconciliation" class="replay-muted"></p>'
+        f'<p id="replay-scope" class="replay-muted"{scope_hidden}>{scope}</p>'
+        f'<p id="replay-reconciliation" class="replay-muted"{reconciliation_hidden}>'
+        f'{reconciliation}</p>'
         '<div id="replay-stats"><div class="general-stats replay-cards" id="replay-cards"></div></div>',
     )
     players_section = _section(
@@ -1053,7 +1271,10 @@ def render_index_page(
     if player_summaries:
         top = player_summaries[0]
         top_pos = POSITION_LABELS.get(top.get('position', 'U'), 'Universal')
-        top_player_html = f'MVP: <strong>{top["name"]}</strong> ({top["rating"]}) · {top_pos}'
+        top_player_html = (
+            f'MVP: <strong>{_html_escape(str(top["name"]))}</strong> '
+            f'({_html_escape(str(top["rating"]))}) · {_html_escape(str(top_pos))}'
+        )
 
     # --- Season objectives (progress rings) ---
     normalized_objectives = _normalize_objectives(objectives)
@@ -1082,10 +1303,10 @@ def render_index_page(
         last_match_html = (
             f'<div class="hub-last-match">'
             f'<span class="hub-last-match-label">Último Partido</span>'
-            f'<span class="hub-last-match-title">{lm["title"]}</span>'
+            f'<span class="hub-last-match-title">{_html_escape(str(lm["title"]))}</span>'
             f'{lm_badge}'
             f'<span class="hub-last-match-rating" style="color:{lm_r_color};">{lm["rating"]}</span>'
-            f'<a href="{lm["file"]}">Ver Reporte →</a>'
+            f'<a href="{_html_escape(str(lm["file"]), quote=True)}">Ver Reporte →</a>'
             f'</div>'
         )
 
@@ -1096,25 +1317,27 @@ def render_index_page(
         lm_result = lm.get('result')
         result_text = 'Victoria' if lm_result == 'W' else ('Derrota' if lm_result == 'L' else '-')
         opponent = lm['title'].replace(team_prefix, '')
-        last_match_tile_stat = f'Último: <strong>{result_text}</strong> vs {opponent}'
+        last_match_tile_stat = (
+            f'Último: <strong>{result_text}</strong> vs {_html_escape(str(opponent))}'
+        )
 
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{team_name} - {tournament_name}</title>
+  <title>{_html_escape(str(team_name))} - {_html_escape(str(tournament_name))}</title>
     <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
 </head>
-<body>
+<body class="hub-page hub-dataset">
 {_THEME_TOGGLE}
 <div class="container">
   <div class="hub-hero">
     <p style="margin:0 0 6px;"><a href="../../index.html" class="back-link">← Equipos</a></p>
-    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> {team_name} - {tournament_name}</h1>
-    <p class="hub-subtitle">Generado: {generated_date}</p>
+    <h1>{_html_escape(str(team_name))} · {_html_escape(str(tournament_name))}</h1>
+    <p class="hub-subtitle">Generado: {_html_escape(str(generated_date))}</p>
     <div class="hub-hero-stats">
       <div class="hub-hero-stat">
         <div class="stat-value" style="color:{r_color};">{rating_val}</div>
@@ -1132,26 +1355,26 @@ def render_index_page(
     {hub_objectives_html}
   </div>
 
-  <div class="hub-nav">
-    <a href="team_season.html" class="hub-tile">
-      <span class="hub-tile-icon">📊</span>
-      <span class="hub-tile-title">Equipo</span>
-      <span class="hub-tile-stat">Rating <strong>{rating_val}</strong> · {wins}W-{losses}L</span>
-      <span class="hub-tile-btn">Ver {comp_label} →</span>
+  <nav class="hub-nav" aria-label="Secciones del equipo">
+  <a href="team_season.html" class="hub-tile">
+    <span class="hub-tile-icon" aria-hidden="true">📊</span>
+    <span class="hub-tile-title">Equipo</span>
+    <span class="hub-tile-stat">Rating <strong>{rating_val}</strong> · {wins}W-{losses}L · {matches_played} partidos</span>
+    <span class="hub-tile-btn">Ver {comp_label}</span>
     </a>
     <a href="players.html" class="hub-tile">
-      <span class="hub-tile-icon">👥</span>
+      <span class="hub-tile-icon" aria-hidden="true">👥</span>
       <span class="hub-tile-title">Jugadores</span>
       <span class="hub-tile-stat">{player_count} jugadores · {top_player_html}</span>
-      <span class="hub-tile-btn">Ver Jugadores →</span>
+    <span class="hub-tile-btn">Ver jugadores</span>
     </a>
     <a href="matches.html" class="hub-tile">
-      <span class="hub-tile-icon">🏐</span>
+      <span class="hub-tile-icon" aria-hidden="true">📅</span>
       <span class="hub-tile-title">Partidos</span>
       <span class="hub-tile-stat">{len(matches)} partidos · {last_match_tile_stat}</span>
-      <span class="hub-tile-btn">Ver Partidos →</span>
+    <span class="hub-tile-btn">Ver partidos</span>
     </a>
-  </div>
+  </nav>
 
   {last_match_html}
 </div>
@@ -1196,6 +1419,9 @@ def render_player_season_page(
     pos_code = positions.get(player_num, 'U')
     pos_label = POSITION_LABELS.get(pos_code, 'Universal')
     display_name = names.get(player_num, f'#{player_num}')
+    display_name_html = _html_escape(str(display_name))
+    team_name_html = _html_escape(str(team_name))
+    tournament_name_html = _html_escape(str(tournament_name))
 
     # Season aggregations
     ratings = [m['rating'] for m in match_stats]
@@ -1224,7 +1450,10 @@ def render_player_season_page(
         consistency_color = '#6b7280'
 
     # Chart data
-    chart_labels = json.dumps([m['match_title'].replace(team_prefix, '') for m in match_stats])
+    chart_labels = _json_for_script(
+        [m['match_title'].replace(team_prefix, '') for m in match_stats]
+    )
+    player_name_json = _json_for_script(display_name)
     chart_ratings = json.dumps(ratings)
     chart_team_ratings = json.dumps(team_match_ratings)
 
@@ -1285,7 +1514,7 @@ def render_player_season_page(
         href = f'{m["match_stem"]}.html'
         match_rows.append(
             f'<tr>'
-            f'<td><a href="{href}" style="color:var(--primary);text-decoration:none;font-weight:500;">{opponent}</a></td>'
+            f'<td><a href="{_html_escape(str(href), quote=True)}" style="color:var(--primary);text-decoration:none;font-weight:500;">{_html_escape(str(opponent))}</a></td>'
             f'<td style="color:{r_color};font-weight:600;">{rating}</td>'
             f'<td>{m["total"]}</td>'
             f'<td style="color:var(--success);">{perfect_pct}%</td>'
@@ -1304,11 +1533,12 @@ def render_player_season_page(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{display_name} - {tournament_name} - {team_name}</title>
+  <title>{display_name_html} - {tournament_name_html} - {team_name_html}</title>
     <link rel="icon" href="../../favicon.ico" sizes="any">
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  {_CHART_INTERACTION_JS}
   {_COLLAPSIBLE_JS}
 </head>
 <body>
@@ -1316,8 +1546,8 @@ def render_player_season_page(
 <div class="container">
   {_back_link('players.html', '← Todos los jugadores')}
   <div class="report-header">
-    <h1>{display_name} <span class="position-badge">{pos_label}</span></h1>
-    {span_line}<p>{tournament_name} - Generado: {generated_date}</p>
+    <h1>{display_name_html} <span class="position-badge">{pos_label}</span></h1>
+    {span_line}<p>{tournament_name_html} - Generado: {_html_escape(str(generated_date))}</p>
   </div>
 
   {
@@ -1330,8 +1560,8 @@ def render_player_season_page(
     <div class="stat-card"><div class="stat-value" style="color:{consistency_color};font-size:1.2rem;word-break:break-word;">{consistency_label}<span style="display:block;font-size:0.75em;color:#6b7280;font-weight:normal;">σ={std_dev}</span></div><div class="stat-label" title="Desviación estándar del rating entre partidos. σ &lt; 0.5: Consistente | σ &lt; 1.0: Moderado | σ ≥ 1.0: Variable">Consistencia ⓘ</div></div>
   </div>
   <div class="general-stats" style="margin-top:12px;">
-    <div class="stat-card"><div class="stat-value" style="color:var(--success);">{best_match['rating']}</div><div class="stat-label">Mejor: {best_match['match_title'].replace(team_prefix, '')}</div></div>
-    <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{worst_match['rating']}</div><div class="stat-label">Peor: {worst_match['match_title'].replace(team_prefix, '')}</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--success);">{best_match['rating']}</div><div class="stat-label">Mejor: {_html_escape(str(best_match['match_title'].replace(team_prefix, '')))}</div></div>
+    <div class="stat-card"><div class="stat-value" style="color:var(--danger);">{worst_match['rating']}</div><div class="stat-label">Peor: {_html_escape(str(worst_match['match_title'].replace(team_prefix, '')))}</div></div>
   </div>''',
         )
     }
@@ -1342,12 +1572,12 @@ def render_player_season_page(
             f'''<div class="stat-card"><div class="card-body"><canvas id="chart-rating" height="250"></canvas></div></div>
   <script>
   (function() {{
-    new Chart(document.getElementById('chart-rating'), {{
+    window.registerSeasonChart(new Chart(document.getElementById('chart-rating'), {{
       type: 'line',
       data: {{
         labels: {chart_labels},
         datasets: [
-          {{ label: '{display_name}', data: {chart_ratings}, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3 }},
+          {{ label: {player_name_json}, data: {chart_ratings}, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.1)', fill: true, tension: 0.3 }},
           {{ label: 'Equipo', data: {chart_team_ratings}, borderColor: '#9ca3af', borderDash: [5,5], fill: false, tension: 0.3 }}
         ]
       }},
@@ -1360,7 +1590,7 @@ def render_player_season_page(
           tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y }} }}
         }}
       }}
-    }});
+    }}));
   }})();
   </script>''',
         )
@@ -1389,6 +1619,7 @@ def render_player_season_page(
         )
     }
 
+  {_ACTION_FOOTNOTE_HTML}
   {_back_nav('players.html', '← Todos los jugadores')}
 </div>
 </body>
@@ -1415,7 +1646,8 @@ def _objective_color(fill_pct):
 def _normalize_objectives(objectives):
     """Normalize raw team.json objective entries into renderable dicts.
 
-    Each valid entry yields {'label', 'fill' (int 0-100), 'center' (str)}.
+    Each valid entry yields a label, ring fill (int 0-100), center text and
+    a boolean 'met' based on the actual target, not the rounded ring fill.
     Fill = clamp((current - baseline) / (target - baseline) * 100, 0, 100),
     with baseline defaulting to 0. Malformed entries (missing label, non-numeric
     current/target/baseline, or target == baseline) are skipped.
@@ -1439,19 +1671,21 @@ def _normalize_objectives(objectives):
         target = obj.get('target')
         baseline = obj.get('baseline', 0)
         if not all(
-            isinstance(v, (int, float)) and not isinstance(v, bool)
+            (isinstance(v, int) and not isinstance(v, bool))
+            or (isinstance(v, float) and math.isfinite(v))
             for v in (current, target, baseline)
         ):
             continue
         if target == baseline:
             continue
+        met = current >= target if target > baseline else current <= target
         fill = round((current - baseline) / (target - baseline) * 100)
         fill = max(0, min(100, fill))
         display = obj.get('display')
         center = (
             display if isinstance(display, str) and display.strip() else f'{current} / {target}'
         )
-        normalized.append({'label': label, 'fill': fill, 'center': center})
+        normalized.append({'label': label, 'fill': fill, 'center': center, 'met': met})
     return normalized
 
 
@@ -1522,7 +1756,7 @@ def render_team_season_page(
     wins = sum(1 for m in team_stats if m.get('result') == 'W')
     losses = sum(1 for m in team_stats if m.get('result') == 'L')
 
-    chart_labels = json.dumps([m['match_title'].replace(team_prefix, '') for m in team_stats])
+    chart_labels = _json_for_script([m['match_title'].replace(team_prefix, '') for m in team_stats])
     chart_ratings = json.dumps(ratings)
 
     # Positive-touch rate trends
@@ -1611,6 +1845,7 @@ def render_team_season_page(
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  {_CHART_INTERACTION_JS}
   {_COLLAPSIBLE_JS}
 </head>
 <body>
@@ -1643,7 +1878,7 @@ def render_team_season_page(
             f'''<div class="stat-card"><div class="card-body"><canvas id="chart-team-rating" height="250"></canvas></div></div>
   <script>
   (function() {{
-    new Chart(document.getElementById('chart-team-rating'), {{
+    window.registerSeasonChart(new Chart(document.getElementById('chart-team-rating'), {{
       type: 'line',
       data: {{
         labels: {chart_labels},
@@ -1657,7 +1892,7 @@ def render_team_season_page(
         scales: {{ y: {{ min: 4, max: 10 }} }},
         plugins: {{ tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y }} }} }}
       }}
-    }});
+    }}));
   }})();
   </script>''',
         )
@@ -1673,7 +1908,7 @@ def render_team_season_page(
   <div class="stat-card"><div class="card-body"><canvas id="chart-points" height="250"></canvas></div></div>
   <script>
   (function() {{
-    new Chart(document.getElementById('chart-points'), {{
+    window.registerSeasonChart(new Chart(document.getElementById('chart-points'), {{
       type: 'line',
       data: {{
         labels: {chart_labels},
@@ -1688,13 +1923,13 @@ def render_team_season_page(
         scales: {{ y: {{ min: 0, max: 100, ticks: {{ callback: v => v + '%' }} }} }},
         plugins: {{ tooltip: {{ callbacks: {{ label: ctx => ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y + '%' : '-') }} }} }}
       }}
-    }});
+    }}));
   }})();
   </script>''',
         )
     }
 
-  {_section('Acciones positivas por Acción (Tendencia)', action_charts_html)}
+  {_section('Calidad de acciones por partido', action_charts_html)}
 
   {_section('Estadísticas Acumuladas', f'<div class="players-grid">{season_card}</div>')}
 
@@ -1714,6 +1949,7 @@ def render_team_season_page(
         )
     }
 
+  {_ACTION_FOOTNOTE_HTML}
   {_back_nav()}
 </div>
 </body>
@@ -1838,7 +2074,6 @@ def render_players_page(player_summaries, generated_date):
         pos_label = POSITION_LABELS.get(code, 'Universal')
         p_cards = []
         for rank, ps in enumerate(members, start=1):
-            r_color = _rating_color(ps['rating'])
             display_name = ps.get('name', f'#{ps["player_num"]}')
             eff = ps.get('efficiency') or {}
             head_label, head_value, head_tip = _headline_efficiency(code, eff)
@@ -1847,7 +2082,7 @@ def render_players_page(player_summaries, generated_date):
                 '<div class="match-card">'
                 '<div class="card-header">'
                 f'<span class="player-number">{display_name}</span>'
-                f'<span class="player-rating" style="color:{r_color};background:white;">{ps["rating"]}</span>'
+                f'{_rating_pill(ps["rating"])}'
                 '</div>'
                 '<div class="card-body">'
                 f'<span class="position-badge">{pos_label} · {rank}.º</span>'
@@ -1907,7 +2142,6 @@ def render_matches_page(matches, generated_date):
     """
     cards = []
     for m in matches:
-        r_color = _rating_color(m['rating'])
         title = m['title']
         rating = m['rating']
         tot = m['total_actions']
@@ -1940,7 +2174,7 @@ def render_matches_page(matches, generated_date):
             f'<div class="match-card">'
             f'<div class="card-header">'
             f'<span class="player-number">{title}</span>'
-            f'<span class="player-rating" style="color:{r_color};background:white;">{rating}</span>'
+            f'{_rating_pill(rating)}'
             f'</div>'
             f'<div class="card-body">'
             f'{badge_html}'
@@ -1985,78 +2219,191 @@ def render_matches_page(matches, generated_date):
 
 
 def render_root_index_page(datasets, generated_date):
-    """Render the top-level selector hub listing every team and its datasets.
+    """Render the root landing page: hero, featured active datasets and other cards.
 
-    Datasets are grouped by team. Within each team, tournament datasets are
-    listed first, followed by a separate "Amistosos" (friendly) group when
-    present. Each dataset links to its own dashboard one level down.
+    Active datasets get a featured "En curso" card (KPI chips, latest-match
+    scoreboard and section mini-tiles); every other dataset is a visible smaller
+    card. The logger stays a secondary footer chip.
 
     Args:
         datasets (list[dict]): One dict per generated dataset, each with keys:
             'team' (str), 'tournament' (str), 'type' (str),
-            'href' (str): relative path to the dataset index (e.g.
-                'vodkas/atlas-chapalita-cup-2026/index.html'),
-            'rating' (float), 'matches_played' (int),
-            'wins' (int), 'losses' (int).
+            'href', 'season_href', 'players_href', 'matches_href', 'latest_match'
+            (None or a dict with 'title', 'href' and optional 'result',
+            'set_scores', 'rating'), 'active', optional raw 'objectives', and
+            rating/record/count. Missing active is treated as False for older callers.
         generated_date (str): Date string displayed in the page header.
 
     Returns:
         str: A complete HTML document string.
     """
-    # Group datasets by team (preserve first-seen order).
-    teams = {}
-    for ds in datasets:
-        teams.setdefault(ds['team'], []).append(ds)
+    active = [dataset for dataset in datasets if dataset.get('active') is True]
+    others = [dataset for dataset in datasets if dataset.get('active') is not True]
 
-    def _dataset_card(ds):
-        r_color = _rating_color(ds.get('rating', 0.0))
-        wins = ds.get('wins', 0)
-        losses = ds.get('losses', 0)
-        played = ds.get('matches_played', 0)
+    def esc(value):
+        return _html_escape(str(value))
+
+    def esc_href(value):
+        return _html_escape(str(value or '#'), quote=True)
+
+    def emoji(symbol, extra_class='hub-emoji'):
+        return f'<span class="{extra_class}" aria-hidden="true">{symbol}</span>'
+
+    def type_parts(ds):
+        return ('🤝', 'Amistosos') if ds.get('type') == 'friendly' else ('🏆', 'Torneo')
+
+    def record(ds):
+        return f'{esc(ds.get("wins", 0))}W - {esc(ds.get("losses", 0))}L'
+
+    def int_or_zero(value):
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    def set_scores_html(pairs):
+        if not isinstance(pairs, list | tuple):
+            return ''
+        sets = []
+        for number, pair in enumerate(pairs, start=1):
+            if not isinstance(pair, list | tuple) or len(pair) != 2:
+                continue
+            if any(
+                not isinstance(score, int | str)
+                or isinstance(score, bool)
+                or not str(score).strip()
+                for score in pair
+            ):
+                continue
+            sets.append(
+                f'<li class="hub-score-set" value="{number}">'
+                f'<span class="hub-set-label">Set {number}</span> '
+                f'<span class="hub-set-value">{esc(pair[0])}-{esc(pair[1])}</span></li>'
+            )
+        if not sets:
+            return ''
         return (
-            f'<a href="{ds["href"]}" class="hub-tile">'
-            f'<span class="hub-tile-icon">🏐</span>'
-            f'<span class="hub-tile-title">{ds["tournament"]}</span>'
-            f'<span class="hub-tile-stat">Rating <strong style="color:{r_color};">{ds.get("rating", 0.0)}</strong>'
-            f' · {wins}W-{losses}L · {played} partidos</span>'
-            f'<span class="hub-tile-btn">Ver →</span>'
-            f'</a>'
+            '<div class="hub-score-sets"><span class="hub-sets-label">Marcador por set:</span>'
+            f'<ol class="hub-set-list">{"".join(sets)}</ol></div>'
         )
 
-    team_sections = []
-    for team_name, team_datasets in teams.items():
-        tournaments = [d for d in team_datasets if d.get('type') != 'friendly']
-        friendlies = [d for d in team_datasets if d.get('type') == 'friendly']
+    def scoreboard_html(latest):
+        if not latest or not latest.get('href'):
+            return ''
+        result = latest.get('result')
+        if result == 'W':
+            badge = '<span class="result-badge result-win">Victoria</span>'
+        elif result == 'L':
+            badge = '<span class="result-badge result-loss">Derrota</span>'
+        else:
+            badge = ''
+        match_rating = latest.get('rating')
+        rating_html = (
+            f'<span class="hub-score-rating">Rating {_rating_pill(match_rating)}</span>'
+            if match_rating is not None and str(match_rating).strip()
+            else ''
+        )
+        meta = badge + rating_html
+        if meta:
+            meta = f'<span class="hub-score-meta">{meta}</span>'
+        return (
+            f'<a class="hub-score" href="{esc_href(latest["href"])}">'
+            '<div class="hub-score-header">'
+            '<span class="hub-score-label">Último partido</span>'
+            f'<span class="hub-score-title">{esc(latest.get("title", ""))}</span>'
+            f'{meta}</div>{set_scores_html(latest.get("set_scores"))}</a>'
+        )
 
-        groups_html = ''
-        if tournaments:
-            cards = ''.join(_dataset_card(d) for d in tournaments)
-            groups_html += (
-                '<h3 style="margin:18px 0 10px;color:var(--text-main);font-size:1rem;">Torneos</h3>'
-                f'<div class="hub-nav">{cards}</div>'
+    def featured_card(ds):
+        type_emoji, type_label = type_parts(ds)
+        rating = ds.get('rating', 0.0)
+        identity = f'{esc(ds.get("team", ""))} · {esc(ds.get("tournament", ""))}'
+        if ds.get('season_href'):
+            first_tile = (ds['season_href'], '📊', 'Temporada')
+        else:
+            first_tile = (ds.get('href'), '🏠', 'Equipo')
+        tiles = [first_tile]
+        if ds.get('players_href'):
+            tiles.append((ds['players_href'], '👥', 'Jugadores'))
+        if ds.get('matches_href'):
+            tiles.append((ds['matches_href'], '📅', 'Partidos'))
+        tiles_html = ''.join(
+            f'<a class="hub-mini-tile" href="{esc_href(href)}">'
+            f'{emoji(symbol, "hub-mini-icon")}<span>{label}</span></a>'
+            for href, symbol, label in tiles
+        )
+        goals = _normalize_objectives(ds.get('objectives'))
+        objective_kpi = ''
+        if goals:
+            met = sum(goal['met'] for goal in goals)
+            label = 'objetivo cumplido' if len(goals) == 1 else 'objetivos cumplidos'
+            objective_kpi = (
+                f'<li class="hub-kpi"><span class="hub-kpi-value">{met} de {len(goals)}</span> '
+                f'<span class="hub-kpi-label">{label}</span></li>'
             )
-        if friendlies:
-            cards = ''.join(_dataset_card(d) for d in friendlies)
-            groups_html += (
-                '<h3 style="margin:18px 0 10px;color:var(--text-main);font-size:1rem;">Amistosos</h3>'
-                f'<div class="hub-nav">{cards}</div>'
-            )
-
-        team_sections.append(
-            '<div class="stat-card" style="margin-bottom:24px;">'
-            '<div class="card-body">'
-            f'<h2 style="margin:0;color:var(--primary);">🏐 {team_name}</h2>'
-            f'{groups_html}'
-            '</div></div>'
+        return (
+            '<article class="hub-feature">'
+            '<div class="hub-feature-top">'
+            f'<span class="hub-status">{emoji("●", "hub-status-dot")}En curso</span>'
+            f'<span class="hub-feature-type">{emoji(type_emoji)} {type_label}</span>'
+            '</div>'
+            f'<h2 class="hub-feature-title"><a href="{esc_href(ds.get("href"))}">{identity}</a></h2>'
+            '<ul class="hub-kpis">'
+            f'<li class="hub-kpi"><span class="hub-kpi-value">{_rating_pill(rating)}</span>'
+            '<span class="hub-kpi-label">Rating</span></li>'
+            f'<li class="hub-kpi"><span class="hub-kpi-value">{record(ds)}</span>'
+            '<span class="hub-kpi-label">Récord</span></li>'
+            f'{objective_kpi}</ul>'
+            f'{scoreboard_html(ds.get("latest_match"))}'
+            f'<nav class="hub-mini-tiles" aria-label="Secciones de {identity}">{tiles_html}</nav>'
+            '</article>'
         )
 
-    sections_html = ''.join(team_sections)
-    if not sections_html:
-        sections_html = (
-            '<div class="stat-card"><div class="card-body">'
-            '<p style="color:var(--text-muted);">Aún no hay datos disponibles.</p>'
-            '</div></div>'
+    current_html = ''
+    if active:
+        grid_class = 'hub-current-grid'
+        if len(active) > 1:
+            grid_class += ' hub-current-grid--multiple'
+        current_html = (
+            '<section class="hub-current" aria-label="En curso">'
+            f'<div class="{grid_class}">{"".join(featured_card(ds) for ds in active)}</div>'
+            '</section>'
         )
+
+    # Group other datasets by team (first-seen order), tournaments before friendlies.
+    teams = {}
+    for ds in others:
+        teams.setdefault(ds.get('team', ''), []).append(ds)
+    ordered_others = []
+    for team_datasets in teams.values():
+        ordered_others.extend(item for item in team_datasets if item.get('type') != 'friendly')
+        ordered_others.extend(item for item in team_datasets if item.get('type') == 'friendly')
+
+    other_cards = []
+    for ds in ordered_others:
+        type_emoji, _ = type_parts(ds)
+        rating = ds.get('rating', 0.0)
+        other_cards.append(
+            f'<a class="hub-other-card" href="{esc_href(ds.get("href"))}">'
+            f'{emoji(type_emoji, "hub-other-icon")}'
+            '<span class="hub-other-body">'
+            f'<span class="hub-other-title">{esc(ds.get("team", ""))} · '
+            f'{esc(ds.get("tournament", ""))}</span>'
+            f'<span class="hub-other-meta">Rating {_rating_pill(rating)} · {record(ds)}</span>'
+            '</span></a>'
+        )
+    other_html = ''
+    if other_cards:
+        other_heading = 'Otros equipos y torneos' if active else 'Equipos y torneos'
+        other_html = (
+            '<section class="hub-other-section" aria-labelledby="hub-other-title">'
+            f'<h2 id="hub-other-title" class="hub-section-title">{other_heading}</h2>'
+            f'<div class="hub-other-grid">{"".join(other_cards)}</div></section>'
+        )
+
+    empty_html = '<p class="hub-empty">Aún no hay datos disponibles.</p>' if not datasets else ''
+    total_matches = sum(int_or_zero(ds.get('matches_played', 0)) for ds in datasets)
+    matches_label = 'partido analizado' if total_matches == 1 else 'partidos analizados'
 
     return f"""<!DOCTYPE html>
 <html lang="es">
@@ -2068,17 +2415,19 @@ def render_root_index_page(datasets, generated_date):
   <link rel="stylesheet" href="styles.css">
   {_THEME_BOOT}
 </head>
-<body>
+<body class="hub-page hub-root">
 {_THEME_TOGGLE}
 <div class="container">
-  <div class="hub-hero">
-    <h1><span style="-webkit-text-fill-color:initial;">🏐</span> Volleyball Analytics</h1>
-    <p class="hub-subtitle">Selecciona un equipo y torneo · Generado: {generated_date}</p>
-  </div>
-  <div style="text-align:center;margin-bottom:24px;">
-    <a href="logger/index.html" class="btn-primary" style="display:inline-flex;align-items:center;gap:8px;padding:12px 22px;border-radius:10px;font-weight:700;text-decoration:none;">🎬 Registro de Partido</a>
-  </div>
-  {sections_html}
+  <header class="hub-hero hub-root-hero">
+    <h1><span class="hub-hero-emoji" aria-hidden="true">🏐</span> Volleyball Analytics</h1>
+    <p class="hub-subtitle">Resultados y estadísticas · {total_matches} {matches_label} · Generado: {_html_escape(str(generated_date))}</p>
+  </header>
+  {current_html}
+  {other_html}
+  {empty_html}
+  <footer class="hub-tools"><h2>Herramientas</h2>
+    <a class="hub-tool-chip" href="logger/index.html"><span aria-hidden="true">✍️</span> Registro de partido</a>
+  </footer>
 </div>
 </body>
 </html>"""

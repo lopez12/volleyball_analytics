@@ -63,6 +63,7 @@ def test_load_complete_team_config(tmp_path):
                 'team': 'Equipo',
                 'tournament': 'Copa',
                 'type': 'friendly',
+                'active': True,
                 'roster': {
                     '7': {'name': 'Jos\u00e9', 'position': 'OH'},
                     '8': {'name': ''},
@@ -78,6 +79,7 @@ def test_load_complete_team_config(tmp_path):
         'team': 'Equipo',
         'tournament': 'Copa',
         'type': 'friendly',
+        'active': True,
         'positions': {'7': 'OH', '8': 'U', '12': 'S'},
         'names': {'7': 'Jos\u00e9'},
         'objectives': objectives,
@@ -105,6 +107,7 @@ def test_load_team_config_defaults(tmp_path, config):
         'positions': {},
         'names': {},
         'objectives': [],
+        'active': False,
     }
 
 
@@ -117,4 +120,12 @@ def test_load_team_config_malformed_json(tmp_path):
     path = tmp_path / 'team.json'
     path.write_text('{', encoding='utf-8')
     with pytest.raises(json.JSONDecodeError):
+        load_team_config(path)
+
+
+@pytest.mark.parametrize('active', ['true', 1, 0, None, [], {}])
+def test_load_team_config_rejects_non_boolean_active(tmp_path, active):
+    path = tmp_path / 'team.json'
+    path.write_text(json.dumps({'active': active}), encoding='utf-8')
+    with pytest.raises(ValueError, match=r'team\.json: "active" must be a boolean'):
         load_team_config(path)

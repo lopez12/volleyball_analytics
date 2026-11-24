@@ -115,6 +115,7 @@ def load_team_config(path):
             "team": "Vodkas",
             "tournament": "Atlas Chapalita Cup",
             "type": "tournament",            # "tournament" or "friendly"
+            "active": True,                  # optional, default False
             "roster": {
                 "7": { "name": "Gio", "position": "OH" },
                 ...
@@ -133,6 +134,7 @@ def load_team_config(path):
             'team' (str): Display team name.
             'tournament' (str): Display tournament/competition name.
             'type' (str): 'tournament' or 'friendly'.
+            'active' (bool): Explicitly marked in-progress dataset; defaults to False.
             'positions' (dict): Maps player number string -> position code.
             'names' (dict): Maps player number string -> display name. Players
                 without a name are omitted so callers can fall back to '#<num>'.
@@ -147,6 +149,9 @@ def load_team_config(path):
     objectives = cfg.get('objectives', [])
     if not isinstance(objectives, list):
         objectives = []
+    active = cfg.get('active', False)
+    if not isinstance(active, bool):
+        raise ValueError(f'{path}: "active" must be a boolean when supplied')
     return {
         'team': cfg.get('team', ''),
         'tournament': cfg.get('tournament', ''),
@@ -154,6 +159,7 @@ def load_team_config(path):
         'positions': positions,
         'names': names,
         'objectives': objectives,
+        'active': active,
     }
 
 

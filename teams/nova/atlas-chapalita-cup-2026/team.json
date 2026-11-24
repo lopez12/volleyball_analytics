@@ -2,6 +2,7 @@
   "team": "Nova",
   "tournament": "Atlas Chapalita Cup",
   "type": "tournament",
+  "active": true,
   "roster": {
     "2":  { "name": "Sari",        "position": "OH"   },
     "5":  { "name": "Eva",         "position": "OH"   },
