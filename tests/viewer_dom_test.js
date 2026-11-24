@@ -1,6 +1,10 @@
 /* Browser-only DOM checks using a deterministic fake IFrame API, never YouTube. */
 (function () {
     'use strict';
+    var requestedTheme = new URLSearchParams(location.search).get('theme');
+    if (requestedTheme === 'light' || requestedTheme === 'dark') {
+        document.documentElement.dataset.theme = requestedTheme;
+    }
     try { localStorage.setItem('va-replay-player', '8'); } catch (error) {}
     var clock = 0;
     var state = 2;
@@ -25,6 +29,16 @@
             'Future/unready chip leaks its outcome: ' + button.outerHTML);
     }
     function action(name) { return document.querySelector('[data-replay="' + name + '"]'); }
+    function checkSelectFocus(selector) {
+        var select = document.querySelector(selector);
+        select.focus();
+        var style = getComputedStyle(select);
+        var box = select.getBoundingClientRect();
+        assert(document.activeElement === select, 'Select cannot retain keyboard focus: ' + selector);
+        assert(style.outlineStyle === 'solid' && style.outlineWidth === '3px' &&
+            style.outlineOffset === '-3px', 'Select focus frame is not fully inset: ' + selector);
+        assert(box.width >= 44 && box.height >= 44, 'Select target is smaller than 44px: ' + selector);
+    }
     function update() { events.onStateChange(); }
     // Track live pollers so lifecycle tests can detect leaked or duplicate timers.
     var intervals = {};
@@ -63,6 +77,8 @@
                     assert(action('next').disabled, 'Controls enabled before readiness');
                     assert(document.getElementById('replay-youtube').hidden,
                         'YouTube fallback visible before readiness');
+                    checkSelectFocus('#replay-set');
+                    checkSelectFocus('#replay-spotlight-select');
                     lifecycle('pagehide');
                     lifecycle('pageshow');
                     lifecycle('pageshow');
@@ -98,11 +114,41 @@
                     var scenario = new URLSearchParams(location.search).get('scenario');
                     if (scenario) {
                         var scenarioSet = document.getElementById('replay-set');
-                        scenarioSet.value = scenario === 'boundaries' ? '2' : '3';
+                        scenarioSet.value = scenario === 'boundaries' ? '2' :
+                            (scenario === 'notes' ? '0' : '3');
                         scenarioSet.dispatchEvent(new Event('change'));
                         update();
                         chips().forEach(function (button, index) { neutral(button, index + 1); });
-                        if (scenario === 'invalid-delta') {
+                        if (scenario === 'notes') {
+                            assert(document.getElementById('replay-scope').hidden &&
+                                document.getElementById('replay-reconciliation').hidden,
+                                'Verified normal set shows routine notes');
+                            scenarioSet.value = '4';
+                            scenarioSet.dispatchEvent(new Event('change'));
+                            update();
+                            assert(document.getElementById('replay-reconciliation').textContent ===
+                                'Sin marcador final registrado; no hay reconciliación independiente del resultado.' &&
+                                !document.getElementById('replay-reconciliation').hidden,
+                                'Unverified set did not show its missing-score warning');
+                            assert(document.getElementById('replay-scope').hidden,
+                                'Normal unverified set shows routine scope');
+                            checkSelectFocus('#replay-set');
+                            scenarioSet.value = '1';
+                            scenarioSet.dispatchEvent(new Event('change'));
+                            update();
+                            checkSelectFocus('#replay-set');
+                            assert(document.getElementById('replay-scope').textContent ===
+                                'Estadísticas registradas en la grabación' &&
+                                !document.getElementById('replay-scope').hidden &&
+                                document.getElementById('replay-reconciliation').hidden,
+                                'Offset/verified set did not show only its applicable scope');
+                            scenarioSet.value = '0';
+                            scenarioSet.dispatchEvent(new Event('change'));
+                            update();
+                            assert(document.getElementById('replay-scope').hidden &&
+                                document.getElementById('replay-reconciliation').hidden,
+                                'Switching back did not clear the previous set notes');
+                        } else if (scenario === 'invalid-delta') {
                             clock = 38;
                             update();
                             assert(document.getElementById('replay-status').textContent.includes('no válido'),
@@ -165,6 +211,7 @@
                         'Spotlight grid has wrong column count');
                     spotlightSelect.value = '7';
                     spotlightSelect.dispatchEvent(new Event('change'));
+                    checkSelectFocus('#replay-spotlight-select');
                     assert(localStorage.getItem('va-replay-player') === '7',
                         'Spotlight selection was not persisted');
                     assert(!document.querySelector('#replay-players img'), 'Player name became HTML');
@@ -172,8 +219,15 @@
                         'Future rally rows leak completion');
                     assert(document.getElementById('replay-start-note').hidden,
                         'Zero start should not show note');
-                    assert(document.getElementById('replay-scope').textContent ===
-                        'Estadísticas del set hasta este momento', 'Legacy scope changed');
+                    assert(document.getElementById('replay-scope').hidden &&
+                        document.getElementById('replay-scope').textContent === '',
+                        'Routine scope note should be empty and hidden');
+                    assert(document.getElementById('replay-reconciliation').hidden &&
+                        document.getElementById('replay-reconciliation').textContent === '',
+                        'Verified-set note should be empty and hidden');
+                    assert(document.getElementById('replay-scope').getClientRects().length === 0 &&
+                        document.getElementById('replay-reconciliation').getClientRects().length === 0,
+                        'Hidden viewer notes leave a blank layout gap');
                     assert(values('.replay-spotlight-value span').join('|') ===
                         'Toques|Puntos|Errores|Rating', 'Spotlight must show exactly four values');
                     assert(values('#replay-cards .stat-label').join('|') ===
@@ -223,7 +277,7 @@
                         'Pinned row has no non-color marker');
                     assert(document.querySelector('.replay-spotlight .replay-spotlight-value strong').textContent === '1',
                         'Spotlight did not update live at the rally boundary');
-                    var ratingPill = document.querySelector('#replay-spotlight .player-rating');
+                    var ratingPill = document.querySelector('#replay-spotlight .rating-pill');
                     assert(ratingPill.classList.contains('replay-value-pulse'),
                         'Changed rating did not trigger a pulse');
                     // Simulate the finished animation, then reconcile the same paused snapshot.
@@ -295,6 +349,10 @@
                         'La grabación inicia con el marcador 7–4.', 'Missing start note');
                     assert(document.getElementById('replay-scope').textContent ===
                         'Estadísticas registradas en la grabación', 'Wrong offset scope');
+                    assert(!document.getElementById('replay-scope').hidden,
+                        'Nonzero recording-start scope was hidden');
+                    assert(document.getElementById('replay-reconciliation').hidden,
+                        'Verified-set note reappeared after a set switch');
                     update();
                     assert(videoId === 'ABCDEFGHIJK' && clock === 0, 'Set video clock mapping incorrect');
                     assert(youtube.hidden && youtube.href === 'https://www.youtube.com/watch?v=ABCDEFGHIJK',

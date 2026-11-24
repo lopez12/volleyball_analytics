@@ -123,6 +123,19 @@ The per-player/team stats dict (from `parse_log` or a DB row) centres on `total`
 
 ---
 
+## UI Quality
+
+Adapted from [unslop](https://github.com/heydamir/unslop) by Damir Sokolovsky ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)). This checklist narrows its audit-first method to this project's static dashboards, logger and replay; it does not adopt its palette, dependencies or landing-page layouts.
+
+1. **Audit before editing.** Inspect the affected screen and its source. Record each concrete problem with its location and user impact; capture a baseline when browser tools are available. A source-only inspection is not visual verification.
+2. **Polish, do not rebrand.** Follow the approved brief and preserve the existing system font, palette, useful content and workflow. Fix only observed problems. A broader redesign needs an architect/owner-approved direction describing the users, product character, visual priorities and scope.
+3. **Work in relevant passes.** Check spacing, color, icons, copy, type, layout, details, visuals and motion, in that order. Skip passes with no demonstrated issue. Reuse the existing spacing rhythm, component sizes and theme tokens instead of adding one-off values or override layers.
+4. **Let the match carry the emphasis.** Prioritize the score, video, statistics and current action over decorative chrome. Reduce competing gradients, shadows, badges or emoji only where they add noise. Keep meaningful grade/outcome colors and the product identity; prefer text or existing symbols over a new icon package, font download or generated image.
+5. **Keep data honest.** Use concise Spanish labels, aligned/tabular figures and consistent number formats. Never invent statistics or remove useful breakdowns to simplify a screen. Positive-touch percentage, action Nota, overall rating and attack efficiency remain distinct; preserve grammar symbols, missing-value states and spoiler-safe replay behavior.
+6. **Check usability, not just appearance.** Compare the same views before/after at about 375px and 1440px in both themes. Check long names, empty states, wrapping, keyboard focus, reduced motion and 200% zoom. Changed controls must remain reachable; touch targets should be at least 44 by 44 CSS pixels, with text contrast of 4.5:1 (3:1 for large text) and control boundaries/focus indicators at least 3:1. Use the existing browser harness where applicable and report checks that could not be performed.
+
+---
+
 ## Volleyball Domain Glossary
 
 | Term | Meaning |
@@ -134,24 +147,28 @@ The per-player/team stats dict (from `parse_log` or a DB row) centres on `total`
 | **Dig** | Successful defense against an attack. |
 | **Transition** | Counter-attack phase after a dig: D → E → A. |
 | **Pass** | Reception. "Good pass" = `R#`/`R+`, "bad pass" = `R!`/`R-`. |
-| **Efficiency** | App uses `good/total` ratio (good = `#` or `+`). |
+| **Positive-touch rate** | `good / attempts`, where good means `#` or `+`; not attack efficiency or a rating. |
+| **Attack efficiency** | `(A# - A-) / A_tot`; no attempts means undefined, not zero. |
 
 ---
 
 ## Testing
 
-No automated test suite. Verify changes by building and validating:
+The repository has a dev-only pytest suite in [tests/](../../tests/) and a separate browser harness. Use Python 3.12 and the setup documented in [README.md](../../README.md#engine-tests-pytest); runtime code remains standard-library only.
 
-1. **Build:** `python generate.py` must finish without crashing (this is also the CI smoke test). It writes `docs/` and opens the root selector in your browser.
-2. **Validate logs** (for any match-data change): `python validate_logs.py` must report **no ERRORs** (add `--strict` to also fail on WARNs). Pass file paths to scope it.
-3. **Inspect output:** open the generated pages under `docs/<team>/<tournament>/` and check the numbers, ratings, phase/point stats, and - for logs with outcome tokens - the earned-vs-gifted report.
-4. **Logger:** open `logger/index.html`, or serve over http (`python -m http.server`) when testing the YouTube video / timestamp features (they are blocked on `file://`). Check layout at ~375px and ~1440px (single column on mobile), in light and dark.
+1. **Regression tests:** start with the affected modules using `python -m pytest -q <test paths>`, then run `python -m pytest -q` before handing off code changes. Add focused cases for changed behavior, preferably a failing reproduction before a bug fix. Do not weaken assertions or change expected statistics merely to make tests pass.
+2. **Lint and format:** `ruff check .` and `ruff format --check .` must pass for Python changes. Do not reformat unrelated files.
+3. **Validate logs:** `python validate_logs.py` must report **no ERRORs**. Scope iteration to changed logs or the whole dataset for a roster change; grammar/validator changes require all logs. Existing WARNs are reported, not silently fixed; `--strict` also fails on WARNs.
+4. **Build:** `python generate.py` must complete and produce a nonempty `docs/index.html`. Set `CI` to a nonempty value for automated checks to avoid opening a browser; normal local preview still opens it. Never hand-edit generated output.
+5. **UI:** follow the UI Quality checks above. For replay-controller changes, use `node tests\viewer_test.js` when Node is available. For logger/replay DOM and responsive checks, run `python tests\browser_smoke.py "<installed Chromium executable>"`. This uses a fake YouTube API, not real playback. Separately check real playback/seeking, set switching and failure states over HTTP(S), using `python -m http.server` for a local preview.
+
+Report exact commands and results, including pre-existing failures and unavailable checks; never claim a browser check from source inspection. Documentation-only changes do not require the application QA gate.
 
 ---
 
 ## Deployment
 
-Push to `main`; `.github/workflows/build.yml` runs `python generate.py` and deploys `docs/` to GitHub Pages. Pull requests are gated by `.github/workflows/qa.yml`, which validates the match logs changed in the PR and runs a smoke build.
+Push to `main`; `.github/workflows/build.yml` runs `python generate.py` and deploys `docs/` to GitHub Pages. Pull requests are gated by `.github/workflows/qa.yml`, which runs Ruff, the pytest suite, scoped log validation and a smoke build. Browser checks remain separate from that CI workflow.
 
 ```bash
 git add -A && git commit -m "description" && git push origin main

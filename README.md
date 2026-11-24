@@ -28,7 +28,7 @@ This discovers every dataset under `teams/`, writes static HTML to `docs/`, and 
 
 ## Data Layout
 
-The project supports **multiple teams**, each playing **multiple tournaments** (and friendly matches). Every `(team, tournament)` pair is an independent **dataset** with its own roster, database, and dashboard.
+The project supports **multiple teams**, each playing **multiple tournaments** (and friendly matches). Every `(team, tournament)` pair is an independent **dataset** with its own roster, database, and dashboard. The root selector prioritizes datasets explicitly marked as in progress; unmarked datasets remain reachable in its compact list.
 
 ```
 teams/
@@ -74,7 +74,32 @@ docs/index.html                                    # root team/tournament select
 | `tournament` | Display competition name (use `"Amistosos"` for friendlies).                           |
 | `type`       | `"tournament"` or `"friendly"`.                                                        |
 | `roster`     | Maps player number → `{ "name", "position" }`. Positions: `S`, `OH`, `OPP`, `MB`, `L`. |
-| `objectives` | Optional. Season goals shown as progress rings on the team/tournament page.             |
+| `objectives` | Optional. Season goals shown as progress rings on the team/tournament page and summarized on featured landing cards. |
+| `active`     | Optional boolean, default `false`. `true` marks an explicitly confirmed in-progress competition; activity is never inferred from dates or results. |
+
+The root landing page shows the site-wide match total and build date in the hero,
+without repeating match counts on individual cards. Each **En curso** card shows
+Rating, Récord (recorded wins and losses, e.g. `6W - 2L`) and, when there are
+valid configured season goals, a chip such as `1 de 3 objetivos cumplidos`.
+A goal counts only when its current value reaches or passes the target in the
+direction from baseline to target, even if its progress ring already rounds to
+100%. With no valid goals, the card shows only Rating and Récord.
+
+The latest-match scoreboard links to the report. Its header shows the title,
+with Victoria/Derrota and rating when known. Below it, **Marcador por set:**
+lists recorded pairs in order, team score first (e.g. `Set 1  18-25`). Each set
+has its own aligned line at widths up to 600px; wider screens show spaced columns
+that wrap to fit. The entire scores area is omitted if no pairs are known.
+The Temporada, Jugadores and Partidos mini-tiles remain separate navigation links.
+Landing-page ratings, card-header ratings and per-action Notas share one **rating pill**:
+a centered number on a borderless neutral surface, with tier colors for light and
+dark themes. Other datasets show rating and record on smaller hover cards
+under **Otros equipos y torneos**, ordered by team with tournaments before friendlies.
+With no active dataset the same cards appear under **Equipos y torneos**.
+Match logging is a secondary **Herramientas** footer
+chip. Hover lifts apply only on hover-capable pointers, and reduced-motion
+preferences disable them. Only mark a dataset active after an explicit team/owner decision;
+missing metadata remains valid and is treated as unmarked.
 
 Players without a name fall back to `#<number>` in the reports.
 
@@ -217,7 +242,7 @@ attack efficiency, and neither value is the action's "Nota":
 
 - **Positive count / percentage:** `good` counts touches graded `#` or `+`;
   the percentage is `good / attempts`. It describes the share of positive
-  touches, not kills. Season trend headings label it "Acciones positivas (#/+)".
+  touches, not kills. Season trend headings label it "Toques positivos (#/+)".
 - **Per-action Nota:** `calculate_action_stats()` averages the action's full
   grade distribution over one fixed grade table, `ACTION_NOTA_GRADE_VALUES`,
   identical for all six actions (`#` 1.0, `+` 0.4, `!` −0.3, `-` −1.0), adding
@@ -269,6 +294,22 @@ For example, in
 
 The card's **Resumen por Calidad y Acción** table shows the grade counts used
 for the Nota. An action with no attempts keeps `None` for its percentage and Nota.
+The action pills above it show, per action with attempts, the positive
+count/attempts, positive percentage and Nota. At viewport widths up to 600px,
+each pill fills one row: the label sits on the left, the count near the middle,
+the percentage about two thirds across and the Nota’s rating pill inset from the
+right edge. The numbers are centered in aligned columns, including season counts
+such as `123/456`. Wider screens keep the equal-width grid, with right-aligned counts
+and percentages and the rating pill centered in the last column. Each outer
+action pill's theme-aware green highlight follows its embedded Nota at 8.0 or
+above, and its red highlight applies below 6.0. From 6.0 up to (but not
+including) 8.0, the outer action pill keeps its default neutral background,
+border and text; the inner Nota rating pill remains amber. The positive-touch
+percentage remains a separate measurement and does not determine the tint. All
+four grades remain in the separate quality breakdown. Both the pills and the
+table use **Recepción** without
+an asterisk. An unmarked note at the bottom of each card page explains how
+**Recepción** differs from **Defensa**; charts keep the full **Recepción de Saque** heading.
 
 ### Special lines
 
@@ -511,8 +552,8 @@ Published match reports offer **Ver con estadísticas** as the first pill in the
 **Ver partido** banner, before the grouped YouTube set links, when at least one
 set has a complete, unambiguous replay timeline. At widths up to 767px, the viewer
 link is centered at its natural width on its own row; on wider screens the set
-group moves below it when the combined links do not fit. The viewer link uses
-the same red styling as the set links.
+group moves below it when the combined links do not fit. Its visible red surface
+is compact while the real link retains a 44px touch target.
 
 The separate `<match>_watch.html` page uses the same dashboard components and
 theme as the match report. At 1200px and wider it uses a video-dominant 3:2 split:
@@ -527,9 +568,14 @@ synchronization status follow; statistics scope/reconciliation notes stay
 with the statistics. Compact mobile playback controls retain their single row
 unless enlarged text requires wrapping.
 
-Choose **Destacar jugador** above the player table to keep one player's live spotlight visible while the match plays. The spotlight and compact player table show touches, points, errors, and rating. Points are direct scoring touches (aces + kills + blocks); errors are touches graded `-`. The spotlight uses four columns on desktop and a 2×2 grid on mobile, and the table fits a 375px screen without sideways scrolling. The selected player's table row moves to the topand is marked with a star. Players with no touches in the current set show zeros
-and a no-touches note, without being added to the table. The selection is saved in `localStorage` (`va-replay-player`) and persists across sets and reloads. Rally chips seek to their starts and mark the active (or latest completed) rally with an independent outline. Only completed rallies show their team point outcome: green with `+` for won, red with `-` for lost, with accessible Spanish labels and a legend. Outcomes appear at the confirmed video end boundary, and disappear again when rewinding before it. In-progress and future chips show only their number, including their accessible text. Keyboard focus stays on a chip when statistics update. These colors describe point outcomes, not touch quality or player points. The longest completed rally appears only as a set-stat value, not as a separate replay control. Set cards show direct points, kills, aces, touches with errors, attack efficiency, and the longest completed rally. For the per-action
+Choose **Destacar jugador** above the player table to keep one player's live spotlight visible while the match plays. The spotlight and compact player table show touches, points, errors, and rating. Points are direct scoring touches (aces + kills + blocks); errors are touches graded `-`. The spotlight uses four columns on desktop and a 2×2 grid on mobile, and the table fits a 375px screen without sideways scrolling. The selected player's table row moves to the top and is marked with a star. Players with no touches in the current set show zeros
+and a no-touches note, without being added to the table. The spotlight’s rating pill shows `—` until the player has a rating.
+The selection is saved in `localStorage` (`va-replay-player`) and persists across sets and reloads. Rally chips seek to their starts and mark the active (or latest completed) rally with an independent outline. Only completed rallies show their team point outcome: green with `+` for won, red with `-` for lost, with accessible Spanish labels and a legend. Outcomes appear at the confirmed video end boundary, and disappear again when rewinding before it. In-progress and future chips show only their number, including their accessible text. Keyboard focus stays on a chip when statistics update. These colors describe point outcomes, not touch quality or player points. The longest completed rally appears only as a set-stat value, not as a separate replay control. Set cards show direct points, kills, aces, touches with errors, attack efficiency, and the longest completed rally. For the per-action
 breakdown (including blocks and reception), use **Reporte completo** below the player table; its spoiler warning notes that it contains final results.
+
+Routine viewer notes are omitted. A nonzero recording start keeps its score
+context; an unverified final score keeps the warning that there is no independent
+reconciliation. Verified-set status and ordinary 0–0 scope are not repeated.
 
 Playback starts at 0–0 unless `@start: V-R` records a late recording start: a rally's score and touches appear only when playback reaches its recorded end. Rewinding restores the corresponding earlier snapshot. The full-report backlink contains final results. This is spoiler-safe presentation, not secrecy: the embedded public JSON contains all snapshots.
 
@@ -560,6 +606,21 @@ In the Match Logger, each set offers optional **Marcador inicial** fields beside
 
 Team cards count recorded touches, `S#` aces, `A#` kills, `B#` winning blocks and all `-` touches (**Toques con error**, not points lost). Attack efficiency is the existing `(A# − A-) / A_total`; player ratings use the role-based player rating with that set's `@role:` override. Unattributed touches affect team totals only. Undefined efficiency and no-touch player ratings display `—`. The longest *completed* rally uses the timestamp interval, with the first winning ties; this is not a measurement of exact ball-in-play time.
 
+Season action-quality charts compare exactly two complementary groups:
+**Positivas (#/+)** and **Regulares y errores (!/-)**. Their percentages add to
+100% only when that action was attempted; a match with no attempts is a gap,
+not a fabricated 0/100. Tooltips show each group’s percentage and count out of
+attempts. Lines are straight and do not bridge missing matches. A touch changing
+from `+` to `#` remains positive rather than being double-counted as a decline.
+These charts are distinct from attack efficiency, Nota and overall ratings.
+On touch screens, tap a point to show its values; tap it again or tap elsewhere,
+scroll, cancel the touch or press Escape to dismiss. Tapping another chart moves
+the selection. Desktop hover and legend toggles remain available.
+
+The dataset hub keeps its three destinations (Equipo, Jugadores, Partidos),
+objectives, MVP and latest-report row with its gradient hero, emoji tiles and
+hover lift.
+
 **Siguiente jugada** seeks to the earliest start strictly after the video's actual current time. **Repetir jugada** replays the active interval or latest completed rally during a gap. Rally chips seek to their rally starts while preserving playing/paused intent subject to YouTube restrictions; clicking a rally before first play starts playback from that rally. Selecting a set resets its statistics and cues its own video at zero. There is no automatic skipping or cross-set advancement.
 
 Playback requires JavaScript, HTTP(S), access to the YouTube IFrame API and permission to embed the selected video. `file://`, API failures, blocked embeds and invalid payloads disable synchronized controls with an explanation and show **Abrir el video en YouTube ↗** below the status line only as a fallback when the player cannot load. This link follows the selected set and stays hidden during normal playback. The static final reports still work without JS. For local playback, run `python -m http.server` and open the generated `docs/` page through localhost, not directly from disk.
@@ -571,6 +632,7 @@ python -m unittest discover -s tests
 node tests/viewer_test.js           # optional local Node, no npm dependencies
 # Or use an installed Chromium browser (controller + mocked-player DOM checks):
 python tests/browser_smoke.py "C:\path\to\msedge.exe"
+python -m pytest -q tests/test_engine_helpers.py tests/test_hub_ui.py tests/test_replay.py tests/test_action_display.py
 python validate_logs.py
 # PowerShell: $env:CI = '1'; python generate.py
 CI=1 python generate.py             # POSIX shells
@@ -578,7 +640,15 @@ ruff check .
 ruff format --check .
 ```
 
-Before merging, check real YouTube playback and seeking, native paused scrubbing, set switching, blocked embeds, keyboard controls, light/dark themes, mobile (~375px) and desktop (~1440px), and the browser console/CSP on an HTTP(S) preview. Synthetic integration fixtures cover eligible sets without changing real logs. The optional browser harness tests computed responsive layout (including an actual 375 CSS-pixel iframe viewport), theme tokens, safe player-name rendering, readiness, failure states and navigation with a **fake** IFrame API. It neither loads real YouTube media nor verifies deployment response headers.
+Before merging, check real YouTube playback and seeking, native paused scrubbing, set switching, blocked embeds, keyboard controls, light/dark themes, mobile (~375px) and desktop (~1440px), and the browser console/CSP on an HTTP(S) preview. Synthetic integration fixtures cover eligible sets without changing real logs. The browser harness tests computed responsive layout (including an actual
+375 CSS-pixel iframe viewport), both hubs, report-link/action-pill geometry,
+theme tokens, focus, safe player-name rendering, readiness, failure states and
+navigation with a **fake** YouTube IFrame API. It also attempts chart data and
+touch-tooltip checks against the actual Chart.js script with Chromium touch
+events enabled; it reports the Chart.js and browser versions when that library
+loads and reports a blocker if the CDN is unavailable. It never loads real
+YouTube media or verifies deployment response headers. A mocked IFrame run is
+not chart or media verification.
 
 ## Troubleshooting
 

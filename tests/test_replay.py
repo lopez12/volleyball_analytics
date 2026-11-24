@@ -345,6 +345,10 @@ class ReplayRenderingTests(unittest.TestCase):
         controls = re.search(r'<nav class="replay-controls".*?</nav>', page, re.S).group(0)
         self.assertNotIn('replay-youtube', controls)
         self.assertIn('id="replay-youtube" class="replay-link" hidden', page)
+        self.assertIn('id="replay-scope" class="replay-muted" hidden></p>', page)
+        self.assertIn('id="replay-reconciliation" class="replay-muted" hidden></p>', page)
+        self.assertNotIn('Estadísticas del set hasta este momento', page)
+        self.assertNotIn('Set verificado contra el marcador registrado', page)
         self.assertIn('Abrir el video en YouTube ↗</a>', page)
         self.assertLess(page.index('id="replay-status"'), page.index('id="replay-youtube"'))
         self.assertLess(page.index('id="replay-youtube"'), page.index('Jugadores'))
@@ -418,6 +422,19 @@ class ReplayRenderingTests(unittest.TestCase):
         self.assertIn('aria-live="polite">7 ' + chr(0x2013) + ' 4', page)
         self.assertIn('La grabación inicia con el marcador 7–4.', page)
         self.assertIn('Estadísticas registradas en la grabación', page)
+        self.assertNotIn('Estadísticas del set hasta este momento', page)
+        self.assertIn('id="replay-reconciliation" class="replay-muted" hidden></p>', page)
+
+    def test_unreconciled_set_keeps_only_the_missing_score_warning(self):
+        log = VIDEO + '7A# @won @t:10-15'
+        page = render_watch_page('Test', parse_log(log)['replay'], {}, 'report.html')
+        self.assertIn(
+            'id="replay-reconciliation" class="replay-muted">'
+            'Sin marcador final registrado; no hay reconciliación independiente del resultado.</p>',
+            page,
+        )
+        self.assertIn('id="replay-scope" class="replay-muted" hidden></p>', page)
+        self.assertNotIn('Set verificado contra el marcador registrado', page)
 
     def test_scoreboard_opponent_fallback(self):
         page = render_watch_page(
@@ -432,14 +449,17 @@ class ReplayRenderingTests(unittest.TestCase):
             'Test', parsed, '22/10/2026', parsed['replay'], 'match_watch.html?a="1"&b=2'
         )
         links = re.search(r'<div class="youtube-banner__links">(.*?)</div>', page).group(1)
-        pill = re.search(r'<a\b[^>]*>Ver con estadísticas</a>', links).group(0)
+        pill = re.search(
+            r'<a\b[^>]*><span class="youtube-set-link__surface">.*?</span></a>', links
+        ).group(0)
         self.assertTrue(links.startswith(pill))
         self.assertIn('class="youtube-set-link youtube-set-link--stats"', pill)
+        self.assertIn('>▶ Ver con estadísticas</span>', pill)
         self.assertIn('href="match_watch.html?a=&quot;1&quot;&amp;b=2"', pill)
         self.assertNotIn('target=', pill)
         self.assertNotIn('rel=', pill)
         self.assertIn('<div class="youtube-banner__sets">', links)
-        self.assertLess(links.index(pill), links.index('>Set 1</a>'))
+        self.assertLess(links.index(pill), links.index('>▶ Set 1</span>'))
         self.assertEqual(page.count('Ver con estadísticas'), 1)
         self.assertNotIn('<aside class="replay-notice">', page)
 
@@ -450,6 +470,7 @@ class ReplayRenderingTests(unittest.TestCase):
         links = re.search(r'<div class="youtube-banner__links">(.*?)</div>', page).group(1)
         self.assertIn('youtube-set-link--stats', links)
         self.assertIn('href="watch.html"', links)
+        self.assertIn('>▶ Ver con estadísticas</span>', links)
         self.assertNotIn('>Set ', links)
         self.assertNotIn('youtube-banner__sets', links)
         self.assertEqual(links.count('<a '), 1)
@@ -462,6 +483,7 @@ class ReplayRenderingTests(unittest.TestCase):
         group = re.search(r'<div class="youtube-banner__sets">(.*?)</div>', page).group(1)
         self.assertEqual(group.count('class="youtube-set-link"'), 3)
         self.assertIn('href="https://youtu.be/abcdefghijk?a=&quot;x&quot;&amp;b=2"', group)
+        self.assertEqual(group.count('class="youtube-set-link__surface"'), 3)
         self.assertEqual(group.count('target="_blank" rel="noopener noreferrer"'), 3)
         self.assertNotIn('youtube-set-link--stats', page)
 

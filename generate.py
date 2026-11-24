@@ -211,6 +211,7 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
     positions = config['positions']
     names = config['names']
     objectives = config['objectives']
+    active = config['active']
 
     matches_dir = ds_dir / 'matches'
     out_dir = DOCS_ROOT / team_slug / tournament_slug
@@ -369,11 +370,37 @@ def _generate_dataset(team_slug, tournament_slug, ds_dir, today):
 
     conn.close()
 
+    latest = matches_meta[-1]
+    set_scores = latest['set_scores']
+    replay = replays.get(latest['file'].removesuffix('.html'))
+    if replay:
+        positioned_scores = [
+            tuple(block['final_score']) if block['final_score'] is not None else None
+            for block in replay['sets']
+        ]
+        # Legacy blocks can contain multiple finals; never drop a recorded pair.
+        if [pair for pair in positioned_scores if pair is not None] == set_scores:
+            set_scores = positioned_scores
+
     summary = {
         'team': team_name,
         'tournament': tournament_name,
         'type': team_type,
+        'active': active,
+        'objectives': objectives,
         'href': f'{team_slug}/{tournament_slug}/index.html',
+        'season_href': (
+            f'{team_slug}/{tournament_slug}/team_season.html' if team_season_summary else None
+        ),
+        'players_href': f'{team_slug}/{tournament_slug}/players.html',
+        'matches_href': f'{team_slug}/{tournament_slug}/matches.html',
+        'latest_match': {
+            'title': latest['title'],
+            'href': f'{team_slug}/{tournament_slug}/{latest["file"]}',
+            'result': latest.get('result'),
+            'set_scores': set_scores,
+            'rating': latest.get('rating'),
+        },
         'rating': team_season_summary['rating'] if team_season_summary else 0.0,
         'matches_played': team_season_summary['matches_played'] if team_season_summary else 0,
         'wins': team_season_summary['wins'] if team_season_summary else 0,

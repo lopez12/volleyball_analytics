@@ -290,7 +290,7 @@
     var spotlightName = element('span');
     spotlightName.className = 'player-number';
     var spotlightRatingPill = element('span');
-    spotlightRatingPill.className = 'player-rating';
+    spotlightRatingPill.className = 'rating-pill';
     spotlightHeader.append(spotlightName, spotlightRatingPill);
     var spotlightBody = element('div');
     spotlightBody.className = 'card-body';
@@ -353,6 +353,12 @@
             node.firstElementChild.textContent = value;
         });
         var rating = String(displayValues.rating);
+        if (values.rating === null) {
+            delete spotlightRatingPill.dataset.tier;
+        } else {
+            spotlightRatingPill.dataset.tier = values.rating >= 8 ? 'high' :
+                (values.rating >= 6 ? 'mid' : 'low');
+        }
         if (previousSpotlightValues && String(previousSpotlightValues.rating) !== rating) {
             spotlightRatingPill.classList.remove('replay-value-pulse');
             void spotlightRatingPill.offsetWidth;
@@ -383,17 +389,19 @@
         var snapshot = set.snapshots[index];
         text('score', snapshot.score.join(' \u2013 '));
         var offset = set.start_score.some(function (value) { return value !== 0; });
-        text('scope', offset ? 'Estad\u00edsticas registradas en la grabaci\u00f3n' :
-            'Estad\u00edsticas del set hasta este momento');
+        var scope = el('scope');
+        scope.textContent = offset ? 'Estad\u00edsticas registradas en la grabaci\u00f3n' : '';
+        scope.hidden = !offset;
         text('start-note', offset ? 'La grabaci\u00f3n inicia con el marcador ' +
             set.start_score.join('\u2013') + '.' : '');
         el('start-note').hidden = !offset;
         el('stats').setAttribute('aria-label', available ?
             'Estad\u00edsticas sincronizadas' : 'Estad\u00edsticas no sincronizadas; valores iniciales');
         el('youtube').href = 'https://www.youtube.com/watch?v=' + set.video_id;
-        text('reconciliation', set.reconciled ?
-            'Set verificado contra el marcador registrado (oculto hasta completar las jugadas).' :
-            'Sin marcador final registrado; no hay reconciliaci\u00f3n independiente del resultado.');
+        var reconciliation = el('reconciliation');
+        reconciliation.textContent = set.reconciled ? '' :
+            'Sin marcador final registrado; no hay reconciliaci\u00f3n independiente del resultado.';
+        reconciliation.hidden = set.reconciled;
         var active = repeatRally(set, time);
         text('current', active ? 'Set ' + set.number + ' \u00b7 Jugada ' + active.number +
             (time < active.end ? ' en curso' : ' completada') : 'Antes de la primera jugada');
