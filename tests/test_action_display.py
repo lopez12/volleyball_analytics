@@ -9,6 +9,7 @@ from renderer import (
     _GRADE_PREFIXES,
     _action_efficiency_charts,
     _json_for_script,
+    _rating_tier,
     build_card_html,
     render_match_page,
     render_player_season_page,
@@ -54,11 +55,11 @@ def _action_grid(html):
     ).group(1)
 
 
-def _pill(name, count, pct, nota, rate_class=''):
-    pill_class = f'action-pill {rate_class}'.strip()
-    tier = 'high' if nota >= 8 else ('mid' if nota >= 6 else 'low')
+def _pill(name, count, pct, nota):
+    tier = _rating_tier(nota)
+    pill_class = f'action-pill action-pill--{tier}'
     return (
-        f'<div class="{pill_class}">'
+        f'<div class="{pill_class}" data-tier="{tier}">'
         f'<span class="action-name">{name}</span>'
         f'<span class="action-count">{count}</span>'
         f'<span class="action-pct">{pct}</span>'
@@ -100,11 +101,35 @@ def test_action_pills_cover_all_actions_and_block_exception():
         'Bloqueo',
     ]
     assert grid.count('<div class="action-pill') == 6
-    assert _pill('Bloqueo', '1/1', '100%', 10.0, 'high-perf') in grid
-    assert _pill('Recepción', '0/2', '0%', 5.0, 'low-perf') in grid
+    assert _pill('Bloqueo', '1/1', '100%', 10.0) in grid
+    assert _pill('Recepción', '0/2', '0%', 5.0) in grid
     assert '<tr><td>Recepción</td>' in html
     assert 'Recepción de Saque' not in html
     assert 'escala fija' in grid
+
+
+def test_action_pill_tier_follows_nota_not_positive_percentage():
+    cases = (
+        ('7S+ 7S+ 7S+ 7S+ 7S+ 7S+ 7S+', 'Saque', '7/7', '100%', '7.1', 'mid'),
+        ('B#', 'Bloqueo', '1/1', '100%', '10.0', 'high'),
+        ('A-', 'Ataque', '0/1', '0%', '5.0', 'low'),
+        ('A+ A+ A+ A! A! A! A!', 'Ataque', '3/7', '43%', '6.0', 'mid'),
+        ('A# A# A#', 'Ataque', '3/3', '100%', '8.0', 'high'),
+    )
+    for log, name, count, pct, nota, tier in cases:
+        parsed = parse_log(log)
+        html = build_card_html('Equipo', parsed['team'], 7.0)
+        grid = _action_grid(html)
+        match = re.search(
+            rf'<div class="action-pill action-pill--{tier}" data-tier="{tier}">'
+            rf'<span class="action-name">{name}</span>'
+            rf'<span class="action-count">{count}</span>'
+            rf'<span class="action-pct">{pct}</span>'
+            rf'<span class="rating-pill" data-tier="{tier}" {NOTA_TOOLTIP}>{nota}</span>'
+            r'</div>',
+            grid,
+        )
+        assert match, f'Expected {tier} outer and Nota tiers for {log}'
 
 
 def test_card_pages_explain_short_reception_label_once():

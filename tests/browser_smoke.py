@@ -167,7 +167,7 @@ window.YT = {Player: function (id, options) {
         )
         report_log = (
             '@youtube: https://youtu.be/abcdefghijk\n'
-            '7S# 7S+ 7R! 7R- 7E# 7E+ 7A# 7A+ 7D! 7D- 7B# 7B+ '
+            '7S+ 7R! 7R- 7E# 7E+ 7A# 7A+ 7D! 7D- 7B# 7B+ '
             '@won @t:10-15\n@set: 1-0'
         )
         report = parse_log((report_log + '\n---\n') * 5 + report_log)
@@ -632,6 +632,52 @@ function checkRatingPills(doc, selector) {
       'Rating pill text contrast below 4.5:1: ' + selector);
   });
 }
+function checkActionPills(doc) {
+  var grid = doc.querySelector('.action-grid--summary');
+  var pills = Array.from(grid.querySelectorAll('.action-pill'));
+  var expected = {
+    high: ['--good-bg', '--good-text'],
+    mid: ['--regular-bg', '--rating-mid-text'],
+    low: ['--bad-bg', '--ui-loss-text']
+  };
+  var found = new Set();
+  pills.forEach(function(pill) {
+    var tier = pill.dataset.tier;
+    var rating = pill.querySelector('.rating-pill');
+    assert(expected[tier] && rating && rating.dataset.tier === tier,
+      'Action and Nota tiers do not match');
+    assert(pill.classList.contains('action-pill--' + tier),
+      'Action pill class does not match its Nota tier');
+    found.add(tier);
+    var styles = doc.defaultView.getComputedStyle(pill);
+    function token(name) {
+      var swatch = doc.createElement('span');
+      swatch.style.color = 'var(' + name + ')';
+      swatch.style.backgroundColor = 'var(' + name + ')';
+      doc.body.append(swatch);
+      var value = doc.defaultView.getComputedStyle(swatch).color;
+      var background = doc.defaultView.getComputedStyle(swatch).backgroundColor;
+      swatch.remove();
+      return name.endsWith('-bg') ? background : value;
+    }
+    assert(styles.backgroundColor === token(expected[tier][0]),
+      'Action pill surface does not match its tier: ' + tier);
+    assert(styles.borderColor !== 'rgba(0, 0, 0, 0)',
+      'Action pill tier boundary is not visible: ' + tier);
+    ['.action-name', '.action-count', '.action-pct'].forEach(function(selector) {
+      var text = doc.defaultView.getComputedStyle(pill.querySelector(selector));
+      assert(text.color === token(expected[tier][1]),
+        'Action pill text color does not match its tier: ' + tier);
+      assert(contrastRatio(text.color, styles.backgroundColor, doc) >= 4.5,
+        'Action pill text contrast below 4.5:1: ' + tier + ' ' + selector);
+    });
+  });
+  // This report is a synthetic fixture constructed with all three tiers; do not
+  // require arbitrary real-match reports to contain every tier.
+  ['high', 'mid', 'low'].forEach(function(tier) {
+    assert(found.has(tier), 'Synthetic action fixture is missing the ' + tier + ' tier');
+  });
+}
 function next() {
   if (++current === cases.length) {
     result.textContent = 'PASS';
@@ -706,6 +752,7 @@ window.addEventListener('message', function(event) {
       assert(pills.length >= 2, 'Action pills missing');
       checkRatingPills(doc, '.card-header .rating-pill');
       checkRatingPills(doc, '.action-grid--summary .rating-pill');
+      checkActionPills(doc);
       assert(parseFloat(win.getComputedStyle(pills[0]).fontSize) >= 13, 'Action pill text below 13px');
       // The widest Nota must fit and share a column center with narrower values.
       pills[0].querySelector('.rating-pill').textContent = '10.0';
@@ -726,13 +773,6 @@ window.addEventListener('message', function(event) {
           assert(Math.abs((rect.right - anchor(cell)) - (firstRect.right - anchor(ref))) <= 1,
             'Action numbers not aligned: ' + selector);
         });
-      });
-      ['.high-perf', '.low-perf'].forEach(function(selector) {
-        var pill = grid.querySelector('.action-pill' + selector);
-        assert(pill, 'Missing positive-rate threshold style: ' + selector);
-        var count = win.getComputedStyle(pill.querySelector('.action-count'));
-        assert(contrastRatio(count.color, win.getComputedStyle(pill).backgroundColor, doc) >= 4.5,
-          'Action pill text contrast below 4.5:1: ' + selector);
       });
       assert(doc.documentElement.scrollWidth <= doc.documentElement.clientWidth + 1,
         'Report page overflow');

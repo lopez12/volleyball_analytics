@@ -59,6 +59,7 @@ def test_root_hub_zero_one_and_many_active_datasets():
     html = render_root_index_page([one], '23/11/2026')
     assert '<section class="hub-current" aria-label="En curso">' in html
     assert 'class="hub-current-grid">' in html
+
     assert 'hub-current-grid--multiple' not in html
     assert html.count('class="hub-feature"') == 1
     # Status pill and type with decorative emoji.

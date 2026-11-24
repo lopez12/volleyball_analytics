@@ -474,13 +474,14 @@ def _rating_tier(rating):
     return 'low'
 
 
-def _rating_pill(value, *, title=None):
+def _rating_pill(value, *, title=None, tier=None):
     """Render a numeric rating without reformatting it; leave other text unboxed."""
     text = _html_escape(str(value))
-    try:
-        tier = _rating_tier(float(value))
-    except (TypeError, ValueError):
-        return text
+    if tier is None:
+        try:
+            tier = _rating_tier(float(value))
+        except (TypeError, ValueError):
+            return text
     tooltip = f' title="{_html_escape(title)}"' if title is not None else ''
     return f'<span class="rating-pill" data-tier="{tier}"{tooltip}>{text}</span>'
 
@@ -561,14 +562,14 @@ def build_card_html(title, data, rating, extra_class=''):
         if a['tot'] == 0:
             continue
         eff = a['pos_pct']
-        rate_class = 'high-perf' if eff == 1.0 else ('low-perf' if eff < 0.4 else '')
-        pill_class = f'action-pill {rate_class}'.strip()
+        tier = _rating_tier(a['rating'])
+        pill_class = f'action-pill action-pill--{tier}'
         action_pills.append(
-            f'<div class="{pill_class}">'
+            f'<div class="{pill_class}" data-tier="{tier}">'
             f'<span class="action-name">{_CARD_ACTION_NAMES[action]}</span>'
             f'<span class="action-count">{a["good"]}/{a["tot"]}</span>'
             f'<span class="action-pct">{round(eff * 100)}%</span>'
-            f'{_rating_pill(a["rating"], title=nota_title)}'
+            f'{_rating_pill(a["rating"], title=nota_title, tier=tier)}'
             f'</div>'
         )
     action_pills_html = (
