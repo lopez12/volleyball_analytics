@@ -16,8 +16,8 @@
     "22": { "name": "Valencia",    "position": "MB"   }
   },
   "objectives": [
-    { "label": "Top 4 del torneo", "current": 3, "baseline": 14, "target": 4, "display": "3°" },
+    { "label": "Top 4 del torneo", "current": 5, "baseline": 14, "target": 4, "display": "3°" },
     { "label": "Ganar 2 derbis",   "current": 1, "target": 2 },
-    { "label": "Saques ace",       "current": 94, "target": 130 }
+    { "label": "Saques ace",       "current": 99, "target": 130 }
   ]
 }
